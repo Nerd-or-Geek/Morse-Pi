@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Morse Trainer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      --bg: #050a0e;
+      --bg2: #0b1520;
+      --bg3: #0f1e2e;
+      --border: #1a3a5c;
+      --accent: #00d4ff;
+      --accent2: #ff6b35;
+      --accent3: #39ff14;
+      --text: #c8dce8;
+      --text-dim: #4a7090;
+      --danger: #ff3366;
+      --gold: #ffd700;
+      --glow: 0 0 20px rgba(0, 212, 255, 0.3);
+      --glow-green: 0 0 20px rgba(57, 255, 20, 0.4);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Scanline overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    /* Animated grid background */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0 30px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+
+    .logo {
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: 1.8rem;
+      letter-spacing: 0.1em;
+      background: linear-gradient(135deg, var(--accent), var(--accent3));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: none;
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      border: 1px solid var(--border);
+      transition: all 0.1s;
+    }
+    .btn-indicator.active {
+      background: var(--accent3);
+      box-shadow: var(--glow-green);
+    }
+
+    .status-badge {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* Nav */
+    .nav {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 24px;
+      background: var(--bg2);
+      padding: 6px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .nav-btn {
+      flex: 1;
+      padding: 10px 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: 'Orbitron', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nav-btn:hover {
+      color: var(--text);
+      background: var(--bg3);
+    }
+
+    .nav-btn.active {
+      background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(57,255,20,0.1));
+      color: var(--accent);
+      border: 1px solid rgba(0,212,255,0.3);
+      box-shadow: 0 0 10px rgba(0,212,255,0.1);
+    }
+
+    /* Panel */
+    .panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.5;
+    }
+
+    .panel-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-title::before {
+      content: '';
+      width: 3px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* Morse Display */
+    .morse-display {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1.5rem;
+      letter-spacing: 0.15em;
+      color: var(--accent3);
+      min-height: 70px;
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      position: relative;
+      word-break: break-all;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+    }
+
+    .morse-display.large {
+      font-size: 2rem;
+      min-height: 90px;
+      justify-content: center;
+      text-align: center;
+      color: var(--gold);
+      letter-spacing: 0.2em;
+    }
+
+    .morse-display .cursor {
+      display: inline-block;
+      width: 10px;
+      height: 22px;
+      background: var(--accent3);
+      margin-left: 4px;
+      animation: blink 1s step-end infinite;
+      vertical-align: middle;
+    }
+
+    .morse-display.active-send {
+      border-color: var(--accent3);
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 0 15px rgba(57,255,20,0.2);
+    }
+
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* Text display */
+    .text-display {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1.1rem;
+      color: var(--text);
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+
+    /* Input */
+    .input-field {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-bottom: 16px;
+    }
+
+    .input-field:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(0,212,255,0.15);
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 7px;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, rgba(0,212,255,0.25), rgba(0,212,255,0.1));
+      color: var(--accent);
+      border: 1px solid rgba(0,212,255,0.4);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, rgba(0,212,255,0.4), rgba(0,212,255,0.2));
+      box-shadow: 0 0 15px rgba(0,212,255,0.2);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, rgba(57,255,20,0.2), rgba(57,255,20,0.05));
+      color: var(--accent3);
+      border: 1px solid rgba(57,255,20,0.3);
+    }
+    .btn-success:hover {
+      background: linear-gradient(135deg, rgba(57,255,20,0.35), rgba(57,255,20,0.15));
+      box-shadow: 0 0 15px rgba(57,255,20,0.2);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, rgba(255,51,102,0.2), rgba(255,51,102,0.05));
+      color: var(--danger);
+      border: 1px solid rgba(255,51,102,0.3);
+    }
+    .btn-danger:hover {
+      background: linear-gradient(135deg, rgba(255,51,102,0.35), rgba(255,51,102,0.15));
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover {
+      color: var(--text);
+      border-color: var(--text-dim);
+    }
+
+    .btn-orange {
+      background: linear-gradient(135deg, rgba(255,107,53,0.25), rgba(255,107,53,0.1));
+      color: var(--accent2);
+      border: 1px solid rgba(255,107,53,0.35);
+    }
+    .btn-orange:hover {
+      background: linear-gradient(135deg, rgba(255,107,53,0.4), rgba(255,107,53,0.2));
+      box-shadow: 0 0 15px rgba(255,107,53,0.2);
+    }
+
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* Result banners */
+    .result-correct {
+      background: rgba(57,255,20,0.1);
+      border: 1px solid rgba(57,255,20,0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      color: var(--accent3);
+      animation: fadeIn 0.3s ease;
+    }
+
+    .result-wrong {
+      background: rgba(255,51,102,0.1);
+      border: 1px solid rgba(255,51,102,0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      color: var(--danger);
+      animation: fadeIn 0.3s ease;
+    }
+
+    .result-wrong .answer-reveal {
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      margin-top: 6px;
+      font-size: 0.9rem;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    /* Timer */
+    .timer-display {
+      font-family: 'Orbitron', monospace;
+      font-size: 2.5rem;
+      font-weight: 900;
+      color: var(--accent2);
+      text-align: center;
+      letter-spacing: 0.1em;
+      margin: 10px 0;
+    }
+
+    /* Settings grid */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .setting-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .setting-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      font-family: 'Orbitron', monospace;
+    }
+
+    .setting-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .setting-input-row .input-field {
+      margin-bottom: 0;
+      flex: 1;
+    }
+
+    .setting-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .toggle-switch.on {
+      background: rgba(0,212,255,0.3);
+      border-color: var(--accent);
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      background: var(--text-dim);
+      border-radius: 50%;
+      transition: all 0.2s;
+    }
+
+    .toggle-switch.on::after {
+      left: 23px;
+      background: var(--accent);
+    }
+
+    /* Cheat sheet */
+    .cheat-sheet {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-top: 16px;
+    }
+
+    .cheat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .cheat-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 6px;
+      text-align: center;
+      transition: all 0.15s;
+    }
+
+    .cheat-item:hover {
+      border-color: var(--accent);
+      background: rgba(0,212,255,0.05);
+    }
+
+    .cheat-char {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text);
+      display: block;
+    }
+
+    .cheat-morse {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent3);
+      display: block;
+      margin-top: 3px;
+    }
+
+    /* Key hints */
+    .key-hint {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 8px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    /* Accuracy bar */
+    .accuracy-bar-wrap {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .accuracy-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent3), var(--accent));
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    /* Progress hint for decode */
+    .phrase-label {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+
+    /* Section separator */
+    .sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .settings-grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .nav-btn { font-size: 0.55rem; padding: 8px 4px; }
+      .logo { font-size: 1.3rem; }
+    }
+
+    /* Smooth transitions */
+    .mode-panel { animation: fadeIn 0.2s ease; }
+
+    /* WPM result */
+    .wpm-result {
+      text-align: center;
+      padding: 16px;
+    }
+    .wpm-number {
+      font-family: 'Orbitron', monospace;
+      font-size: 3rem;
+      font-weight: 900;
+      color: var(--accent2);
+    }
+    .wpm-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .send-big {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 2.5rem;
+      letter-spacing: 0.15em;
+      color: var(--accent3);
+      text-align: center;
+      min-height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      word-break: break-all;
+    }
+
+    .hint-text {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-style: italic;
+      margin-bottom: 10px;
+    }
+
+    .section-header {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="app">
+  <header class="header">
+    <div class="logo">? MORSE TRAINER</div>
+    <div class="header-status">
+      <div class="status-badge">GPIO <span id="gpio-status">–</span></div>
+      <div id="btn-indicator" class="btn-indicator"></div>
+    </div>
+  </header>
+
+  <nav class="nav">
+    <button class="nav-btn" data-mode="send">SEND</button>
+    <button class="nav-btn" data-mode="encode">ENCODE</button>
+    <button class="nav-btn" data-mode="decode">DECODE</button>
+    <button class="nav-btn" data-mode="speed">SPEED</button>
+    <button class="nav-btn" data-mode="stats">STATS</button>
+    <button class="nav-btn" data-mode="settings">CONFIG</button>
+  </nav>
+
+  <div id="main-content" class="mode-panel"></div>
+
+  <!-- Cheat Sheet Toggle -->
+  <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+    <button class="btn btn-ghost" id="cheat-toggle-btn">Reference Sheet</button>
+  </div>
+  <div id="cheat-sheet-panel" class="cheat-sheet" style="display:none;"></div>
+</div>
+
+  <!-- Safe data injection -->
+  <script id="init-state" type="application/json">{{ state|tojson }}</script>
+  <script id="init-settings" type="application/json">{{ settings|tojson }}</script>
+
+<script>
+// -- State ------------------------------------------------------------------
+const _stateJson = document.getElementById('init-state').textContent;
+const _settingsJson = document.getElementById('init-settings').textContent;
+let state = JSON.parse(_stateJson);
+let settings = JSON.parse(_settingsJson);
+
+const MORSE_CODE = {
+  'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.',
+  'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..',
+  'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.',
+  'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
+  'Y': '-.--', 'Z': '--..',
+  '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-',
+  '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.',
+  '.': '.-.-.-', ',': '--..--', '?': '..--..', "'": '.----.',
+  '!': '-.-.--', '/': '-..-.', '(': '-.--.', ')': '-.--.-',
+  '&': '.-...', ':': '---...', '=': '-...-', '+': '.-.-.',
+  '-': '-....-', '@': '.--.-.'
+};
+
+const REV_MORSE = Object.fromEntries(Object.entries(MORSE_CODE).map(([k,v]) => [v,k]));
+
+// -- Helpers ----------------------------------------------------------------
+function api(url, method='GET', body=null) {
+  const opts = { method, headers: {} };
+  if (body) { opts.body = JSON.stringify(body); opts.headers['Content-Type'] = 'application/json'; }
+  return fetch(url, opts).then(r => r.json());
+}
+
+function morseEncode(text) {
+  return text.toUpperCase().split('').map(c => {
+    if (c === ' ') return '/';
+    return MORSE_CODE[c] || '';
+  }).filter(Boolean).join(' ');
+}
+
+// -- Nav --------------------------------------------------------------------
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => setMode(btn.dataset.mode));
+});
+
+function setMode(mode) {
+  api('/set_mode', 'POST', { mode }).then(s => {
+    state = s;
+    renderNav();
+    renderContent();
+  });
+}
+
+function renderNav() {
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === state.mode);
+  });
+}
+
+// -- Content Renderer -------------------------------------------------------
+function renderContent() {
+  const el = document.getElementById('main-content');
+  el.className = 'mode-panel';
+  switch (state.mode) {
+    case 'send':    el.innerHTML = renderSend(); break;
+    case 'encode':  el.innerHTML = renderEncode(); break;
+    case 'decode':  el.innerHTML = renderDecode(); break;
+    case 'speed':   el.innerHTML = renderSpeed(); break;
+    case 'stats':   el.innerHTML = renderStats(); break;
+    case 'settings': el.innerHTML = renderSettings(); break;
+  }
+  attachHandlers();
+}
+
+// -- SEND MODE --------------------------------------------------------------
+function renderSend() {
+  const buf = state.current_morse_buffer || '';
+  const out = state.send_output || '';
+  const isActive = state.button_active;
+  return `
+    <div class="panel">
+      <div class="panel-title">SEND MODE</div>
+      <p class="hint-text">Hold physical button or press <span class="key-hint">SPACE</span> to key. Dot = short, Dash = long.</p>
+      <div class="section-header">Current Symbol</div>
+      <div class="morse-display ${isActive ? 'active-send' : ''}" style="font-size:2.5rem;justify-content:center;min-height:80px;">
+        ${buf || '<span style="color:var(--text-dim);font-size:1rem;">holding…</span>'}
+        ${isActive ? '<span class="cursor"></span>' : ''}
+      </div>
+      <div class="section-header">Decoded Output</div>
+      <div class="morse-display" style="font-size:1.8rem;justify-content:center;min-height:70px;">
+        ${out || '<span style="color:var(--text-dim);font-size:0.9rem;">start sending…</span>'}
+      </div>
+      <div class="btn-group" style="margin-top:8px;">
+        <button class="btn btn-danger" onclick="clearAll()">Clear</button>
+      </div>
+    </div>
+  `;
+}
+
+// -- ENCODE MODE ------------------------------------------------------------
+function renderEncode() {
+  const morse = state.encode_output || '';
+  const text = state.encode_input || '';
+  return `
+    <div class="panel">
+      <div class="panel-title">ENCODE</div>
+      <p class="hint-text">Type text — see and hear the Morse code.</p>
+      <input id="encode-input" class="input-field" type="text" placeholder="Type text here…" value="${escHtml(text)}" autocomplete="off">
+      <div class="section-header">Morse Output</div>
+      <div class="morse-display" style="font-size:1.2rem;min-height:80px;line-height:1.8;">${escHtml(morse) || '<span style="color:var(--text-dim);">output will appear here</span>'}</div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="playEncode()">? PLAY AUDIO</button>
+        <button class="btn btn-ghost" onclick="clearAll()">Clear</button>
+      </div>
+    </div>
+  `;
+}
+
+// -- DECODE MODE ------------------------------------------------------------
+function renderDecode() {
+  const phrase = state.current_phrase || '';
+  const morse = phrase ? morseEncode(phrase) : '';
+  const result = state.decode_result;
+  let resultHtml = '';
+  if (result === 'correct') {
+    resultHtml = `<div class="result-correct">? CORRECT — well done!</div>`;
+  } else if (result === 'wrong') {
+    resultHtml = `<div class="result-wrong">? WRONG<div class="answer-reveal">Answer: ${escHtml(state.decode_correct_answer || phrase)}</div></div>`;
+  }
+
+  return `
+    <div class="panel">
+      <div class="panel-title">DECODE QUIZ</div>
+      <p class="hint-text">Read the Morse code and type the plaintext answer.</p>
+      <div class="phrase-label">Morse Phrase</div>
+      <div class="morse-display large">${escHtml(morse)}</div>
+      <div class="btn-group" style="margin-bottom:16px;">
+        <button class="btn btn-ghost" onclick="playPhrase()">?? Hear it</button>
+        <button class="btn btn-ghost" onclick="newDecode()">? New Phrase</button>
+      </div>
+      <input id="decode-answer" class="input-field" type="text" placeholder="Type your answer here…" autocomplete="off">
+      <div class="btn-group">
+        <button class="btn btn-success" onclick="submitDecode()">SUBMIT</button>
+      </div>
+      ${resultHtml ? `<div style="margin-top:14px;">${resultHtml}</div>` : ''}
+    </div>
+  `;
+}
+
+// -- SPEED TEST -------------------------------------------------------------
+let speedStartTime = null;
+let speedTimerInterval = null;
+let speedRunning = false;
+
+function renderSpeed() {
+  const phrase = state.speed_phrase || '';
+  const result = state.speed_result;
+  return `
+    <div class="panel">
+      <div class="panel-title">SPEED TEST</div>
+      <p class="hint-text">Encode the phrase in Morse code as fast as you can. Type dots and dashes.</p>
+      <div class="phrase-label">Encode This Phrase</div>
+      <div class="text-display" style="font-size:1.5rem;font-family:'Orbitron',monospace;justify-content:center;color:var(--gold);">${escHtml(phrase)}</div>
+      <div class="timer-display" id="speed-timer">00:00</div>
+      <input id="speed-input" class="input-field" type="text" placeholder="Type Morse code here… (. - and space)" autocomplete="off">
+      <div class="btn-group">
+        <button class="btn btn-orange" onclick="submitSpeed()">DONE</button>
+        <button class="btn btn-ghost" onclick="newSpeed()">? New Test</button>
+      </div>
+      ${result ? renderSpeedResult(result) : ''}
+    </div>
+  `;
+}
+
+function renderSpeedResult(r) {
+  if (typeof r === 'string') return '';
+  const ok = r.result === 'correct';
+  return `
+    <div class="${ok ? 'result-correct' : 'result-wrong'}" style="margin-top:14px;">
+      <div class="wpm-result">
+        <div class="wpm-number">${r.wpm || 0}</div>
+        <div class="wpm-label">WPM</div>
+      </div>
+      ${ok ? '? CORRECT' : `? WRONG — Expected: <span style="font-family:Share Tech Mono,monospace;">${escHtml(r.expected||'')}</span>`}
+    </div>
+  `;
+}
+
+// -- STATS ------------------------------------------------------------------
+function renderStats() {
+  const s = state.stats || {};
+  const total = s.total_attempts || 0;
+  const correct = s.correct || 0;
+  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+  return `
+    <div class="panel">
+      <div class="panel-title">STATISTICS</div>
+      <div class="stats-row">
+        <div class="stat-card">
+          <span class="stat-value" style="color:var(--accent3);">${accuracy}%</span>
+          <div class="stat-label">Accuracy</div>
+          <div class="accuracy-bar-wrap"><div class="accuracy-bar-fill" style="width:${accuracy}%"></div></div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">${correct}</span>
+          <div class="stat-label">Correct</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" style="color:var(--gold);">${s.streak || 0}</span>
+          <div class="stat-label">Streak</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" style="color:var(--accent2);">${s.best_streak || 0}</span>
+          <div class="stat-label">Best Streak</div>
+        </div>
+      </div>
+      <div class="stat-card" style="margin-bottom:16px;">
+        <span class="stat-label">Total Attempts</span>
+        <span class="stat-value" style="font-size:1rem;color:var(--text);">${total}</span>
+      </div>
+      <button class="btn btn-danger" onclick="resetStats()">Reset Stats</button>
+    </div>
+  `;
+}
+
+// -- SETTINGS ---------------------------------------------------------------
+function renderSettings() {
+  const s = settings;
+  return `
+    <div class="panel">
+      <div class="panel-title">CONFIGURATION</div>
+      <div class="settings-grid">
+
+        <div class="setting-row">
+          <div class="setting-label">Speaker GPIO Pin</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" id="s-speaker_pin" value="${s.speaker_pin}">
+            <button class="btn btn-primary" onclick="previewTone(${s.dot_freq}, ${s.dot_max}, ${s.volume})">Test</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">Built-in Button Pin</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" id="s-builtin_button_pin" value="${s.builtin_button_pin}">
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">Ext. Switch Pin A (input)</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" id="s-external_switch_pin_a" value="${s.external_switch_pin_a}">
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">Ext. Switch Pin B (ground)</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" id="s-external_switch_pin_b" value="${s.external_switch_pin_b}">
+          </div>
+        </div>
+
+        <div class="setting-row" style="grid-column:1/-1;">
+          <div class="setting-label">Use External Switch</div>
+          <div class="setting-toggle">
+            <div id="ext-toggle" class="toggle-switch ${s.use_external_switch ? 'on' : ''}" onclick="toggleExtSwitch()"></div>
+            <span style="font-size:0.8rem;color:var(--text-dim);" id="ext-toggle-label">${s.use_external_switch ? 'Enabled' : 'Disabled'}</span>
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-dim);margin-top:6px;">Wire external switch: one leg ? Pin A, other leg ? Pin B (acts as ground via software)</div>
+        </div>
+
+        <hr class="sep" style="grid-column:1/-1;">
+
+        <div class="setting-row">
+          <div class="setting-label">Dot Frequency (Hz)</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" id="s-dot_freq" value="${s.dot_freq}">
+            <button class="btn btn-primary" onclick="previewTone(document.getElementById('s-dot_freq').value, ${s.dot_max}, ${s.volume})">Test</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">Dash Frequency (Hz)</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" id="s-dash_freq" value="${s.dash_freq}">
+            <button class="btn btn-primary" onclick="previewTone(document.getElementById('s-dash_freq').value, ${s.dot_max*3}, ${s.volume})">Test</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">Volume (0–1)</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" step="0.05" min="0" max="1" id="s-volume" value="${s.volume}">
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">Dot Max Duration (s)</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" step="0.01" id="s-dot_max" value="${s.dot_max}">
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">Letter Gap (s)</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" step="0.05" id="s-letter_gap" value="${s.letter_gap}">
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">Word Gap (s)</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" step="0.05" id="s-word_gap" value="${s.word_gap}">
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">Difficulty</div>
+          <select class="input-field" id="s-difficulty" style="margin-bottom:0;">
+            <option value="easy" ${s.difficulty==='easy'?'selected':''}>Easy (single word)</option>
+            <option value="medium" ${s.difficulty==='medium'?'selected':''}>Medium (2 words)</option>
+            <option value="hard" ${s.difficulty==='hard'?'selected':''}>Hard (phrase)</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">WPM Target</div>
+          <div class="setting-input-row">
+            <input class="input-field" type="number" id="s-wpm_target" value="${s.wpm_target}">
+          </div>
+        </div>
+
+      </div>
+
+      <hr class="sep">
+      <div class="btn-group">
+        <button class="btn btn-success" onclick="saveSettings()">SAVE SETTINGS</button>
+        <button class="btn btn-ghost" onclick="setMode('settings')">Reset</button>
+      </div>
+      <div id="settings-msg" style="margin-top:10px;font-family:'Orbitron',monospace;font-size:0.7rem;color:var(--accent3);"></div>
+    </div>
+  `;
+}
+
+// -- Cheat Sheet ------------------------------------------------------------
+function toggleCheatSheet() {
+  api('/toggle_cheat_sheet', 'POST').then(r => {
+    state.cheat_sheet = r.cheat_sheet;
+    renderCheatSheet();
+  });
+}
+
+function renderCheatSheet() {
+  const panel = document.getElementById('cheat-sheet-panel');
+  if (!state.cheat_sheet) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const entries = Object.entries(MORSE_CODE).filter(([k]) => k !== ' ');
+  panel.innerHTML = `
+    <div class="panel-title">REFERENCE SHEET</div>
+    <div class="cheat-grid">
+      ${entries.map(([k,v]) => `
+        <div class="cheat-item">
+          <span class="cheat-char">${escHtml(k)}</span>
+          <span class="cheat-morse">${v}</span>
+        </div>`).join('')}
+    </div>
+  `;
+}
+
+// -- Event Handlers ---------------------------------------------------------
+function attachHandlers() {
+  if (state.mode === 'encode') {
+    const inp = document.getElementById('encode-input');
+    if (inp) {
+      inp.addEventListener('input', e => {
+        api('/encode', 'POST', { text: e.target.value }).then(res => {
+          state.encode_output = res.morse;
+          state.encode_input = e.target.value;
+          // Update display only
+          const disp = document.querySelector('.morse-display:not(.large)');
+          if (disp) disp.innerHTML = escHtml(res.morse) || '<span style="color:var(--text-dim);">output will appear here</span>';
+        });
+      });
+      inp.focus();
+    }
+  }
+
+  if (state.mode === 'decode') {
+    const inp = document.getElementById('decode-answer');
+    if (inp) {
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') submitDecode(); });
+      inp.focus();
+    }
+  }
+
+  if (state.mode === 'speed') {
+    const inp = document.getElementById('speed-input');
+    if (inp) {
+      inp.addEventListener('focus', startSpeedTimer);
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') submitSpeed(); });
+      inp.focus();
+    }
+  }
+}
+
+function startSpeedTimer() {
+  if (speedRunning) return;
+  speedRunning = true;
+  speedStartTime = Date.now();
+  speedTimerInterval = setInterval(() => {
+    const el = document.getElementById('speed-timer');
+    if (!el) { clearInterval(speedTimerInterval); speedRunning = false; return; }
+    const elapsed = Math.floor((Date.now() - speedStartTime) / 1000);
+    const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const s = String(elapsed % 60).padStart(2, '0');
+    el.textContent = `${m}:${s}`;
+  }, 500);
+}
+
+function stopSpeedTimer() {
+  clearInterval(speedTimerInterval);
+  speedRunning = false;
+  const elapsed = speedStartTime ? (Date.now() - speedStartTime) / 1000 : 1;
+  speedStartTime = null;
+  return elapsed;
+}
+
+// -- Actions ----------------------------------------------------------------
+function clearAll() {
+  api('/clear', 'POST').then(s => { state = s; renderContent(); });
+}
+
+function playEncode() {
+  api('/play', 'POST');
+}
+
+function playPhrase() {
+  api('/play_phrase', 'POST');
+}
+
+function newDecode() {
+  setMode('decode');
+}
+
+function submitDecode() {
+  const inp = document.getElementById('decode-answer');
+  if (!inp) return;
+  api('/decode_submit', 'POST', { answer: inp.value }).then(res => {
+    state.decode_result = res.result;
+    state.decode_correct_answer = res.correct_answer;
+    state.stats = res.stats;
+    renderContent();
+  });
+}
+
+function newSpeed() {
+  stopSpeedTimer();
+  setMode('speed');
+}
+
+function submitSpeed() {
+  const inp = document.getElementById('speed-input');
+  if (!inp) return;
+  const elapsed = stopSpeedTimer();
+  api('/submit_test', 'POST', { input: inp.value, elapsed }).then(res => {
+    state.speed_result = res;
+    state.stats = res.stats;
+    renderContent();
+  });
+}
+
+function resetStats() {
+  api('/reset_stats', 'POST').then(s => { state.stats = s; renderContent(); });
+}
+
+function saveSettings() {
+  const keys = ['speaker_pin','builtin_button_pin','external_switch_pin_a','external_switch_pin_b',
+                 'dot_freq','dash_freq','volume','dot_max','letter_gap','word_gap','wpm_target','difficulty'];
+  const data = { use_external_switch: settings.use_external_switch };
+  keys.forEach(k => {
+    const el = document.getElementById('s-' + k);
+    if (el) data[k] = el.value;
+  });
+  api('/save_settings', 'POST', data).then(s => {
+    settings = s;
+    const msg = document.getElementById('settings-msg');
+    if (msg) { msg.textContent = '? SAVED'; setTimeout(() => msg.textContent = '', 2000); }
+  });
+}
+
+function previewTone(freq, duration, duty) {
+  api('/preview_tone', 'POST', { freq: +freq, duration: +duration, duty: +duty });
+}
+
+let extSwitchLocal = settings.use_external_switch;
+function toggleExtSwitch() {
+  extSwitchLocal = !extSwitchLocal;
+  settings.use_external_switch = extSwitchLocal;
+  const tog = document.getElementById('ext-toggle');
+  const lbl = document.getElementById('ext-toggle-label');
+  if (tog) tog.className = 'toggle-switch' + (extSwitchLocal ? ' on' : '');
+  if (lbl) lbl.textContent = extSwitchLocal ? 'Enabled' : 'Disabled';
+}
+
+// -- Space bar key for Send mode --------------------------------------------
+let spacePressed = false;
+document.addEventListener('keydown', e => {
+  if (state.mode !== 'send') return;
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space' && !spacePressed) {
+    spacePressed = true;
+    e.preventDefault();
+    api('/key_press', 'POST', { pressed: true });
+  }
+});
+document.addEventListener('keyup', e => {
+  if (state.mode !== 'send') return;
+  if (e.code === 'Space' && spacePressed) {
+    spacePressed = false;
+    e.preventDefault();
+    api('/key_press', 'POST', { pressed: false });
+  }
+});
+
+// -- Escape html ------------------------------------------------------------
+function escHtml(s) {
+  if (typeof s !== 'string') return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// -- Polling ----------------------------------------------------------------
+setInterval(() => {
+  fetch('/status').then(r => r.json()).then(s => {
+    const prevMode = state.mode;
+    const prevBtn = state.button_active;
+    state = s;
+    // Only re-render send mode on changes (avoid disruptive re-renders elsewhere)
+    if (state.mode === 'send') {
+      if (prevBtn !== s.button_active || state.send_output !== s.send_output || state.current_morse_buffer !== s.current_morse_buffer) {
+        renderContent();
+      }
+    }
+    // Update button indicator
+    const ind = document.getElementById('btn-indicator');
+    if (ind) ind.className = 'btn-indicator' + (s.button_active ? ' active' : '');
+  }).catch(() => {
+    document.getElementById('gpio-status').textContent = 'ERR';
+  });
+}, 500);
+
+// -- Init -------------------------------------------------------------------
+renderNav();
+renderContent();
+renderCheatSheet();
+
+document.getElementById('cheat-toggle-btn').addEventListener('click', toggleCheatSheet);
+
+// Mark GPIO as available based on server response
+fetch('/status').then(r => r.json()).then(() => {
+  document.getElementById('gpio-status').textContent = 'OK';
+}).catch(() => {
+  document.getElementById('gpio-status').textContent = 'N/A';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "articles": ["the", "a", "an"],
+  "adjectives": ["big", "small", "red", "blue", "happy", "sad", "fast", "slow", "bright", "dark", "loud", "quiet", "old", "new", "good", "bad", "tall", "short", "hot", "cold", "strong", "weak"],
+  "nouns": ["dog", "cat", "house", "car", "apple", "book", "tree", "river", "mountain", "friend", "school", "work", "bird", "fish", "horse", "lion", "bear", "rabbit", "mouse", "elephant", "sun", "moon", "star"],
+  "verbs": ["run", "jump", "eat", "sleep", "read", "write", "think", "see", "hear", "speak", "play", "work", "love", "hate", "know", "go", "come", "stop", "start", "fly"],
+  "adverbs": ["quickly", "slowly", "loudly", "quietly", "happily", "sadly", "fast", "slow", "brightly", "darkly"],
+  "prepositions": ["on", "in", "over", "under", "near", "far", "with", "by", "to", "from"]
+}
