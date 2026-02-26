@@ -463,7 +463,7 @@ def decode_submit():
 
 @app.route("/submit_test", methods=["POST"])
 def submit_test():
-    # Now we ignore the json "input" field â€” use server-side buffer instead
+    # Now we ignore the json "input" field — use server-side buffer instead
     input_morse = state["speed_morse_output"].strip()
     elapsed = request.json.get("elapsed", 1)
     if not input_morse:
