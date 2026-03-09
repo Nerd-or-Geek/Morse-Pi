@@ -86,9 +86,9 @@ curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.s
 ```
 
 The script will:
-1. Install system packages (`python3`, `pip`, `venv`, `git`, `gpiozero`, `pigpio`)
+1. Install system packages (`python3`, `pip`, `git`, `python3-gpiozero`, `python3-lgpio`)
 2. Clone this repo to `/opt/morse-pi`
-3. Create a Python virtual environment and install Flask
+3. Install Flask and dependencies to the system Python with `pip3`
 4. Register and start a `systemd` service that auto-starts on boot
 5. Open port 5000 in `ufw` if the firewall is active
 
@@ -107,18 +107,16 @@ http://192.168.1.42:5000
 git clone https://github.com/Nerd-or-Geek/Morse-Pi.git
 cd Morse-Pi
 
-# 2. Create venv and install dependencies
-python3 -m venv venv
-source venv/bin/activate
-pip install flask
+# 2. Install dependencies
+sudo pip3 install flask --break-system-packages
 
 # On Raspberry Pi, also install GPIO support:
-sudo apt install python3-gpiozero pigpio python3-pigpio -y
-sudo systemctl enable pigpiod --now
+sudo apt install python3-gpiozero python3-lgpio -y
+sudo usermod -aG gpio $USER
 
 # 3. Run
 cd morse-translator
-python app.py
+python3 app.py
 ```
 
 Then open `http://localhost:5000` (or the Pi's IP from another device).

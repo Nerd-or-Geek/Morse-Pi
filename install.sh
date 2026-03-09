@@ -20,7 +20,6 @@ banner()  { echo -e "\n${BLD}${CYN}━━━  $*  ━━━${RST}\n"; }
 REPO_URL="https://github.com/Nerd-or-Geek/Morse-Pi.git"
 BRANCH="main"
 INSTALL_DIR="/opt/morse-pi"
-VENV_DIR="${INSTALL_DIR}/venv"
 APP_DIR="${INSTALL_DIR}/morse-translator"
 SERVICE_NAME="morse-pi"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
@@ -50,7 +49,7 @@ banner "Step 1 / 5 — System packages"
 info "Refreshing package lists…"
 apt-get update -qq
 
-PKGS=(python3 python3-pip python3-venv git)
+PKGS=(python3 python3-pip git)
 for pkg in "${PKGS[@]}"; do
   if dpkg -s "$pkg" &>/dev/null; then
     ok "$pkg already installed"
@@ -61,9 +60,9 @@ for pkg in "${PKGS[@]}"; do
   fi
 done
 
-# gpiozero + pigpio work best from apt on Pi OS
+# GPIO libraries — lgpio is the default backend for gpiozero on Pi OS Bookworm+
 if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
-  for pkg in python3-gpiozero pigpio python3-pigpio; do
+  for pkg in python3-gpiozero python3-lgpio; do
     if dpkg -s "$pkg" &>/dev/null; then
       ok "$pkg already installed"
     else
@@ -72,15 +71,6 @@ if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
       ok "$pkg installed"
     fi
   done
-
-  # Enable pigpio daemon so gpiozero hardware PWM works
-  if ! systemctl is-enabled pigpiod &>/dev/null; then
-    info "Enabling pigpio daemon…"
-    systemctl enable pigpiod --now
-    ok "pigpio daemon started"
-  else
-    ok "pigpio daemon already enabled"
-  fi
 fi
 
 # ── Clone / update repo ────────────────────────────────────────────────────────
@@ -101,35 +91,45 @@ if [[ ! -f "${APP_DIR}/app.py" ]]; then
 fi
 ok "app.py found at ${APP_DIR}"
 
-# ── Python virtual environment ─────────────────────────────────────────────────
-banner "Step 3 / 5 — Python environment"
-if [[ -d "${VENV_DIR}" ]]; then
-  ok "Virtual environment already exists at ${VENV_DIR}"
-else
-  info "Creating virtual environment…"
-  python3 -m venv "${VENV_DIR}"
-  ok "Virtual environment created"
+# Remove any leftover virtual environment from old installs
+if [[ -d "${INSTALL_DIR}/venv" ]]; then
+  info "Removing old virtual environment at ${INSTALL_DIR}/venv…"
+  rm -rf "${INSTALL_DIR}/venv"
+  ok "Old venv removed"
 fi
+# Also catch venvs named .venv or env
+for leftover in "${INSTALL_DIR}/.venv" "${INSTALL_DIR}/env" "${APP_DIR}/venv" "${APP_DIR}/.venv" "${APP_DIR}/env"; do
+  if [[ -d "${leftover}" ]]; then
+    info "Removing leftover environment at ${leftover}…"
+    rm -rf "${leftover}"
+    ok "Removed ${leftover}"
+  fi
+done
 
+# ── Python packages ──────────────────────────────────────────────────────────
+banner "Step 3 / 5 — Python packages"
 info "Upgrading pip…"
-"${VENV_DIR}/bin/pip" install --upgrade pip --quiet
+pip3 install --upgrade pip --quiet --break-system-packages 2>/dev/null || \
+  pip3 install --upgrade pip --quiet
 ok "pip up to date"
 
 # Core Python dependencies
 PYTHON_PKGS=(flask)
-# gpiozero via pip as fallback if apt version unavailable
+# gpiozero via pip as fallback if apt version is unavailable
 if ! python3 -c "import gpiozero" 2>/dev/null; then
   PYTHON_PKGS+=(gpiozero)
 fi
 
 info "Installing Python packages: ${PYTHON_PKGS[*]}…"
-"${VENV_DIR}/bin/pip" install "${PYTHON_PKGS[@]}" --quiet
+pip3 install "${PYTHON_PKGS[@]}" --quiet --break-system-packages 2>/dev/null || \
+  pip3 install "${PYTHON_PKGS[@]}" --quiet
 ok "Python packages installed"
 
 # Install from requirements.txt if present
 if [[ -f "${INSTALL_DIR}/requirements.txt" ]]; then
   info "Installing from requirements.txt…"
-  "${VENV_DIR}/bin/pip" install -r "${INSTALL_DIR}/requirements.txt" --quiet
+  pip3 install -r "${INSTALL_DIR}/requirements.txt" --quiet --break-system-packages 2>/dev/null || \
+    pip3 install -r "${INSTALL_DIR}/requirements.txt" --quiet
   ok "requirements.txt packages installed"
 fi
 
@@ -144,22 +144,35 @@ else
 fi
 info "Service will run as user: ${RUN_USER}"
 
+# Add user to gpio group so gpiozero can access hardware without sudo
+if getent group gpio &>/dev/null; then
+  if ! id -nG "${RUN_USER}" | grep -qw "gpio"; then
+    info "Adding ${RUN_USER} to gpio group…"
+    usermod -aG gpio "${RUN_USER}"
+    ok "${RUN_USER} added to gpio group"
+  else
+    ok "${RUN_USER} already in gpio group"
+  fi
+fi
+
 cat > "${SERVICE_FILE}" <<EOF
 [Unit]
 Description=Morse-Pi — Morse code trainer web app
-After=network.target
-Wants=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=${RUN_USER}
 WorkingDirectory=${APP_DIR}
-ExecStart=${VENV_DIR}/bin/python app.py
-Restart=on-failure
+ExecStart=/usr/bin/python3 app.py
+Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-# Give gpiozero/pigpio time to initialise on boot
+# Tell gpiozero to use lgpio (default on Pi OS Bookworm)
+Environment=GPIOZERO_PIN_FACTORY=lgpio
+# Give gpiozero time to initialise on boot
 TimeoutStartSec=30
 
 [Install]
