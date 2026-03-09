@@ -17,7 +17,7 @@ die()     { echo -e "${RED}[FAIL]  ${RST}$*" >&2; exit 1; }
 banner()  { echo -e "\n${BLD}${CYN}━━━  $*  ━━━${RST}\n"; }
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-REPO_URL="https://github.com/YOUR_USERNAME/Morse-Pi.git"   # ← edit before running
+REPO_URL="https://github.com/Nerd-or-Geek/Morse-Pi.git"   # ← edit before running
 BRANCH="main"
 INSTALL_DIR="/opt/morse-pi"
 VENV_DIR="${INSTALL_DIR}/venv"
