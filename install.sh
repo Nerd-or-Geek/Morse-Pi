@@ -108,28 +108,34 @@ done
 
 # ── Python packages ──────────────────────────────────────────────────────────
 banner "Step 3 / 5 — Python packages"
-info "Upgrading pip…"
-pip3 install --upgrade pip --quiet --break-system-packages 2>/dev/null || \
-  pip3 install --upgrade pip --quiet
-ok "pip up to date"
 
-# Core Python dependencies
-PYTHON_PKGS=(flask)
-# gpiozero via pip as fallback if apt version is unavailable
-if ! python3 -c "import gpiozero" 2>/dev/null; then
-  PYTHON_PKGS+=(gpiozero)
+# Helper: check if a Python package is already importable
+pkg_installed(){ python3 -c "import $1" 2>/dev/null; }
+
+# Flask
+if pkg_installed flask; then
+  FLASK_VER=$(python3 -c "import flask; print(flask.__version__)" 2>/dev/null)
+  ok "flask already installed (v${FLASK_VER})"
+else
+  info "Installing flask…"
+  pip3 install flask --quiet --break-system-packages
+  ok "flask installed"
 fi
 
-info "Installing Python packages: ${PYTHON_PKGS[*]}…"
-pip3 install "${PYTHON_PKGS[@]}" --quiet --break-system-packages 2>/dev/null || \
-  pip3 install "${PYTHON_PKGS[@]}" --quiet
-ok "Python packages installed"
+# gpiozero via pip only if the apt package isn't available
+if pkg_installed gpiozero; then
+  GZ_VER=$(python3 -c "import gpiozero; print(gpiozero.__version__)" 2>/dev/null)
+  ok "gpiozero already installed (v${GZ_VER})"
+else
+  info "Installing gpiozero…"
+  pip3 install gpiozero --quiet --break-system-packages
+  ok "gpiozero installed"
+fi
 
 # Install from requirements.txt if present
 if [[ -f "${INSTALL_DIR}/requirements.txt" ]]; then
   info "Installing from requirements.txt…"
-  pip3 install -r "${INSTALL_DIR}/requirements.txt" --quiet --break-system-packages 2>/dev/null || \
-    pip3 install -r "${INSTALL_DIR}/requirements.txt" --quiet
+  pip3 install -r "${INSTALL_DIR}/requirements.txt" --quiet --break-system-packages
   ok "requirements.txt packages installed"
 fi
 
