@@ -17,7 +17,7 @@ die()     { echo -e "${RED}[FAIL]  ${RST}$*" >&2; exit 1; }
 banner()  { echo -e "\n${BLD}${CYN}━━━  $*  ━━━${RST}\n"; }
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-REPO_URL="https://github.com/Nerd-or-Geek/Morse-Pi.git"   # ← edit before running
+REPO_URL="https://github.com/Nerd-or-Geek/Morse-Pi.git"
 BRANCH="main"
 INSTALL_DIR="/opt/morse-pi"
 VENV_DIR="${INSTALL_DIR}/venv"
@@ -33,10 +33,6 @@ echo -e "  Branch : ${BLD}${BRANCH}${RST}"
 echo -e "  Target : ${BLD}${INSTALL_DIR}${RST}"
 echo -e "  Port   : ${BLD}${PORT}${RST}"
 echo ""
-
-if [[ "${REPO_URL}" == *"YOUR_USERNAME"* ]]; then
-  die "Please edit REPO_URL in this script before running it."
-fi
 
 if [[ $EUID -ne 0 ]]; then
   die "Run this installer with sudo: sudo bash install.sh"
