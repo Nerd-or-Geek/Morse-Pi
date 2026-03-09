@@ -142,6 +142,14 @@ fi
 # ── Systemd service ────────────────────────────────────────────────────────────
 banner "Step 4 / 5 — Systemd service"
 
+# Remove any drop-in overrides left by previous installs (e.g. old venv path)
+DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.service.d"
+if [[ -d "${DROPIN_DIR}" ]]; then
+  info "Removing old systemd drop-in overrides at ${DROPIN_DIR}…"
+  rm -rf "${DROPIN_DIR}"
+  ok "Old overrides removed"
+fi
+
 # Resolve the actual user who invoked sudo (fall back to 'pi' → root)
 if [[ -n "${SUDO_USER:-}" ]]; then
   RUN_USER="${SUDO_USER}"
