@@ -86,7 +86,7 @@ curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.s
 ```
 
 The script will:
-1. Install system packages (`python3`, `pip`, `git`, `python3-gpiozero`, `python3-lgpio`)
+1. Install system packages (`python3`, `pip`, `git`, `python3-gpiozero`, `pigpio`, `python3-pigpio`)
 2. Clone this repo to `/opt/morse-pi`
 3. Install Flask and dependencies to the system Python with `pip3`
 4. Register and start a `systemd` service that auto-starts on boot
@@ -111,7 +111,8 @@ cd Morse-Pi
 sudo pip3 install flask --break-system-packages
 
 # On Raspberry Pi, also install GPIO support:
-sudo apt install python3-gpiozero python3-lgpio -y
+sudo apt install python3-gpiozero pigpio python3-pigpio -y
+sudo systemctl enable pigpiod --now
 sudo usermod -aG gpio $USER
 
 # 3. Run

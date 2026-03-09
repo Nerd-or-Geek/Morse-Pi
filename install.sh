@@ -60,9 +60,9 @@ for pkg in "${PKGS[@]}"; do
   fi
 done
 
-# GPIO libraries — lgpio is the default backend for gpiozero on Pi OS Bookworm+
+# GPIO libraries — pigpio backend works reliably on all Pi models including Zero W
 if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
-  for pkg in python3-gpiozero python3-lgpio; do
+  for pkg in python3-gpiozero pigpio python3-pigpio; do
     if dpkg -s "$pkg" &>/dev/null; then
       ok "$pkg already installed"
     else
@@ -71,6 +71,19 @@ if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
       ok "$pkg installed"
     fi
   done
+
+  # pigpio requires its daemon to be running
+  if ! systemctl is-enabled pigpiod &>/dev/null; then
+    info "Enabling pigpio daemon…"
+    systemctl enable pigpiod --now
+    ok "pigpiod enabled and started"
+  elif ! systemctl is-active pigpiod &>/dev/null; then
+    info "Starting pigpio daemon…"
+    systemctl start pigpiod
+    ok "pigpiod started"
+  else
+    ok "pigpiod already running"
+  fi
 fi
 
 # ── Clone / update repo ────────────────────────────────────────────────────────
@@ -184,8 +197,8 @@ Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-# Tell gpiozero to use lgpio (default on Pi OS Bookworm)
-Environment=GPIOZERO_PIN_FACTORY=lgpio
+# Tell gpiozero to use pigpio — works on all Pi models including Zero W
+Environment=GPIOZERO_PIN_FACTORY=pigpio
 # Give gpiozero time to initialise on boot
 TimeoutStartSec=30
 
