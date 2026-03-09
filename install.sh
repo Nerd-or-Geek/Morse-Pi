@@ -2,7 +2,7 @@
 # =============================================================================
 #  Morse-Pi  —  Automatic Installer
 #  Run on your Raspberry Pi with:
-#    curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/Morse-Pi/main/install.sh | bash
+#    curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | bash
 # =============================================================================
 set -euo pipefail
 
