@@ -14,6 +14,18 @@
       --orange: #ff8c42; --yellow: #facc15;
       --glow-g: 0 0 12px rgba(57,255,20,0.7);
       --glow-b: 0 0 12px rgba(0,212,255,0.7);
+      --overlay-bg: rgba(13,17,23,.7);
+      --overlay-full: rgba(13,17,23,.9);
+    }
+    :root.light {
+      --bg:    #f5f7fa; --bg2: #ffffff; --bg3: #e8ecf1;
+      --border: #d0d7de; --text: #1f2328; --dim: #656d76;
+      --green: #1a7f37; --blue: #0969da; --red: #cf222e;
+      --orange: #bf5700; --yellow: #9a6700;
+      --glow-g: 0 0 10px rgba(26,127,55,0.5);
+      --glow-b: 0 0 10px rgba(9,105,218,0.5);
+      --overlay-bg: rgba(245,247,250,.85);
+      --overlay-full: rgba(245,247,250,.95);
     }
     * { box-sizing:border-box; margin:0; padding:0; }
     body {
@@ -129,7 +141,7 @@
     .footer { text-align:center; color:var(--dim); font-size:.65rem; margin-top:16px; }
 
     /* ── No-GPIO overlay ─────────────── */
-    #no-gpio { background:rgba(13,17,23,.9); position:fixed; inset:0;
+    #no-gpio { background:var(--overlay-full); position:fixed; inset:0;
                display:flex; flex-direction:column; align-items:center;
                justify-content:center; gap:14px; z-index:99; padding:24px; text-align:center; }
     #no-gpio h2 { font-family:'Orbitron',monospace; color:var(--red); font-size:1.1rem; }
@@ -141,6 +153,52 @@
                border-top-color:var(--blue); border-radius:50%;
                animation:spin .7s linear infinite; display:inline-block; }
     @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ── GPIO Click Menu ─────────────── */
+    .gpio-menu-overlay {
+      position:fixed; inset:0; background:var(--overlay-bg);
+      z-index:100; display:none; align-items:center; justify-content:center;
+    }
+    .gpio-menu-overlay.active { display:flex; }
+    .gpio-menu {
+      background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+      padding:16px 18px; min-width:220px; max-width:280px;
+      box-shadow:0 8px 32px rgba(0,0,0,.5);
+    }
+    .gpio-menu-header {
+      font-family:'Orbitron',monospace; font-size:.85rem; letter-spacing:.1em;
+      color:var(--blue); margin-bottom:12px; text-align:center;
+      padding-bottom:10px; border-bottom:1px solid var(--border);
+    }
+    .gpio-menu-item {
+      display:block; width:100%; padding:10px 12px; margin:5px 0;
+      background:var(--bg3); border:1px solid var(--border); border-radius:6px;
+      color:var(--text); font-family:'Share Tech Mono',monospace; font-size:.75rem;
+      cursor:pointer; text-align:left; transition:border-color .15s, color .15s;
+    }
+    .gpio-menu-item:hover { border-color:var(--blue); color:var(--blue); }
+    .gpio-menu-item.ground:hover { border-color:#9ca3af; color:#9ca3af; }
+    .gpio-menu-item.speaker:hover { border-color:var(--blue); color:var(--blue); }
+    .gpio-menu-item.danger:hover { border-color:var(--red); color:var(--red); }
+    .gpio-menu-item.disabled {
+      opacity:0.4; cursor:not-allowed; pointer-events:none;
+    }
+    .gpio-menu-item .icon { display:inline-block; width:20px; text-align:center; margin-right:6px; }
+    .gpio-menu-close {
+      margin-top:12px; padding:8px; width:100%; background:transparent;
+      border:1px solid var(--border); border-radius:5px; color:var(--dim);
+      font-family:'Orbitron',monospace; font-size:.6rem; cursor:pointer;
+      transition:border-color .15s, color .15s;
+    }
+    .gpio-menu-close:hover { border-color:var(--red); color:var(--red); }
+    .gpio-menu-status {
+      font-size:.65rem; color:var(--dim); text-align:center;
+      margin-top:8px; min-height:16px;
+    }
+    .gpio-menu-status.error { color:var(--red); }
+    .gpio-menu-status.success { color:var(--green); }
+    .pin-cell.clickable { cursor:pointer; }
+    .pin-cell.clickable:hover { border-color:var(--orange); }
   </style>
 </head>
 <body>
@@ -176,6 +234,7 @@
   <div style="display:flex;gap:8px;align-items:center;">
     <div class="pill" id="conn-pill"><div class="dot" id="conn-dot"></div>SERVER</div>
     <div class="pill" id="gpio-pill"><div class="dot" id="gpio-dot"></div>GPIO</div>
+    <button class="btn-sm" onclick="toggleTheme()" id="theme-btn">&#9788; LIGHT</button>
     <button class="btn-sm" onclick="reinit()">&#9861; REINIT</button>
     <button class="btn-sm" onclick="window.close()">&#10005; CLOSE</button>
   </div>
@@ -188,7 +247,7 @@
 </div>
 
 <!-- Full grid -->
-<div class="section-lbl">ALL BCM GPIO PINS &nbsp;<span style="font-size:.55rem;font-weight:400;text-transform:none;">(click any row to probe)</span></div>
+<div class="section-lbl">ALL BCM GPIO PINS &nbsp;<span style="font-size:.55rem;font-weight:400;text-transform:none;">(click to assign)</span></div>
 <div class="pin-grid" id="pin-grid"></div>
 
 <!-- Error log -->
@@ -196,10 +255,15 @@
 <div class="err-log" id="err-log">Waiting for data&hellip;</div>
 
 <!-- Instructions -->
-<div class="section-lbl">HOW TO WIRE</div>
+<div class="section-lbl">HOW TO USE</div>
 <div class="instr">
+  <b>Assigning GPIO Pins:</b><br>
+  &nbsp;&#x2022; <b>Click any GPIO pin</b> in the grid above to open the assignment menu.<br>
+  &nbsp;&#x2022; Choose from: <b>Ground</b> (driven LOW), <b>Speaker/LED</b>, <b>Dot Key</b>, <b>Dash Key</b>, or <b>Straight/Data Key</b>.<br>
+  &nbsp;&#x2022; Key pins (dot, dash, straight) <b>cannot be grounded</b> &mdash; they use internal pull-up resistors.<br>
+  <br>
   <b>Paddle / Straight Key (pull-up wiring):</b><br>
-  &nbsp;&#x2022; Connect the <b>common / ground wire</b> of your paddle/key to any <b>GND pin</b> on the header (e.g. Pi Pin&nbsp;6, 9, 14, 20, 25, 30, 34, or 39).<br>
+  &nbsp;&#x2022; Connect the <b>common / ground wire</b> of your paddle/key to any <b>GND pin</b> on the header (e.g. Pi Pin&nbsp;6, 9, 14, 20, 25, 30, 34, or 39), or to a GPIO set as <b>Ground</b>.<br>
   &nbsp;&#x2022; Connect each <b>signal wire</b> to its assigned BCM GPIO pin.<br>
   &nbsp;&#x2022; When a paddle is pressed, the signal pin is pulled <b>LOW</b> (grounded) and will <b>glow green</b> above.<br>
   <br>
@@ -216,6 +280,33 @@
 
 <div class="footer">Auto-refreshing every 150ms &nbsp;&bull;&nbsp; <a href="/" style="color:var(--blue)">Back to main app</a></div>
 
+<!-- GPIO Pin Assignment Menu -->
+<div class="gpio-menu-overlay" id="gpio-menu-overlay" onclick="closeGpioMenu(event)">
+  <div class="gpio-menu" onclick="event.stopPropagation()">
+    <div class="gpio-menu-header" id="gpio-menu-header">BCM --</div>
+    <button class="gpio-menu-item ground" onclick="assignPin('ground')">
+      <span class="icon">&#9632;</span>SET AS GROUND
+    </button>
+    <button class="gpio-menu-item speaker" onclick="assignPin('speaker')">
+      <span class="icon">&#9836;</span>SET AS SPEAKER/LED
+    </button>
+    <button class="gpio-menu-item" id="btn-dot" onclick="assignPin('dot')">
+      <span class="icon">&#183;</span>SET AS DOT KEY
+    </button>
+    <button class="gpio-menu-item" id="btn-dash" onclick="assignPin('dash')">
+      <span class="icon">&#8722;</span>SET AS DASH KEY
+    </button>
+    <button class="gpio-menu-item" id="btn-straight" onclick="assignPin('straight')">
+      <span class="icon">&#9679;</span>SET AS STRAIGHT/DATA KEY
+    </button>
+    <button class="gpio-menu-item danger" onclick="assignPin('clear')">
+      <span class="icon">&#10005;</span>CLEAR ASSIGNMENT
+    </button>
+    <div class="gpio-menu-status" id="gpio-menu-status"></div>
+    <button class="gpio-menu-close" onclick="closeGpioMenu()">CANCEL</button>
+  </div>
+</div>
+
 <script>
 'use strict';
 const INIT_SETTINGS = {{ settings | tojson }};
@@ -231,6 +322,81 @@ const ALL_BCM = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25
 
 let lastData = null;
 let pollOk = false;
+let selectedBcm = null;
+
+// ── GPIO Menu Functions ────────────────────────
+function openGpioMenu(bcm) {
+  selectedBcm = bcm;
+  document.getElementById('gpio-menu-header').textContent = 'BCM ' + bcm;
+  document.getElementById('gpio-menu-status').textContent = '';
+  document.getElementById('gpio-menu-status').className = 'gpio-menu-status';
+  
+  // Update button states based on constraints
+  updateMenuButtons();
+  
+  document.getElementById('gpio-menu-overlay').classList.add('active');
+}
+
+function closeGpioMenu(evt) {
+  if (evt && evt.target !== document.getElementById('gpio-menu-overlay')) return;
+  document.getElementById('gpio-menu-overlay').classList.remove('active');
+  selectedBcm = null;
+}
+
+function updateMenuButtons() {
+  if (!lastData) return;
+  
+  const btnDot = document.getElementById('btn-dot');
+  const btnDash = document.getElementById('btn-dash');
+  const btnStraight = document.getElementById('btn-straight');
+  
+  // Get current pin assignments
+  const dotPin = lastData.dot_pin;
+  const dashPin = lastData.dash_pin;
+  const dataPin = lastData.data_pin;
+  const pinMode = lastData.pin_mode;
+  
+  // Show/hide based on pin mode
+  if (pinMode === 'dual') {
+    btnDot.style.display = 'block';
+    btnDash.style.display = 'block';
+    btnStraight.style.display = 'none';
+  } else {
+    btnDot.style.display = 'none';
+    btnDash.style.display = 'none';
+    btnStraight.style.display = 'block';
+  }
+}
+
+function assignPin(role) {
+  if (selectedBcm === null) return;
+  
+  const statusEl = document.getElementById('gpio-menu-status');
+  statusEl.textContent = 'Assigning...';
+  statusEl.className = 'gpio-menu-status';
+  
+  fetch('/assign_gpio', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({bcm: selectedBcm, role: role})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      statusEl.textContent = data.message || 'Assigned!';
+      statusEl.className = 'gpio-menu-status success';
+      // Close menu after short delay
+      setTimeout(() => closeGpioMenu(), 600);
+    } else {
+      statusEl.textContent = data.error || 'Assignment failed';
+      statusEl.className = 'gpio-menu-status error';
+    }
+  })
+  .catch(err => {
+    statusEl.textContent = 'Network error';
+    statusEl.className = 'gpio-menu-status error';
+  });
+}
 
 // ── Reinit ─────────────────────────────────────
 function reinit() {
@@ -261,8 +427,10 @@ function roleLabel(bcm, data) {
   const dp  = data.data_pin;
   const dop = data.dot_pin;
   const dap = data.dash_pin;
+  const grounded = data.grounded_pins || [];
   if (bcm === sp)  return 'SPEAKER';
   if (bcm === gp)  return 'GND OUT';
+  if (grounded.includes(bcm)) return 'GROUNDED';
   if (pm === 'dual') {
     if (bcm === dop) return 'DOT KEY';
     if (bcm === dap) return 'DASH KEY';
@@ -277,6 +445,9 @@ function pinClass(bcm, data) {
   if (!info) return 'error';
   if (info.role === 'speaker') return 'output';
   if (info.role === 'ground')  return 'gnd-out';
+  // Check grounded_pins array
+  const grounded = data.grounded_pins || [];
+  if (grounded.includes(bcm)) return 'gnd-out';
   if (info.active === true)    return 'active';
   if (info.active === null)    return 'error';
   return 'inactive';
@@ -335,7 +506,7 @@ function renderGrid(data) {
     const rl    = roleLabel(bcm, data);
     const phys  = BCM_PHYS[bcm] || '?';
     return `
-      <div class="pin-cell ${cls}" title="BCM ${bcm} \u2014 Pi pin ${phys}">
+      <div class="pin-cell ${cls} clickable" title="BCM ${bcm} \u2014 Pi pin ${phys} \u2014 Click to assign" onclick="openGpioMenu(${bcm})">
         <div class="pin-cell-bcm">BCM ${bcm}</div>
         <div class="pin-cell-dot"></div>
         <div class="pin-cell-role">${rl || '&nbsp;'}</div>
@@ -392,6 +563,31 @@ if (!SERVER_GPIO) {
 
 setInterval(poll, 150);
 poll();
+
+// ── Theme Toggle ────────────────────────────
+function toggleTheme() {
+  const root = document.documentElement;
+  const btn = document.getElementById('theme-btn');
+  if (root.classList.contains('light')) {
+    root.classList.remove('light');
+    btn.innerHTML = '&#9788; LIGHT';
+    localStorage.setItem('morse-diag-theme', 'dark');
+  } else {
+    root.classList.add('light');
+    btn.innerHTML = '&#9790; DARK';
+    localStorage.setItem('morse-diag-theme', 'light');
+  }
+}
+
+// Apply saved theme on load
+(function() {
+  const saved = localStorage.getItem('morse-diag-theme');
+  const btn = document.getElementById('theme-btn');
+  if (saved === 'light') {
+    document.documentElement.classList.add('light');
+    if (btn) btn.innerHTML = '&#9790; DARK';
+  }
+})();
 </script>
 </body>
 </html>

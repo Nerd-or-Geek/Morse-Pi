@@ -25,6 +25,28 @@
       --glow:       0 0 20px rgba(0,212,255,0.3);
       --glow-green: 0 0 20px rgba(57,255,20,0.4);
       --glow-red:   0 0 20px rgba(255,51,102,0.4);
+      --grid-line:  rgba(0,212,255,0.03);
+      --scanline:   rgba(0,0,0,0.03);
+    }
+    :root.light {
+      --bg:       #f5f7fa;
+      --bg2:      #ffffff;
+      --bg3:      #e8ecf1;
+      --bg4:      #dde3eb;
+      --border:   #c5cdd8;
+      --accent:   #0077b6;
+      --accent2:  #d45500;
+      --accent3:  #1a7f37;
+      --text:     #1f2328;
+      --text-dim: #656d76;
+      --danger:   #cf222e;
+      --gold:     #9a6700;
+      --purple:   #8250df;
+      --glow:       0 0 12px rgba(0,119,182,0.25);
+      --glow-green: 0 0 12px rgba(26,127,55,0.3);
+      --glow-red:   0 0 12px rgba(207,34,46,0.3);
+      --grid-line:  rgba(0,119,182,0.04);
+      --scanline:   rgba(0,0,0,0.015);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -38,14 +60,14 @@
     body::before {
       content: '';
       position: fixed; inset: 0;
-      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, var(--scanline) 2px, var(--scanline) 4px);
       pointer-events: none; z-index: 100;
     }
     .grid-bg {
       position: fixed; inset: 0;
       background-image:
-        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
       background-size: 40px 40px;
       pointer-events: none; z-index: 0;
     }
@@ -387,6 +409,7 @@
       <div class="status-pill"><div class="dot" id="gpio-dot"></div>GPIO</div>
       <div class="status-pill"><div class="dot" id="conn-dot"></div>SERVER</div>
       <div class="status-pill"><div class="dot" id="btn-dot"></div>KEY</div>
+      <button onclick="toggleTheme()" id="theme-btn" title="Toggle light/dark theme" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">&#9788; LIGHT</button>
       <button onclick="window.open('/diag','gpio_diag','width=560,height=820,resizable=yes,menubar=no,toolbar=no,location=no')" title="Open GPIO live diagnostic window" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">GPIO DIAG</button>
     </div>
   </header>
@@ -424,8 +447,8 @@ let cheatTabActive  = 'letters';
 let cheatOpen       = false;
 
 const SETTINGS_DEFAULTS = {
-  speaker_pin:18, speaker_polarity:'positive',
-  pin_mode:'single', data_pin:17, dot_pin:22, dash_pin:27, ground_pin:null,
+  speaker_pin:18, output_type:'speaker',
+  pin_mode:'single', data_pin:17, dot_pin:22, dash_pin:27, ground_pin:null, grounded_pins:[],
   use_external_switch:false,
   dot_freq:700, dash_freq:500, volume:0.75,
   wpm_target:20, difficulty:'easy',
@@ -786,21 +809,21 @@ function renderSettings(){
       </div>
 
       <div class="settings-section">
-        <div class="settings-section-title">&#9656; SPEAKER / BUZZER</div>
+        <div class="settings-section-title">&#9656; OUTPUT / SPEAKER</div>
         <div class="settings-grid">
           <div class="setting-row">
-            <div class="setting-label">Speaker GPIO Pin (BCM)</div>
+            <div class="setting-label">Output GPIO Pin (BCM)</div>
             <div class="setting-input-row"><input class="input-field" type="number" id="s-speaker_pin" value="${s.speaker_pin}" min="2" max="27"><button class="btn btn-primary" onclick="previewTone()">Test</button></div>
           </div>
           <div class="setting-row">
-            <div class="setting-label">Speaker Polarity</div>
+            <div class="setting-label">Output Type</div>
             <div class="segmented">
-              <button class="segmented-btn ${s.speaker_polarity!=='negative'?'active':''}" onclick="setPolarity('positive')">Active High (+)</button>
-              <button class="segmented-btn ${s.speaker_polarity==='negative'?'active':''}" onclick="setPolarity('negative')">Active Low (&minus;)</button>
+              <button class="segmented-btn ${s.output_type!=='led'?'active':''}" onclick="setOutputType('speaker')">&#9835; Speaker</button>
+              <button class="segmented-btn ${s.output_type==='led'?'active':''}" onclick="setOutputType('led')">&#9788; LED</button>
             </div>
-            <div class="setting-help">${s.speaker_polarity==='negative'
-              ?'<span class="tag tag-orange">Active Low</span> &mdash; speaker+ to 3.3V, speaker&minus; to GPIO pin (inverted drive).'
-              :'<span class="tag tag-blue">Active High</span> &mdash; speaker+ to GPIO pin (via resistor), speaker&minus; to GND.'}</div>
+            <div class="setting-help">${s.output_type==='led'
+              ?'<span class="tag tag-orange">LED Mode</span> &mdash; Output turns ON/OFF to flash an LED. Connect LED+ to GPIO via 220-470\u03A9 resistor, LED- to GND.'
+              :'<span class="tag tag-blue">Speaker Mode</span> &mdash; PWM audio output for piezo/speaker. Connect via 100-470\u03A9 series resistor for protection.'}</div>
           </div>
           <div class="setting-row">
             <div class="setting-label">Dot Tone (Hz)</div>
@@ -814,6 +837,7 @@ function renderSettings(){
             <div class="setting-label">Volume <span id="vol-display" style="color:var(--accent);margin-left:6px;">${Math.round(s.volume*100)}%</span></div>
             <input type="range" min="0" max="100" value="${Math.round(s.volume*100)}" id="s-volume" class="vol-slider"
               oninput="document.getElementById('vol-display').textContent=this.value+'%'">
+            <div class="setting-help">${s.output_type==='led'?'Volume has no effect in LED mode.':''}</div>
           </div>
         </div>
       </div>
@@ -890,14 +914,18 @@ function renderGpioMap(s) {
     assign[s.dot_pin]  = {role:'DOT KEY',  col:'key'};
     assign[s.dash_pin] = {role:'DASH KEY', col:'key'};
   }
-  if (s.speaker_polarity === 'negative') {
-    assign[s.speaker_pin] = {role:'SPK − (inv)', col:'spkr'};
+  if (s.output_type === 'led') {
+    assign[s.speaker_pin] = {role:'LED OUT', col:'spkr'};
   } else {
-    assign[s.speaker_pin] = {role:'SPK + (out)', col:'spkr'};
+    assign[s.speaker_pin] = {role:'SPEAKER', col:'spkr'};
   }
   if (s.ground_pin != null) {
     assign[s.ground_pin] = {role:'GND OUT', col:'gnd-out'};
   }
+  // Also show grounded_pins
+  (s.grounded_pins || []).forEach(pin => {
+    if (pin != null) assign[pin] = {role:'GND OUT', col:'gnd-out'};
+  });
   function ptype(lbl){ if(lbl==='3V3')return'3v3'; if(lbl==='5V')return'5v'; if(lbl==='GND')return'gnd'; return'gpio'; }
   function bcmOf(lbl){ return lbl.startsWith('BCM')?parseInt(lbl.slice(3)):null; }
   function dotStyle(lbl){
@@ -1003,7 +1031,7 @@ function doAssignPin(bcm, settingKey) {
   closeGpioPopover();
   ['data_pin','dot_pin','dash_pin','speaker_pin'].forEach(k=>{if(settings[k]===bcm)settings[k]=null;});
   if(settingKey) settings[settingKey]=bcm;
-  const payload={pin_mode:settings.pin_mode,speaker_polarity:settings.speaker_polarity,
+  const payload={pin_mode:settings.pin_mode,output_type:settings.output_type,
     data_pin:settings.data_pin,dot_pin:settings.dot_pin,
     dash_pin:settings.dash_pin,speaker_pin:settings.speaker_pin};
   fetch('/save_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
@@ -1024,6 +1052,12 @@ function updateGpioPinStates(pinStates) {
 let _netPollTimer = null;
 
 function renderNetwork(){
+  const dual = settings.pin_mode === 'dual';
+  const keyMode = state.net_key_mode || false;
+  const keyBuf = state.net_morse_buffer || '';
+  const keyOut = state.net_morse_output || '';
+  const isActive = state.button_active && keyMode;
+  
   return `
     <div class="panel">
       <div class="panel-title">NETWORK &mdash; MULTI-PI MESH</div>
@@ -1057,6 +1091,50 @@ function renderNetwork(){
           <div class="setting-label">Recipient</div>
           <select class="input-field" id="net-send-target" style="margin-bottom:0;"></select>
         </div>
+        
+        <div class="setting-row full" style="margin-bottom:12px;">
+          <div class="setting-label">Input Method</div>
+          <div class="segmented">
+            <button class="segmented-btn ${!keyMode?'active':''}" onclick="setNetKeyMode(false)">&#9999; Type Text</button>
+            <button class="segmented-btn ${keyMode?'active':''}" onclick="setNetKeyMode(true)">&#9835; Use Key/Paddle</button>
+          </div>
+        </div>
+        
+        ${keyMode ? `
+        <div class="setting-row full">
+          <div class="setting-label">Key in your message using ${dual ? 'paddles (Z/X)' : 'key (SPACE)'}</div>
+          <div class="section-header" style="margin-top:8px;">Current Symbol Buffer</div>
+          <div class="morse-display ${isActive?'active-send':''}" id="net-key-buf" style="font-size:1.8rem;justify-content:center;min-height:64px;">
+            ${keyBuf?esc(keyBuf):'<span style="color:var(--text-dim);font-size:0.85rem;">awaiting input\u2026</span>'}
+            ${isActive?'<span class="cursor"></span>':''}
+          </div>
+          <div class="section-header">Decoded Message</div>
+          <div class="morse-display" id="net-key-out" style="font-size:1.3rem;justify-content:center;min-height:54px;">
+            ${keyOut?esc(keyOut):'<span style="color:var(--text-dim);font-size:0.8rem;">start keying\u2026</span>'}
+          </div>
+          ${dual?`
+          <div class="morse-key-area">
+            <button class="btn morse-key morse-key-dot" id="net-key-dot"
+              onmousedown="netKeyDownDual('dot')" onmouseup="netKeyUpDual('dot')">
+              &bull;&nbsp; DOT<span class="morse-key-sub">Z key</span>
+            </button>
+            <button class="btn morse-key morse-key-dash" id="net-key-dash"
+              onmousedown="netKeyDownDual('dash')" onmouseup="netKeyUpDual('dash')">
+              &mdash;&nbsp; DASH<span class="morse-key-sub">X key</span>
+            </button>
+          </div>`:`
+          <div class="morse-key-area">
+            <button class="btn morse-key morse-key-single" id="net-key-single"
+              onmousedown="netKeyDown()" onmouseup="netKeyUp()">
+              KEY<span class="morse-key-sub">SPACE or hold</span>
+            </button>
+          </div>`}
+          <div class="btn-group" style="margin-top:10px;">
+            <button class="btn btn-success" onclick="sendNetMorse()">SEND MESSAGE</button>
+            <button class="btn btn-danger" onclick="clearNetMorse()">Clear</button>
+          </div>
+        </div>
+        ` : `
         <div class="setting-row full">
           <div class="setting-label">Message (plain text)</div>
           <div class="setting-input-row">
@@ -1068,6 +1146,7 @@ function renderNetwork(){
           </div>
           <div id="net-send-morse" style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:var(--accent3);margin-top:5px;min-height:16px;letter-spacing:0.08em;"></div>
         </div>
+        `}
       </div>
 
       <div class="settings-section">
@@ -1199,6 +1278,61 @@ function clearInbox(){
   api('/clear_inbox','POST').then(()=>refreshNetStatus());
 }
 
+// ── Network Key-Based Morse Input ─────────────────
+function setNetKeyMode(enabled){
+  api('/net_key_mode','POST',{enabled}).then(()=>{
+    state.net_key_mode = enabled;
+    renderContent();
+  }).catch(()=>toast('Failed to toggle key mode','error'));
+}
+
+function netKeyDown(){
+  document.getElementById('net-key-single')?.classList.add('pressed');
+  api('/net_key_press','POST',{pressed:true}).catch(()=>{});
+}
+
+function netKeyUp(){
+  document.getElementById('net-key-single')?.classList.remove('pressed');
+  api('/net_key_press','POST',{pressed:false}).catch(()=>{});
+}
+
+function netKeyDownDual(sym){
+  document.getElementById('net-key-'+sym)?.classList.add('pressed');
+  api('/key_press_dual','POST',{sym,pressed:true}).catch(()=>{});
+}
+
+function netKeyUpDual(sym){
+  document.getElementById('net-key-'+sym)?.classList.remove('pressed');
+  api('/key_press_dual','POST',{sym,pressed:false}).catch(()=>{});
+}
+
+function clearNetMorse(){
+  api('/net_clear_morse','POST').then(()=>{
+    state.net_morse_buffer = '';
+    state.net_morse_output = '';
+    renderContent();
+  }).catch(()=>toast('Clear failed','error'));
+}
+
+function sendNetMorse(){
+  const selectEl = document.getElementById('net-send-target');
+  if(!selectEl || !selectEl.value){toast('Select a peer first','warning');return;}
+  const text = state.net_morse_output || '';
+  if(!text.trim()){toast('Key in a message first','warning');return;}
+  const parts = selectEl.value.split(':');
+  const ip = parts[0]; const port = parseInt(parts[1]||'5000');
+  api('/net_send_morse','POST',{ip,port}).then(res=>{
+    if(res.ok){
+      toast('Sent: '+res.sent_text,'success');
+      state.net_morse_buffer = '';
+      state.net_morse_output = '';
+      renderContent();
+    } else {
+      toast('Send failed: '+(res.error||'?'),'error',4000);
+    }
+  }).catch(()=>toast('Send failed','error'));
+}
+
 // ── HELP ───────────────────────────────────────
 function renderHelp(){return `
   <div class="panel">
@@ -1240,10 +1374,10 @@ function renderHelp(){return `
         </ul>
       </div>
       <div class="help-card">
-        <div class="help-card-title">Speaker Polarity</div>
+        <div class="help-card-title">Output Types</div>
         <ul>
-          <li><span>Active High: pin&rarr;spkr+, GND&rarr;spkr&minus;</span></li>
-          <li><span>Active Low: 3.3V&rarr;spkr+, pin&rarr;spkr&minus;</span></li>
+          <li><span>Speaker: PWM audio for piezo/buzzer</span></li>
+          <li><span>LED: On/Off flashing for visual output</span></li>
           <li><span>Always use a 100&ndash;470&Omega; series resistor</span></li>
         </ul>
       </div>
@@ -1405,10 +1539,10 @@ function copyText(text){if(!text)return;navigator.clipboard?.writeText(text).the
 
 // ── Settings helpers ───────────────────────────
 function setPinMode(mode){settings.pin_mode=mode;renderContent();}
-function setPolarity(pol){settings.speaker_polarity=pol;renderContent();}
+function setOutputType(type){settings.output_type=type;renderContent();}
 function saveSettings(){
   const keys=['speaker_pin','dot_freq','dash_freq','wpm_target','difficulty','data_pin','dot_pin','dash_pin'];
-  const data={pin_mode:settings.pin_mode,speaker_polarity:settings.speaker_polarity,use_external_switch:settings.use_external_switch||false};
+  const data={pin_mode:settings.pin_mode,output_type:settings.output_type,use_external_switch:settings.use_external_switch||false};
   keys.forEach(k=>{const el=document.getElementById('s-'+k);if(el)data[k]=el.value;});
   // Device name
   const dnEl=document.getElementById('s-device_name');
@@ -1482,7 +1616,7 @@ document.addEventListener('keyup',e=>{
 });
 
 // ── Polling — incremental DOM updates ──────────
-let _pBtn=null,_pSBuf=null,_pSOut=null,_pSpBuf=null,_pSpOut=null;
+let _pBtn=null,_pSBuf=null,_pSOut=null,_pSpBuf=null,_pSpOut=null,_pNetBuf=null,_pNetOut=null;
 setInterval(()=>{
   fetch('/status').then(r=>{connOk();return r.json();}).then(s=>{
     const bd=document.getElementById('btn-dot');
@@ -1514,6 +1648,19 @@ setInterval(()=>{
         state.speed_morse_output = s.speed_morse_output;
         _patchSpeedDisplay();
       }
+    }
+    // Incremental update for Network key mode
+    else if(state.mode==='network' && state.net_key_mode){
+      const bufChanged = s.net_morse_buffer !== _pNetBuf;
+      const outChanged = s.net_morse_output !== _pNetOut;
+      const btnChanged = s.button_active !== _pBtn;
+      if(bufChanged || outChanged || btnChanged){
+        state.button_active = s.button_active;
+        state.net_morse_buffer = s.net_morse_buffer;
+        state.net_morse_output = s.net_morse_output;
+        _patchNetKeyDisplay();
+      }
+      _pNetBuf = s.net_morse_buffer; _pNetOut = s.net_morse_output;
     }
     _pBtn=s.button_active;_pSBuf=s.current_morse_buffer;_pSOut=s.send_output;_pSpBuf=s.speed_morse_buffer;_pSpOut=s.speed_morse_output;
   }).catch(()=>connLost());
@@ -1552,6 +1699,22 @@ function _patchSpeedDisplay(){
       : '<span style="color:var(--text-dim);font-size:0.83rem;">start sending\u2026</span>';
   }
 }
+function _patchNetKeyDisplay(){
+  const buf = state.net_morse_buffer||'';
+  const out = state.net_morse_output||'';
+  const isActive = state.button_active;
+  const bufEl = document.getElementById('net-key-buf');
+  const outEl = document.getElementById('net-key-out');
+  if(bufEl){
+    bufEl.className = 'morse-display'+(isActive?' active-send':'');
+    bufEl.innerHTML = buf ? esc(buf)+(isActive?'<span class="cursor"></span>':'')
+      : '<span style="color:var(--text-dim);font-size:0.85rem;">awaiting input\u2026</span>';
+  }
+  if(outEl){
+    outEl.innerHTML = out ? esc(out)
+      : '<span style="color:var(--text-dim);font-size:0.8rem;">start keying\u2026</span>';
+  }
+}
 
 // ── Init ───────────────────────────────────────
 document.getElementById('cheat-toggle-btn').addEventListener('click',toggleCheatSheet);
@@ -1566,6 +1729,31 @@ fetch('/status').then(r=>r.json()).then(s=>{
 fetch('/get_settings').then(r=>r.json()).then(s=>{
   settings=Object.assign({},SETTINGS_DEFAULTS,s);
 }).catch(()=>{});
+
+// ── Theme Toggle ────────────────────────────
+function toggleTheme() {
+  const root = document.documentElement;
+  const btn = document.getElementById('theme-btn');
+  if (root.classList.contains('light')) {
+    root.classList.remove('light');
+    if(btn) btn.innerHTML = '&#9788; LIGHT';
+    localStorage.setItem('morse-pi-theme', 'dark');
+  } else {
+    root.classList.add('light');
+    if(btn) btn.innerHTML = '&#9790; DARK';
+    localStorage.setItem('morse-pi-theme', 'light');
+  }
+}
+
+// Apply saved theme on load
+(function() {
+  const saved = localStorage.getItem('morse-pi-theme');
+  const btn = document.getElementById('theme-btn');
+  if (saved === 'light') {
+    document.documentElement.classList.add('light');
+    if (btn) btn.innerHTML = '&#9790; DARK';
+  }
+})();
 </script>
 </body>
 </html>

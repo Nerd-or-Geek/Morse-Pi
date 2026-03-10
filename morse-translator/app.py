@@ -39,12 +39,13 @@ MORSE_CODE = {
 SETTINGS_FILE = "settings.json"
 DEFAULT_SETTINGS = {
     "speaker_pin": 18,
-    "speaker_polarity": "positive",
+    "output_type": "speaker",  # "speaker" or "led"
     "pin_mode": "single",
     "data_pin": 17,
     "dot_pin": 22,
     "dash_pin": 27,
     "ground_pin": None,
+    "grounded_pins": [],  # list of BCM pins set as ground outputs
     "use_external_switch": False,
     "dot_freq": 700,
     "dash_freq": 500,
@@ -213,6 +214,9 @@ state = {
     "button_active": False,
     "current_morse_buffer": "",
     "net_inbox": [],      # list of received Morse messages
+    "net_morse_buffer": "",    # buffer for key-based network sending
+    "net_morse_output": "",    # decoded text from key input for network
+    "net_key_mode": False,     # True when using key to compose network message
 }
 
 pin_states = {}  # {bcm: bool} live state updated by poll thread + callbacks
@@ -227,8 +231,11 @@ def _managed_bcm_set():
     s = set()
     sp = settings.get("speaker_pin")
     gp = settings.get("ground_pin")
+    grounded = settings.get("grounded_pins", [])
     if sp is not None: s.add(int(sp))
     if gp is not None: s.add(int(gp))
+    for pin in grounded:
+        if pin is not None: s.add(int(pin))
     if settings.get("pin_mode") == "dual":
         dp = settings.get("dot_pin");  da = settings.get("dash_pin")
         if dp  is not None: s.add(int(dp))
@@ -273,11 +280,12 @@ def get_all_pin_states():
     dop = settings.get("dot_pin")
     dap = settings.get("dash_pin")
     gp  = settings.get("ground_pin")
+    grounded = settings.get("grounded_pins", [])
     result = {}
     for bcm in ALL_BCM_PINS:
         if bcm == sp:
             result[str(bcm)] = {"active": None, "role": "speaker"}
-        elif bcm == gp:
+        elif bcm == gp or bcm in grounded:
             result[str(bcm)] = {"active": None, "role": "ground"}
         elif pm == "dual" and bcm == dop:
             result[str(bcm)] = {"active": dot_btn.is_pressed  if dot_btn  else None, "role": "dot"}
@@ -321,6 +329,7 @@ data_btn   = None
 dot_btn    = None
 dash_btn   = None
 ground_out = None  # OutputDevice held LOW to act as a GND pin
+grounded_outputs = []  # List of OutputDevices for grounded_pins
 
 # ── Iambic Keyer ─────────────────────────────────────────────────────────────
 _KEYER_IDLE = 'IDLE'
@@ -568,7 +577,7 @@ def _stop_keyer_thread():
 
 
 def init_gpio():
-    global beeper, data_btn, dot_btn, dash_btn, ground_out
+    global beeper, data_btn, dot_btn, dash_btn, ground_out, grounded_outputs
     if not GPIO_AVAILABLE:
         return
     try:
@@ -576,17 +585,36 @@ def init_gpio():
             if dev:
                 try: dev.close()
                 except: pass
+        # Close any existing grounded outputs
+        for dev in grounded_outputs:
+            if dev:
+                try: dev.close()
+                except: pass
+        grounded_outputs = []
+        
         beeper = PWMOutputDevice(
             settings["speaker_pin"],
             frequency=max(1, int(settings["dot_freq"])),
             initial_value=0
         )
-        # Ground output pin: drive LOW so paddle common wire works on a GPIO pin
+        # Ground output pin (legacy single pin): drive LOW so paddle common wire works on a GPIO pin
         gp = settings.get("ground_pin")
         if gp is not None:
             ground_out = OutputDevice(gp, initial_value=False)
         else:
             ground_out = None
+        
+        # Handle grounded_pins array - each pin is driven LOW as a ground source
+        grounded = settings.get("grounded_pins", [])
+        for pin in grounded:
+            if pin is not None:
+                try:
+                    gnd_dev = OutputDevice(int(pin), initial_value=False)
+                    grounded_outputs.append(gnd_dev)
+                except Exception as e:
+                    msg = f"ground pin {pin}: {e}"
+                    gpio_error_log.append(msg)
+        
         if settings.get("pin_mode") == "dual":
             # 5 ms hardware debounce; keyer thread polls is_pressed directly
             dot_btn  = Button(settings["dot_pin"],  pull_up=True, bounce_time=0.005)
@@ -618,17 +646,24 @@ def play_tone(freq, duration=None, duty=None):
         with lock:
             try:
                 vol = float(duty) if duty is not None else settings["volume"]
-                # Clamp volume to usable PWM range; very low duty cycles
-                # produce no audible tone on Pi hardware, and 1.0 is a flat
-                # DC level (no oscillation = silence on piezo/speaker).
-                vol = max(0.01, min(0.95, vol))
-                if settings.get("speaker_polarity") == "negative":
-                    vol = 1.0 - vol
-                beeper.frequency = max(100, min(4000, int(freq)))
-                beeper.value = vol
+                output_type = settings.get("output_type", "speaker")
+                
+                if output_type == "led":
+                    # LED mode: just turn on (high) for the duration
+                    beeper.frequency = 1000  # doesn't matter for LED
+                    beeper.value = 1.0  # full on
+                else:
+                    # Speaker mode: use PWM with frequency for audio
+                    # Clamp volume to usable PWM range; very low duty cycles
+                    # produce no audible tone on Pi hardware, and 1.0 is a flat
+                    # DC level (no oscillation = silence on piezo/speaker).
+                    vol = max(0.01, min(0.95, vol))
+                    beeper.frequency = max(100, min(4000, int(freq)))
+                    beeper.value = vol
+                
                 if duration:
                     time.sleep(duration)
-                    beeper.value = 1.0 if settings.get("speaker_polarity") == "negative" else 0
+                    beeper.value = 0
             except Exception:
                 pass
 
@@ -883,11 +918,13 @@ def gpio_poll():
         "gpio_available": GPIO_AVAILABLE,
         "gpio_error":     GPIO_ERROR,
         "pin_mode":       settings.get("pin_mode", "single"),
+        "output_type":    settings.get("output_type", "speaker"),
         "data_pin":       settings.get("data_pin"),
         "dot_pin":        settings.get("dot_pin"),
         "dash_pin":       settings.get("dash_pin"),
         "speaker_pin":    settings.get("speaker_pin"),
         "ground_pin":     settings.get("ground_pin"),
+        "grounded_pins":  settings.get("grounded_pins", []),
         "states":         get_all_pin_states(),
         "errors":         gpio_error_log[-20:],
         "timestamp":      time.time()
@@ -1196,6 +1233,207 @@ def send_to_peer():
 def clear_inbox():
     state["net_inbox"].clear()
     return jsonify({"ok": True})
+
+@app.route("/assign_gpio", methods=["POST"])
+def assign_gpio():
+    """Assign a GPIO pin role from the diagnostic page.
+    
+    Roles: speaker_pin, data_pin, dot_pin, dash_pin, ground (add to grounded_pins), clear
+    Constraints:
+    - dot_pin and dash_pin cannot be the same
+    - dot_pin, dash_pin, data_pin cannot be grounded
+    - speaker_pin cannot be grounded
+    """
+    data = request.json or {}
+    bcm = data.get("bcm")
+    role = data.get("role")  # speaker_pin, data_pin, dot_pin, dash_pin, ground, clear
+    
+    if bcm is None or role is None:
+        return jsonify({"ok": False, "error": "missing bcm or role"})
+    
+    bcm = int(bcm)
+    
+    # Get protected pins (keys can't be grounded)
+    key_pins = set()
+    if settings.get("pin_mode") == "dual":
+        if settings.get("dot_pin") is not None:
+            key_pins.add(int(settings.get("dot_pin")))
+        if settings.get("dash_pin") is not None:
+            key_pins.add(int(settings.get("dash_pin")))
+    else:
+        if settings.get("data_pin") is not None:
+            key_pins.add(int(settings.get("data_pin")))
+    
+    if role == "ground":
+        # Cannot ground key pins or speaker pin
+        if bcm in key_pins:
+            return jsonify({"ok": False, "error": "Cannot ground a key pin"})
+        if bcm == settings.get("speaker_pin"):
+            return jsonify({"ok": False, "error": "Cannot ground the speaker pin"})
+        # Clear any existing role for this pin
+        for k in ["speaker_pin", "data_pin", "dot_pin", "dash_pin"]:
+            if settings.get(k) == bcm:
+                settings[k] = None
+        # Add to grounded_pins if not already there
+        grounded = settings.get("grounded_pins", [])
+        if bcm not in grounded:
+            grounded.append(bcm)
+            settings["grounded_pins"] = grounded
+    elif role == "clear":
+        # Remove all assignments for this pin
+        for k in ["speaker_pin", "data_pin", "dot_pin", "dash_pin", "ground_pin"]:
+            if settings.get(k) == bcm:
+                settings[k] = None
+        grounded = settings.get("grounded_pins", [])
+        if bcm in grounded:
+            grounded.remove(bcm)
+            settings["grounded_pins"] = grounded
+    elif role == "speaker_pin":
+        # Cannot set a key pin as speaker
+        if bcm in key_pins:
+            return jsonify({"ok": False, "error": "This pin is used as a key"})
+        # Remove from grounded if present
+        grounded = settings.get("grounded_pins", [])
+        if bcm in grounded:
+            grounded.remove(bcm)
+            settings["grounded_pins"] = grounded
+        # Clear any existing speaker assignment
+        settings["speaker_pin"] = bcm
+    elif role in ["data_pin", "dot_pin", "dash_pin"]:
+        # Cannot set a grounded pin as a key
+        grounded = settings.get("grounded_pins", [])
+        if bcm in grounded:
+            return jsonify({"ok": False, "error": "Cannot use a grounded pin as a key"})
+        # For dot/dash, ensure they're not the same
+        if role == "dot_pin":
+            if bcm == settings.get("dash_pin"):
+                return jsonify({"ok": False, "error": "Dot and dash pins cannot be the same"})
+        elif role == "dash_pin":
+            if bcm == settings.get("dot_pin"):
+                return jsonify({"ok": False, "error": "Dot and dash pins cannot be the same"})
+        # Clear other key assignments for this pin
+        for k in ["speaker_pin", "data_pin", "dot_pin", "dash_pin", "ground_pin"]:
+            if settings.get(k) == bcm:
+                settings[k] = None
+        settings[role] = bcm
+    else:
+        return jsonify({"ok": False, "error": f"Unknown role: {role}"})
+    
+    save_settings_to_file(settings)
+    recreate_gpio()
+    return jsonify({"ok": True, "settings": settings})
+
+# ── Network key-based morse sending ────────────────────────────────────────────
+net_morse_buffer = []
+net_morse_active = False
+net_morse_press_time = 0
+net_morse_gap_timer = None
+
+def net_key_pressed():
+    global net_morse_active, net_morse_press_time, net_morse_gap_timer
+    net_morse_active = True
+    net_morse_press_time = time.time()
+    state["button_active"] = True
+    if net_morse_gap_timer:
+        net_morse_gap_timer.cancel()
+    play_tone(settings["dot_freq"], duty=settings["volume"])
+
+def net_key_released():
+    global net_morse_active, net_morse_buffer, net_morse_gap_timer
+    net_morse_active = False
+    state["button_active"] = False
+    stop_tone()
+    duration = time.time() - net_morse_press_time
+    symbol = '.' if duration < _get_dot_unit() * 2 else '-'
+    net_morse_buffer.append(symbol)
+    state["net_morse_buffer"] = ''.join(net_morse_buffer)
+    if net_morse_gap_timer:
+        net_morse_gap_timer.cancel()
+    net_morse_gap_timer = threading.Timer(_get_letter_gap_secs(), net_finalize_letter)
+    net_morse_gap_timer.start()
+
+def net_finalize_letter():
+    global net_morse_buffer, net_morse_gap_timer
+    if not net_morse_active and net_morse_buffer:
+        code = ''.join(net_morse_buffer)
+        rev = {v: k for k, v in MORSE_CODE.items()}
+        char = rev.get(code, '?')
+        state["net_morse_output"] += char
+        state["net_morse_buffer"] = ""
+        net_morse_buffer.clear()
+        net_morse_gap_timer = threading.Timer(_get_word_extra_secs(), net_finalize_word)
+        net_morse_gap_timer.start()
+
+def net_finalize_word():
+    if not net_morse_active:
+        if state["net_morse_output"] and not state["net_morse_output"].endswith(' '):
+            state["net_morse_output"] += ' '
+
+@app.route("/net_key_mode", methods=["POST"])
+def net_key_mode():
+    """Toggle network key input mode on/off."""
+    data = request.json or {}
+    enabled = data.get("enabled", False)
+    state["net_key_mode"] = enabled
+    if not enabled:
+        # Clear buffers when disabling
+        state["net_morse_buffer"] = ""
+        state["net_morse_output"] = ""
+        net_morse_buffer.clear()
+    return jsonify({"ok": True, "net_key_mode": state["net_key_mode"]})
+
+@app.route("/net_key_press", methods=["POST"])
+def net_key_press():
+    """Handle key press/release for network morse composition."""
+    pressed = request.json.get("pressed", False)
+    if pressed:
+        net_key_pressed()
+    else:
+        net_key_released()
+    return jsonify({"ok": True})
+
+@app.route("/net_clear_morse", methods=["POST"])
+def net_clear_morse():
+    """Clear the network morse buffer."""
+    state["net_morse_buffer"] = ""
+    state["net_morse_output"] = ""
+    net_morse_buffer.clear()
+    return jsonify({"ok": True})
+
+@app.route("/net_send_morse", methods=["POST"])
+def net_send_morse():
+    """Send the composed morse message to a peer."""
+    data = request.json or {}
+    ip = data.get("ip", "")
+    port = int(data.get("port", 5000))
+    text = state.get("net_morse_output", "").strip().upper()
+    morse = morse_encode(text) if text else ""
+    
+    if not ip or not text:
+        return jsonify({"ok": False, "error": "missing ip or no message composed"})
+    
+    payload = json.dumps({
+        "sender_name": settings.get("device_name", "Morse Pi"),
+        "text": text,
+        "morse": morse,
+    }).encode()
+    
+    try:
+        url = f"http://{ip}:{port}/receive_morse"
+        req = _urllib_request.Request(
+            url, data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with _urllib_request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read())
+        # Clear buffer after successful send
+        state["net_morse_buffer"] = ""
+        state["net_morse_output"] = ""
+        net_morse_buffer.clear()
+        return jsonify({"ok": True, "result": result, "sent_text": text})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 @app.route("/key_press", methods=["POST"])
 def key_press():
