@@ -42,7 +42,8 @@ if [[ -d "${INSTALL_DIR}/.git" ]]; then
   echo -e "  ${CYN}1)${RST} Full update (check packages + update code + restart service)"
   echo -e "  ${CYN}2)${RST} Quick update (skip packages, just update code + restart service)"
   echo ""
-  read -p "Choose option [1/2, default=1]: " UPDATE_CHOICE
+  echo -n "Choose option [1/2, default=1]: "
+  read UPDATE_CHOICE < /dev/tty
   if [[ "${UPDATE_CHOICE}" == "2" ]]; then
     SKIP_PACKAGES=true
     info "Skipping package checks — quick update mode"
