@@ -88,27 +88,15 @@ fi
 
 # ── System packages ────────────────────────────────────────────────────────────
 if [[ "${SKIP_PACKAGES}" == "true" ]]; then
-  banner "Step 1 / 5 — System packages (SKIPPED)"
+  banner "Step 1 / 6 — System packages (SKIPPED)"
   info "Skipping package checks as requested"
 else
-  banner "Step 1 / 5 — System packages"
-info "Refreshing package lists…"
-apt-get update -qq
+  banner "Step 1 / 6 — System packages"
+  info "Refreshing package lists…"
+  apt-get update -qq
 
-PKGS=(python3 python3-pip git)
-for pkg in "${PKGS[@]}"; do
-  if dpkg -s "$pkg" &>/dev/null; then
-    ok "$pkg already installed"
-  else
-    info "Installing $pkg…"
-    apt-get install -y "$pkg" -qq
-    ok "$pkg installed"
-  fi
-done
-
-# GPIO libraries — pigpio backend works reliably on all Pi models including Zero W
-if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
-  for pkg in python3-gpiozero pigpio python3-pigpio; do
+  PKGS=(python3 python3-pip git)
+  for pkg in "${PKGS[@]}"; do
     if dpkg -s "$pkg" &>/dev/null; then
       ok "$pkg already installed"
     else
@@ -118,23 +106,35 @@ if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
     fi
   done
 
-  # pigpio requires its daemon to be running
-  if ! systemctl is-enabled pigpiod &>/dev/null; then
-    info "Enabling pigpio daemon…"
-    systemctl enable pigpiod --now
-    ok "pigpiod enabled and started"
-  elif ! systemctl is-active pigpiod &>/dev/null; then
-    info "Starting pigpio daemon…"
-    systemctl start pigpiod
-    ok "pigpiod started"
-  else
-    ok "pigpiod already running"
+  # GPIO libraries — pigpio backend works reliably on all Pi models including Zero W
+  if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
+    for pkg in python3-gpiozero pigpio python3-pigpio; do
+      if dpkg -s "$pkg" &>/dev/null; then
+        ok "$pkg already installed"
+      else
+        info "Installing $pkg…"
+        apt-get install -y "$pkg" -qq
+        ok "$pkg installed"
+      fi
+    done
+
+    # pigpio requires its daemon to be running
+    if ! systemctl is-enabled pigpiod &>/dev/null; then
+      info "Enabling pigpio daemon…"
+      systemctl enable pigpiod --now
+      ok "pigpiod enabled and started"
+    elif ! systemctl is-active pigpiod &>/dev/null; then
+      info "Starting pigpio daemon…"
+      systemctl start pigpiod
+      ok "pigpiod started"
+    else
+      ok "pigpiod already running"
+    fi
   fi
 fi
-fi  # end SKIP_PACKAGES check
 
 # ── Clone / update repo ────────────────────────────────────────────────────────
-banner "Step 2 / 5 — Repository"
+banner "Step 2 / 6 — Repository"
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
   IS_UPDATE=true
   info "Existing installation found at ${INSTALL_DIR}. Updating…"
@@ -198,7 +198,7 @@ for leftover in "${INSTALL_DIR}/.venv" "${INSTALL_DIR}/env" "${APP_DIR}/venv" "$
 done
 
 # ── Python packages ──────────────────────────────────────────────────────────
-banner "Step 3 / 5 — Python packages"
+banner "Step 3 / 6 — Python packages"
 
 # Helper: check if a Python package is already importable
 pkg_installed(){ python3 -c "import $1" 2>/dev/null; }
@@ -231,7 +231,7 @@ if [[ -f "${INSTALL_DIR}/requirements.txt" ]]; then
 fi
 
 # ── Systemd service ────────────────────────────────────────────────────────────
-banner "Step 4 / 5 — Systemd service"
+banner "Step 4 / 6 — Systemd service"
 
 # Remove any drop-in overrides left by previous installs (e.g. old venv path)
 DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.service.d"
@@ -300,6 +300,8 @@ if getent group gpio &>/dev/null; then
   fi
 fi
 
+# Create the systemd service file
+info "Creating systemd service file at ${SERVICE_FILE}…"
 cat > "${SERVICE_FILE}" <<EOF
 [Unit]
 Description=Morse-Pi — Morse code trainer web app
@@ -323,20 +325,22 @@ TimeoutStartSec=30
 [Install]
 WantedBy=multi-user.target
 EOF
-ok "Service file written to ${SERVICE_FILE}"
+
+# Verify the service file was created
+if [[ -f "${SERVICE_FILE}" ]]; then
+  ok "Service file written to ${SERVICE_FILE}"
+else
+  die "Failed to create service file at ${SERVICE_FILE}"
+fi
 
 info "Reloading systemd daemon…"
 systemctl daemon-reload
 ok "systemd reloaded"
 
 # Always ensure service is enabled (will start on boot)
-if ! systemctl is-enabled --quiet "${SERVICE_NAME}" 2>/dev/null; then
-  info "Enabling ${SERVICE_NAME} to start on boot…"
-  systemctl enable "${SERVICE_NAME}"
-  ok "${SERVICE_NAME} enabled"
-else
-  ok "${SERVICE_NAME} already enabled for boot"
-fi
+info "Enabling ${SERVICE_NAME} to start on boot…"
+systemctl enable "${SERVICE_NAME}"
+ok "${SERVICE_NAME} enabled"
 
 # Always ensure service is running (stop first if active to pick up changes)
 if systemctl is-active --quiet "${SERVICE_NAME}"; then
@@ -360,8 +364,188 @@ fi
 # Wait briefly for the service to come up before showing the URL
 sleep 2
 
-# ── Firewall ───────────────────────────────────────────────────────────────────
-banner "Step 5 / 5 — Firewall"
+# ── USB HID Gadget Setup ─────────────────────────────────────────────────────
+banner "Step 5 / 6 — USB HID Keyboard Gadget"
+
+# Only set up USB HID on Raspberry Pi
+if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
+  HID_NEEDS_REBOOT=false
+  
+  # Determine config.txt location (changed in newer Pi OS)
+  if [[ -f /boot/firmware/config.txt ]]; then
+    CONFIG_TXT="/boot/firmware/config.txt"
+  else
+    CONFIG_TXT="/boot/config.txt"
+  fi
+  
+  # Enable dwc2 overlay in config.txt
+  if grep -q "^dtoverlay=dwc2" "${CONFIG_TXT}" 2>/dev/null; then
+    ok "dwc2 overlay already enabled in ${CONFIG_TXT}"
+  else
+    info "Enabling dwc2 overlay in ${CONFIG_TXT}…"
+    echo "dtoverlay=dwc2" >> "${CONFIG_TXT}"
+    ok "dwc2 overlay enabled"
+    HID_NEEDS_REBOOT=true
+  fi
+  
+  # Add dwc2 module to /etc/modules
+  if grep -q "^dwc2" /etc/modules 2>/dev/null; then
+    ok "dwc2 module already in /etc/modules"
+  else
+    info "Adding dwc2 to /etc/modules…"
+    echo "dwc2" >> /etc/modules
+    ok "dwc2 added to /etc/modules"
+    HID_NEEDS_REBOOT=true
+  fi
+  
+  # Add libcomposite module to /etc/modules
+  if grep -q "^libcomposite" /etc/modules 2>/dev/null; then
+    ok "libcomposite module already in /etc/modules"
+  else
+    info "Adding libcomposite to /etc/modules…"
+    echo "libcomposite" >> /etc/modules
+    ok "libcomposite added to /etc/modules"
+    HID_NEEDS_REBOOT=true
+  fi
+  
+  # Create USB HID gadget setup script
+  HID_SCRIPT="/usr/local/bin/morse-pi-hid-setup.sh"
+  info "Creating USB HID gadget setup script…"
+  cat > "${HID_SCRIPT}" <<'HID_SCRIPT_EOF'
+#!/bin/bash
+# Morse-Pi USB HID Keyboard Gadget Setup
+# This script configures the Raspberry Pi as a USB HID keyboard
+
+set -e
+
+# Load required module
+modprobe libcomposite 2>/dev/null || true
+
+GADGET_DIR="/sys/kernel/config/usb_gadget/morse-pi-keyboard"
+
+# If gadget already exists, we're done
+if [[ -d "${GADGET_DIR}" ]]; then
+  exit 0
+fi
+
+# Check if configfs is available
+if [[ ! -d /sys/kernel/config/usb_gadget ]]; then
+  # Try to mount configfs
+  mount -t configfs none /sys/kernel/config 2>/dev/null || true
+  if [[ ! -d /sys/kernel/config/usb_gadget ]]; then
+    echo "USB gadget configfs not available" >&2
+    exit 1
+  fi
+fi
+
+# Create gadget
+mkdir -p "${GADGET_DIR}"
+cd "${GADGET_DIR}"
+
+# USB device descriptor
+echo 0x1d6b > idVendor  # Linux Foundation
+echo 0x0104 > idProduct # Multifunction Composite Gadget
+echo 0x0100 > bcdDevice # v1.0.0
+echo 0x0200 > bcdUSB    # USB2
+
+# Device strings
+mkdir -p strings/0x409
+echo "fedcba9876543210" > strings/0x409/serialnumber
+echo "Morse-Pi" > strings/0x409/manufacturer
+echo "Morse Code Keyboard" > strings/0x409/product
+
+# HID function
+mkdir -p functions/hid.usb0
+echo 1 > functions/hid.usb0/protocol    # Keyboard
+echo 1 > functions/hid.usb0/subclass    # Boot interface subclass
+echo 8 > functions/hid.usb0/report_length
+
+# HID report descriptor for a standard keyboard
+echo -ne '\x05\x01\x09\x06\xa1\x01\x05\x07\x19\xe0\x29\xe7\x15\x00\x25\x01\x75\x01\x95\x08\x81\x02\x95\x01\x75\x08\x81\x03\x95\x05\x75\x01\x05\x08\x19\x01\x29\x05\x91\x02\x95\x01\x75\x03\x91\x03\x95\x06\x75\x08\x15\x00\x25\x65\x05\x07\x19\x00\x29\x65\x81\x00\xc0' > functions/hid.usb0/report_desc
+
+# Configuration
+mkdir -p configs/c.1/strings/0x409
+echo "Config 1: Keyboard" > configs/c.1/strings/0x409/configuration
+echo 250 > configs/c.1/MaxPower
+
+# Link function to configuration
+ln -sf functions/hid.usb0 configs/c.1/
+
+# Get the UDC (USB Device Controller) name
+UDC=$(ls /sys/class/udc | head -n1)
+if [[ -n "${UDC}" ]]; then
+  echo "${UDC}" > UDC
+  echo "USB HID keyboard gadget enabled on ${UDC}"
+else
+  echo "No USB Device Controller found" >&2
+  exit 1
+fi
+HID_SCRIPT_EOF
+  chmod +x "${HID_SCRIPT}"
+  ok "USB HID setup script created at ${HID_SCRIPT}"
+  
+  # Create systemd service for USB HID gadget
+  HID_SERVICE="/etc/systemd/system/morse-pi-hid.service"
+  info "Creating USB HID systemd service…"
+  cat > "${HID_SERVICE}" <<HID_SERVICE_EOF
+[Unit]
+Description=Morse-Pi USB HID Keyboard Gadget
+After=sysinit.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=${HID_SCRIPT}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target
+HID_SERVICE_EOF
+  ok "USB HID service created at ${HID_SERVICE}"
+  
+  # Enable and start the HID service
+  systemctl daemon-reload
+  if ! systemctl is-enabled --quiet morse-pi-hid 2>/dev/null; then
+    info "Enabling USB HID service…"
+    systemctl enable morse-pi-hid
+    ok "USB HID service enabled"
+  else
+    ok "USB HID service already enabled"
+  fi
+  
+  # Try to start it now (may fail if modules aren't loaded yet)
+  if [[ -d /sys/kernel/config/usb_gadget ]] || modprobe libcomposite 2>/dev/null; then
+    if ! systemctl is-active --quiet morse-pi-hid 2>/dev/null; then
+      info "Starting USB HID service…"
+      if systemctl start morse-pi-hid 2>/dev/null; then
+        ok "USB HID gadget is active"
+      else
+        warn "USB HID service couldn't start now — will work after reboot"
+      fi
+    else
+      ok "USB HID gadget already active"
+    fi
+  else
+    warn "USB HID will be available after reboot (kernel modules not yet loaded)"
+    HID_NEEDS_REBOOT=true
+  fi
+  
+  # Set permissions on /dev/hidg0 if it exists
+  if [[ -e /dev/hidg0 ]]; then
+    chmod 666 /dev/hidg0
+    ok "/dev/hidg0 permissions set"
+  fi
+  
+  if [[ "${HID_NEEDS_REBOOT}" == "true" ]]; then
+    warn "USB HID gadget requires a reboot to fully activate"
+    echo -e "  ${YEL}After this script completes, run: ${BLD}sudo reboot${RST}"
+  fi
+else
+  info "Not a Raspberry Pi — skipping USB HID gadget setup"
+fi
+
+# ── Firewall ─────────────────────────────────────────────────────────────────
+banner "Step 6 / 6 — Firewall"
 if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
   if ufw status | grep -q "${PORT}"; then
     ok "Port ${PORT} already allowed in ufw"
