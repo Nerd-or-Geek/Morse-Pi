@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Troubleshooting — Morse-Pi</title>
+<meta name="description" content="Solutions for common Morse-Pi issues with the web UI, GPIO, USB HID keyboard, networking, and connections.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header class="site-header">
+  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+  <span class="logo"><a href="index.html">Morse-Pi</a></span>
+  <span class="tagline">Morse Code Trainer &amp; Practice Tool for Raspberry Pi</span>
+  <nav class="header-links">
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi" target="_blank">GitHub</a>
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues" target="_blank">Issues</a>
+  </nav>
+</header>
+
+<!-- ═══ LAYOUT ═══ -->
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="nav-group">
+    <a class="nav-page-link" href="index.html">Home</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="getting-started.html">Getting Started</a>
+    <a class="nav-link" href="getting-started.html#features">Features</a>
+    <a class="nav-link" href="getting-started.html#requirements">Requirements</a>
+    <a class="nav-link" href="getting-started.html#installation">Installation</a>
+    <a class="nav-link" href="getting-started.html#wiring">GPIO Wiring</a>
+    <a class="nav-link" href="getting-started.html#modes">Modes &amp; Tabs</a>
+    <a class="nav-link" href="getting-started.html#send-mode">SEND Mode</a>
+    <a class="nav-link" href="getting-started.html#encode-mode">ENCODE Mode</a>
+    <a class="nav-link" href="getting-started.html#decode-mode">DECODE Mode</a>
+    <a class="nav-link" href="getting-started.html#speed-mode">SPEED Trainer</a>
+    <a class="nav-link" href="getting-started.html#network-mode">Networking</a>
+    <a class="nav-link" href="getting-started.html#stats-mode">Statistics</a>
+    <a class="nav-link" href="getting-started.html#config-mode">Configuration</a>
+    <a class="nav-link" href="getting-started.html#shortcuts">Keyboard Shortcuts</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="maintenance.html">Maintenance</a>
+    <a class="nav-link" href="maintenance.html#updating">Updating</a>
+    <a class="nav-link" href="maintenance.html#packages">Package Management</a>
+    <a class="nav-link" href="maintenance.html#services">Service Management</a>
+    <a class="nav-link" href="maintenance.html#autostart">Auto-Start on Boot</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="usb-hid.html">USB HID Keyboard</a>
+    <a class="nav-link" href="usb-hid.html#hid-setup">HID Setup</a>
+    <a class="nav-link" href="usb-hid.html#hid-usage">Using HID Mode</a>
+    <a class="nav-link" href="usb-hid.html#hid-troubleshoot">HID Troubleshooting</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="reference.html">Reference</a>
+    <a class="nav-link" href="reference.html#morse-table">Morse Code Table</a>
+    <a class="nav-link" href="reference.html#timing">Timing &amp; WPM</a>
+    <a class="nav-link" href="reference.html#settings-ref">Settings Reference</a>
+    <a class="nav-link" href="reference.html#api-routes">API Routes</a>
+    <a class="nav-link" href="reference.html#project-structure">Project Structure</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link current" href="troubleshooting.html">Troubleshooting</a>
+    <a class="nav-link" href="#common-issues">Common Issues</a>
+    <a class="nav-link" href="#gpio-errors">GPIO Errors</a>
+    <a class="nav-link" href="#connection-errors">Connection Errors</a>
+    <a class="nav-link" href="#hid-errors">USB HID Errors</a>
+    <a class="nav-link" href="#network-errors">Network Errors</a>
+  </div>
+</aside>
+
+<!-- ═══ MAIN CONTENT ═══ -->
+<main class="content">
+
+<h1>Troubleshooting</h1>
+<p class="subtitle">Solutions for common issues with the web UI, GPIO, USB HID, and networking.</p>
+
+<!-- ── COMMON ISSUES ──────────────────────────────────── -->
+<h2 id="common-issues">Common Issues</h2>
+
+<h3>The web UI won't load</h3>
+<ol>
+  <li>Check the service is running: <code>sudo systemctl status morse-pi</code></li>
+  <li>Check the logs: <code>sudo journalctl -u morse-pi -n 50</code></li>
+  <li>Make sure you're using the right IP and port (default 5000)</li>
+  <li>If ufw is active, verify port 5000 is open: <code>sudo ufw status</code></li>
+</ol>
+
+<h3>Service won't start</h3>
+<ol>
+  <li>Check logs: <code>sudo journalctl -u morse-pi -n 50</code></li>
+  <li>Try running manually: <code>cd /opt/morse-pi/morse-translator && python3 app.py</code></li>
+  <li>Check file permissions: <code>ls -la /opt/morse-pi/morse-translator/</code></li>
+  <li>Re-run the updater: <code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update.sh | sudo bash</code></li>
+</ol>
+
+<h3>Settings aren't saving</h3>
+<ul>
+  <li>Check file permissions: <code>ls -la /opt/morse-pi/morse-translator/settings.json</code></li>
+  <li>The file should be owned by your user (not root): <code>sudo chown $USER:$USER /opt/morse-pi/morse-translator/settings.json</code></li>
+</ul>
+
+<!-- ── GPIO ERRORS ────────────────────────────────────── -->
+<h2 id="gpio-errors">GPIO Errors</h2>
+
+<h3>GPIO indicator shows red / "GPIO unavailable"</h3>
+<ul>
+  <li>You may not be on a Raspberry Pi — GPIO only works on Pi hardware</li>
+  <li>Check that <code>pigpiod</code> is running: <code>sudo systemctl status pigpiod</code></li>
+  <li>Start it: <code>sudo systemctl start pigpiod</code></li>
+  <li>Make sure your user is in the <code>gpio</code> group: <code>groups</code></li>
+  <li>Add yourself: <code>sudo usermod -aG gpio $USER</code> then log out/in</li>
+</ul>
+
+<h3>No sound from speaker</h3>
+<ul>
+  <li>Check wiring — speaker positive to the speaker pin (default BCM 18), negative to GND (or second speaker pin)</li>
+  <li>Verify pin assignment in CONFIG matches your wiring</li>
+  <li>Check that output type is set to "speaker" (not "led")</li>
+  <li>Try the <strong>GPIO Diagnostic</strong> page (click the GPIO indicator dot) to see live pin states</li>
+  <li>Increase volume in CONFIG</li>
+  <li>If using dual-pin speaker, ensure both Speaker Pin 1 and Speaker Pin 2 are set and pigpio is available</li>
+</ul>
+
+<h3>Key presses not detected</h3>
+<ul>
+  <li>Check wiring — key should short the data pin to GND when pressed</li>
+  <li>Verify pin assignment in CONFIG</li>
+  <li>Make sure pin mode matches your hardware (single = straight key, dual = iambic)</li>
+  <li>Use the GPIO Diagnostic page to see if the pin toggles when you press the key</li>
+  <li>Internal pull-ups are enabled — no external resistors needed</li>
+</ul>
+
+<!-- ── CONNECTION ERRORS ──────────────────────────────── -->
+<h2 id="connection-errors">Connection Errors</h2>
+
+<h3>"Connection to Pi lost" message</h3>
+<p>This appears when the browser can't reach the Pi's web server. Common causes:</p>
+<ul>
+  <li><strong>Pi rebooting</strong> — wait 30–60 seconds for boot to complete</li>
+  <li><strong>Service crashed</strong> — check with <code>sudo systemctl status morse-pi</code></li>
+  <li><strong>Network change</strong> — Pi may have gotten a new IP address. Check: <code>hostname -I</code></li>
+  <li><strong>WiFi interference</strong> — move closer to the router or use Ethernet</li>
+</ul>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Auto-reconnect</div>
+  The UI will automatically reconnect when the Pi becomes reachable again. The connection indicator dot in the header turns green when connected and red when disconnected.
+</div>
+
+<h3>Slow or laggy UI</h3>
+<ul>
+  <li>The UI polls the Pi every 250ms — on a Pi Zero this is near its limit</li>
+  <li>Make sure no other heavy processes are running on the Pi</li>
+  <li>Use a wired Ethernet connection if possible for lower latency</li>
+</ul>
+
+<!-- ── HID ERRORS ─────────────────────────────────────── -->
+<h2 id="hid-errors">USB HID Errors</h2>
+
+<h3>"USB HID not available" in KB tab</h3>
+<ul>
+  <li><code>/dev/hidg0</code> doesn't exist — reboot after installation</li>
+  <li>Check modules: <code>lsmod | grep dwc2</code> — should show <code>dwc2</code> and <code>libcomposite</code></li>
+  <li>Check service: <code>sudo systemctl status morse-pi-hid</code></li>
+  <li>Check kernel config: <code>grep dtoverlay=dwc2 /boot/config.txt</code></li>
+</ul>
+
+<h3>"Permission denied" writing to /dev/hidg0</h3>
+<ul>
+  <li>Fix permissions: <code>sudo chmod 666 /dev/hidg0</code></li>
+  <li>The udev rule should handle this automatically — run <code>sudo udevadm trigger</code></li>
+  <li>Verify rule exists: <code>cat /etc/udev/rules.d/99-morse-pi-hid.rules</code></li>
+</ul>
+
+<h3>Wrong characters being typed</h3>
+<ul>
+  <li>HID scan codes assume a US keyboard layout</li>
+  <li>If your computer has a different keyboard layout, some characters may map differently</li>
+</ul>
+
+<p>See the <a href="usb-hid.html">USB HID Keyboard</a> page for more setup details and manual configuration steps.</p>
+
+<!-- ── NETWORK ERRORS ─────────────────────────────────── -->
+<h2 id="network-errors">Network Errors</h2>
+
+<h3>No peers discovered</h3>
+<ul>
+  <li>Both Pis must be on the <strong>same subnet</strong> (same WiFi network)</li>
+  <li>UDP broadcast (port 5001) must not be blocked by the router</li>
+  <li>Wait at least 5 seconds — beacons are sent every 3 seconds</li>
+  <li>Some enterprise/hotel WiFi networks block broadcast traffic — use a home network</li>
+</ul>
+
+<h3>Messages not arriving</h3>
+<ul>
+  <li>Verify the peer shows as online in the NET tab (peers disappear after 15 seconds without a beacon)</li>
+  <li>Check that port 5000 is reachable on the target Pi: <code>curl http://&lt;peer-ip&gt;:5000/status</code></li>
+  <li>Check for firewall rules: <code>sudo ufw status</code></li>
+</ul>
+
+<div class="site-footer">
+  Morse-Pi &mdash; MIT License &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi">GitHub</a> &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues">Report an Issue</a>
+</div>
+
+</main>
+</div>
+
+<a class="back-top" id="back-top" href="#" title="Back to top">↑</a>
+<script>
+const navLinks=document.querySelectorAll('.sidebar .nav-link[href^="#"]');
+const sections=[];
+navLinks.forEach(link=>{
+  const id=link.getAttribute('href')?.slice(1);
+  if(id){const el=document.getElementById(id);if(el)sections.push({id,el,link});}
+});
+function updateActive(){
+  let current='';
+  for(const s of sections){if(s.el.getBoundingClientRect().top<=100)current=s.id;}
+  navLinks.forEach(l=>{if(l.getAttribute('href')?.startsWith('#'))l.classList.remove('active');});
+  const active=sections.find(s=>s.id===current);
+  if(active)active.link.classList.add('active');
+}
+window.addEventListener('scroll',updateActive,{passive:true});
+updateActive();
+
+const btn=document.getElementById('back-top');
+window.addEventListener('scroll',()=>{btn.classList.toggle('visible',window.scrollY>400);},{passive:true});
+document.querySelectorAll('.sidebar .nav-link, .sidebar .nav-page-link').forEach(l=>{
+  l.addEventListener('click',()=>{document.querySelector('.sidebar').classList.remove('open');});
+});
+</script>
+</body>
+</html>

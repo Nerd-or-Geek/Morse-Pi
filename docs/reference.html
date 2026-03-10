@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reference — Morse-Pi</title>
+<meta name="description" content="Morse code table, timing formulas, full settings reference, API routes, and project structure for Morse-Pi.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header class="site-header">
+  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+  <span class="logo"><a href="index.html">Morse-Pi</a></span>
+  <span class="tagline">Morse Code Trainer &amp; Practice Tool for Raspberry Pi</span>
+  <nav class="header-links">
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi" target="_blank">GitHub</a>
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues" target="_blank">Issues</a>
+  </nav>
+</header>
+
+<!-- ═══ LAYOUT ═══ -->
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="nav-group">
+    <a class="nav-page-link" href="index.html">Home</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="getting-started.html">Getting Started</a>
+    <a class="nav-link" href="getting-started.html#features">Features</a>
+    <a class="nav-link" href="getting-started.html#requirements">Requirements</a>
+    <a class="nav-link" href="getting-started.html#installation">Installation</a>
+    <a class="nav-link" href="getting-started.html#wiring">GPIO Wiring</a>
+    <a class="nav-link" href="getting-started.html#modes">Modes &amp; Tabs</a>
+    <a class="nav-link" href="getting-started.html#send-mode">SEND Mode</a>
+    <a class="nav-link" href="getting-started.html#encode-mode">ENCODE Mode</a>
+    <a class="nav-link" href="getting-started.html#decode-mode">DECODE Mode</a>
+    <a class="nav-link" href="getting-started.html#speed-mode">SPEED Trainer</a>
+    <a class="nav-link" href="getting-started.html#network-mode">Networking</a>
+    <a class="nav-link" href="getting-started.html#stats-mode">Statistics</a>
+    <a class="nav-link" href="getting-started.html#config-mode">Configuration</a>
+    <a class="nav-link" href="getting-started.html#shortcuts">Keyboard Shortcuts</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="maintenance.html">Maintenance</a>
+    <a class="nav-link" href="maintenance.html#updating">Updating</a>
+    <a class="nav-link" href="maintenance.html#packages">Package Management</a>
+    <a class="nav-link" href="maintenance.html#services">Service Management</a>
+    <a class="nav-link" href="maintenance.html#autostart">Auto-Start on Boot</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="usb-hid.html">USB HID Keyboard</a>
+    <a class="nav-link" href="usb-hid.html#hid-setup">HID Setup</a>
+    <a class="nav-link" href="usb-hid.html#hid-usage">Using HID Mode</a>
+    <a class="nav-link" href="usb-hid.html#hid-troubleshoot">HID Troubleshooting</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link current" href="reference.html">Reference</a>
+    <a class="nav-link" href="#morse-table">Morse Code Table</a>
+    <a class="nav-link" href="#timing">Timing &amp; WPM</a>
+    <a class="nav-link" href="#settings-ref">Settings Reference</a>
+    <a class="nav-link" href="#api-routes">API Routes</a>
+    <a class="nav-link" href="#project-structure">Project Structure</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="troubleshooting.html">Troubleshooting</a>
+    <a class="nav-link" href="troubleshooting.html#common-issues">Common Issues</a>
+    <a class="nav-link" href="troubleshooting.html#gpio-errors">GPIO Errors</a>
+    <a class="nav-link" href="troubleshooting.html#connection-errors">Connection Errors</a>
+    <a class="nav-link" href="troubleshooting.html#hid-errors">USB HID Errors</a>
+    <a class="nav-link" href="troubleshooting.html#network-errors">Network Errors</a>
+  </div>
+</aside>
+
+<!-- ═══ MAIN CONTENT ═══ -->
+<main class="content">
+
+<h1>Reference</h1>
+<p class="subtitle">Morse code table, timing formulas, settings, API endpoints, and project layout.</p>
+
+<!-- ── MORSE TABLE ────────────────────────────────────── -->
+<h2 id="morse-table">Morse Code Table</h2>
+
+<h3>Letters</h3>
+<div class="morse-grid">
+  <div class="morse-cell"><div class="mc-char">A</div><div class="mc-code">·−</div></div>
+  <div class="morse-cell"><div class="mc-char">B</div><div class="mc-code">−···</div></div>
+  <div class="morse-cell"><div class="mc-char">C</div><div class="mc-code">−·−·</div></div>
+  <div class="morse-cell"><div class="mc-char">D</div><div class="mc-code">−··</div></div>
+  <div class="morse-cell"><div class="mc-char">E</div><div class="mc-code">·</div></div>
+  <div class="morse-cell"><div class="mc-char">F</div><div class="mc-code">··−·</div></div>
+  <div class="morse-cell"><div class="mc-char">G</div><div class="mc-code">−−·</div></div>
+  <div class="morse-cell"><div class="mc-char">H</div><div class="mc-code">····</div></div>
+  <div class="morse-cell"><div class="mc-char">I</div><div class="mc-code">··</div></div>
+  <div class="morse-cell"><div class="mc-char">J</div><div class="mc-code">·−−−</div></div>
+  <div class="morse-cell"><div class="mc-char">K</div><div class="mc-code">−·−</div></div>
+  <div class="morse-cell"><div class="mc-char">L</div><div class="mc-code">·−··</div></div>
+  <div class="morse-cell"><div class="mc-char">M</div><div class="mc-code">−−</div></div>
+  <div class="morse-cell"><div class="mc-char">N</div><div class="mc-code">−·</div></div>
+  <div class="morse-cell"><div class="mc-char">O</div><div class="mc-code">−−−</div></div>
+  <div class="morse-cell"><div class="mc-char">P</div><div class="mc-code">·−−·</div></div>
+  <div class="morse-cell"><div class="mc-char">Q</div><div class="mc-code">−−·−</div></div>
+  <div class="morse-cell"><div class="mc-char">R</div><div class="mc-code">·−·</div></div>
+  <div class="morse-cell"><div class="mc-char">S</div><div class="mc-code">···</div></div>
+  <div class="morse-cell"><div class="mc-char">T</div><div class="mc-code">−</div></div>
+  <div class="morse-cell"><div class="mc-char">U</div><div class="mc-code">··−</div></div>
+  <div class="morse-cell"><div class="mc-char">V</div><div class="mc-code">···−</div></div>
+  <div class="morse-cell"><div class="mc-char">W</div><div class="mc-code">·−−</div></div>
+  <div class="morse-cell"><div class="mc-char">X</div><div class="mc-code">−··−</div></div>
+  <div class="morse-cell"><div class="mc-char">Y</div><div class="mc-code">−·−−</div></div>
+  <div class="morse-cell"><div class="mc-char">Z</div><div class="mc-code">−−··</div></div>
+</div>
+
+<h3>Numbers</h3>
+<div class="morse-grid">
+  <div class="morse-cell"><div class="mc-char">0</div><div class="mc-code">−−−−−</div></div>
+  <div class="morse-cell"><div class="mc-char">1</div><div class="mc-code">·−−−−</div></div>
+  <div class="morse-cell"><div class="mc-char">2</div><div class="mc-code">··−−−</div></div>
+  <div class="morse-cell"><div class="mc-char">3</div><div class="mc-code">···−−</div></div>
+  <div class="morse-cell"><div class="mc-char">4</div><div class="mc-code">····−</div></div>
+  <div class="morse-cell"><div class="mc-char">5</div><div class="mc-code">·····</div></div>
+  <div class="morse-cell"><div class="mc-char">6</div><div class="mc-code">−····</div></div>
+  <div class="morse-cell"><div class="mc-char">7</div><div class="mc-code">−−···</div></div>
+  <div class="morse-cell"><div class="mc-char">8</div><div class="mc-code">−−−··</div></div>
+  <div class="morse-cell"><div class="mc-char">9</div><div class="mc-code">−−−−·</div></div>
+</div>
+
+<h3>Punctuation</h3>
+<div class="morse-grid">
+  <div class="morse-cell"><div class="mc-char">.</div><div class="mc-code">·−·−·−</div></div>
+  <div class="morse-cell"><div class="mc-char">,</div><div class="mc-code">−−··−−</div></div>
+  <div class="morse-cell"><div class="mc-char">?</div><div class="mc-code">··−−··</div></div>
+  <div class="morse-cell"><div class="mc-char">'</div><div class="mc-code">·−−−−·</div></div>
+  <div class="morse-cell"><div class="mc-char">!</div><div class="mc-code">−·−·−−</div></div>
+  <div class="morse-cell"><div class="mc-char">/</div><div class="mc-code">−··−·</div></div>
+  <div class="morse-cell"><div class="mc-char">(</div><div class="mc-code">−·−−·</div></div>
+  <div class="morse-cell"><div class="mc-char">)</div><div class="mc-code">−·−−·−</div></div>
+  <div class="morse-cell"><div class="mc-char">&amp;</div><div class="mc-code">·−···</div></div>
+  <div class="morse-cell"><div class="mc-char">:</div><div class="mc-code">−−−···</div></div>
+  <div class="morse-cell"><div class="mc-char">=</div><div class="mc-code">−···−</div></div>
+  <div class="morse-cell"><div class="mc-char">+</div><div class="mc-code">·−·−·</div></div>
+  <div class="morse-cell"><div class="mc-char">-</div><div class="mc-code">−····−</div></div>
+  <div class="morse-cell"><div class="mc-char">@</div><div class="mc-code">·−−·−·</div></div>
+  <div class="morse-cell"><div class="mc-char">_</div><div class="mc-code">··−−·−</div></div>
+  <div class="morse-cell"><div class="mc-char">"</div><div class="mc-code">·−··−·</div></div>
+</div>
+
+<!-- ── TIMING ─────────────────────────────────────────── -->
+<h2 id="timing">Timing &amp; WPM</h2>
+<p>All timing in Morse-Pi is derived from the <strong>dot unit</strong>, which is calculated from your WPM setting:</p>
+<pre><code>dot_unit = 1200ms / WPM</code></pre>
+
+<table>
+  <tr><th>Element</th><th>Duration</th><th>At 20 WPM</th></tr>
+  <tr><td>Dot</td><td>1 unit</td><td>60 ms</td></tr>
+  <tr><td>Dash</td><td>3 units</td><td>180 ms</td></tr>
+  <tr><td>Inter-element gap</td><td>1 unit</td><td>60 ms</td></tr>
+  <tr><td>Letter gap</td><td>3 units</td><td>180 ms</td></tr>
+  <tr><td>Word gap</td><td>7 units</td><td>420 ms</td></tr>
+</table>
+
+<h3>Farnsworth timing</h3>
+<p>Farnsworth timing keeps the characters at full speed but stretches the gaps between them, making it easier for beginners to follow.</p>
+<ul>
+  <li><strong>Letter gap</strong> = 3 × dot_unit × <code>farnsworth_letter_mult</code> (default 2×)</li>
+  <li><strong>Word gap</strong> = 7 × dot_unit × <code>farnsworth_word_mult</code> (default 2×)</li>
+</ul>
+<p>Enable Farnsworth timing in <strong>CONFIG → Farnsworth Mode</strong>.</p>
+
+<!-- ── SETTINGS REFERENCE ─────────────────────────────── -->
+<h2 id="settings-ref">Settings Reference</h2>
+<table>
+  <tr><th>Setting</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>device_name</code></td><td>string</td><td><code>"Morse Pi"</code></td><td>Name shown to other devices on the network</td></tr>
+  <tr><td><code>wpm_target</code></td><td>int</td><td><code>20</code></td><td>Words per minute — all timing derives from this</td></tr>
+  <tr><td><code>pin_mode</code></td><td>string</td><td><code>"single"</code></td><td><code>single</code> = straight key, <code>dual</code> = iambic paddle</td></tr>
+  <tr><td><code>data_pin</code></td><td>int</td><td><code>17</code></td><td>BCM pin for straight key input</td></tr>
+  <tr><td><code>dot_pin</code></td><td>int</td><td><code>22</code></td><td>BCM pin for dot paddle (dual mode)</td></tr>
+  <tr><td><code>dash_pin</code></td><td>int</td><td><code>27</code></td><td>BCM pin for dash paddle (dual mode)</td></tr>
+  <tr><td><code>speaker_pin</code></td><td>int</td><td><code>18</code></td><td>BCM pin for speaker (pin 1)</td></tr>
+  <tr><td><code>speaker_pin2</code></td><td>int|null</td><td><code>null</code></td><td>Second speaker GPIO pin for push-pull drive. When set (and pigpio is available), the two pins are driven in anti-phase for louder audio.</td></tr>
+  <tr><td><code>output_type</code></td><td>string</td><td><code>"speaker"</code></td><td><code>speaker</code> = PWM audio, <code>led</code> = on/off</td></tr>
+  <tr><td><code>ground_pin</code></td><td>int|null</td><td><code>null</code></td><td>Legacy single ground output pin</td></tr>
+  <tr><td><code>grounded_pins</code></td><td>list</td><td><code>[]</code></td><td>Multiple GPIO pins driven LOW as grounds</td></tr>
+  <tr><td><code>dot_freq</code></td><td>int</td><td><code>700</code></td><td>Dot tone frequency in Hz (100–4000)</td></tr>
+  <tr><td><code>dash_freq</code></td><td>int</td><td><code>500</code></td><td>Dash tone frequency in Hz (100–4000)</td></tr>
+  <tr><td><code>volume</code></td><td>float</td><td><code>0.75</code></td><td>PWM duty cycle (0.01–0.95)</td></tr>
+  <tr><td><code>theme</code></td><td>string</td><td><code>"dark"</code></td><td>UI theme: <code>dark</code> or <code>light</code></td></tr>
+  <tr><td><code>difficulty</code></td><td>string</td><td><code>"easy"</code></td><td>Quiz difficulty: <code>easy</code>, <code>medium</code>, <code>hard</code></td></tr>
+  <tr><td><code>farnsworth_enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable Farnsworth timing</td></tr>
+  <tr><td><code>farnsworth_letter_mult</code></td><td>float</td><td><code>2.0</code></td><td>Letter gap multiplier</td></tr>
+  <tr><td><code>farnsworth_word_mult</code></td><td>float</td><td><code>2.0</code></td><td>Word gap multiplier</td></tr>
+  <tr><td><code>kb_enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable USB HID keyboard output</td></tr>
+  <tr><td><code>kb_mode</code></td><td>string</td><td><code>"letters"</code></td><td><code>letters</code> = decoded chars, <code>custom</code> = mapped keys</td></tr>
+  <tr><td><code>kb_dot_key</code></td><td>string</td><td><code>"z"</code></td><td>Key sent for dot in custom mode</td></tr>
+  <tr><td><code>kb_dash_key</code></td><td>string</td><td><code>"x"</code></td><td>Key sent for dash in custom mode</td></tr>
+</table>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Settings persistence</div>
+  All settings are stored in <code>/opt/morse-pi/morse-translator/settings.json</code>. New settings added in updates are automatically merged with your existing file — you never lose your configuration.
+</div>
+
+<!-- ── API ROUTES ─────────────────────────────────────── -->
+<h2 id="api-routes">API Routes</h2>
+<p>Morse-Pi exposes a REST-like API. The web UI uses these internally, but they can be called from scripts or other tools.</p>
+
+<h3>Core</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Description</th></tr>
+  <tr><td><code>/</code></td><td>GET</td><td>Main web UI</td></tr>
+  <tr><td><code>/status</code></td><td>GET</td><td>Full app state (polled by UI every 250ms)</td></tr>
+  <tr><td><code>/get_settings</code></td><td>GET</td><td>Current settings</td></tr>
+  <tr><td><code>/save_settings</code></td><td>POST</td><td>Update and persist settings</td></tr>
+  <tr><td><code>/set_mode</code></td><td>POST</td><td>Switch active mode</td></tr>
+  <tr><td><code>/clear</code></td><td>POST</td><td>Clear all output buffers</td></tr>
+</table>
+
+<h3>Morse operations</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Description</th></tr>
+  <tr><td><code>/encode</code></td><td>POST</td><td>Text → Morse code</td></tr>
+  <tr><td><code>/play</code></td><td>POST</td><td>Play last encoded text as audio</td></tr>
+  <tr><td><code>/decode_submit</code></td><td>POST</td><td>Submit decode quiz answer</td></tr>
+  <tr><td><code>/submit_test</code></td><td>POST</td><td>Submit speed test for scoring</td></tr>
+  <tr><td><code>/key_press</code></td><td>POST</td><td>Simulate straight key press/release</td></tr>
+  <tr><td><code>/key_press_dual</code></td><td>POST</td><td>Simulate dot/dash paddle press/release</td></tr>
+</table>
+
+<h3>Networking</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Description</th></tr>
+  <tr><td><code>/peers</code></td><td>GET</td><td>Device identity + discovered peers</td></tr>
+  <tr><td><code>/send_to_peer</code></td><td>POST</td><td>Send message to another Pi</td></tr>
+  <tr><td><code>/receive_morse</code></td><td>POST</td><td>Receive incoming Morse from peer</td></tr>
+  <tr><td><code>/net_status</code></td><td>GET</td><td>Peers + inbox</td></tr>
+</table>
+
+<h3>USB HID keyboard</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Description</th></tr>
+  <tr><td><code>/kb_status</code></td><td>GET</td><td>HID keyboard status</td></tr>
+  <tr><td><code>/kb_enable</code></td><td>POST</td><td>Enable/disable keyboard mode</td></tr>
+  <tr><td><code>/kb_mode</code></td><td>POST</td><td>Set letters or custom mode</td></tr>
+  <tr><td><code>/kb_set_keys</code></td><td>POST</td><td>Set custom dot/dash key mappings</td></tr>
+</table>
+
+<!-- ── PROJECT STRUCTURE ──────────────────────────────── -->
+<h2 id="project-structure">Project Structure</h2>
+<pre><code>Morse-Pi/
+├── install.sh                  ← fresh installer (HID + packages + clone + systemd)
+├── update.sh                   ← updater (verify HID + pull code + restart)
+├── packages.sh                 ← package updater (upgrade apt + pip packages)
+├── docs/                       ← documentation site (GitHub Pages)
+│   ├── index.html              ← home / landing page
+│   ├── getting-started.html    ← features, install, wiring, modes guide
+│   ├── maintenance.html        ← updating, packages, services
+│   ├── usb-hid.html            ← USB HID keyboard setup &amp; usage
+│   ├── reference.html          ← morse table, settings, API, structure
+│   ├── troubleshooting.html    ← common issues &amp; error solutions
+│   └── style.css               ← shared stylesheet
+└── morse-translator/
+    ├── app.py                  ← Flask app, GPIO, Morse timing, networking, HID
+    ├── settings.json           ← user settings (auto-created, preserved on update)
+    ├── stats.json              ← user statistics (auto-created, preserved on update)
+    ├── words.json              ← word list for quiz/speed modes
+    └── templates/
+        ├── index.html          ← single-page web UI
+        └── diag.html           ← GPIO live diagnostic popup
+
+# Created by installer on Raspberry Pi:
+/etc/systemd/system/morse-pi.service       ← auto-start on boot
+/etc/systemd/system/morse-pi-hid.service   ← USB HID gadget service
+/usr/local/bin/morse-pi-hid-setup.sh       ← USB HID configuration script
+/etc/udev/rules.d/99-morse-pi-hid.rules    ← udev rule for /dev/hidg0</code></pre>
+
+<div class="site-footer">
+  Morse-Pi &mdash; MIT License &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi">GitHub</a> &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues">Report an Issue</a>
+</div>
+
+</main>
+</div>
+
+<a class="back-top" id="back-top" href="#" title="Back to top">↑</a>
+<script>
+const navLinks=document.querySelectorAll('.sidebar .nav-link[href^="#"]');
+const sections=[];
+navLinks.forEach(link=>{
+  const id=link.getAttribute('href')?.slice(1);
+  if(id){const el=document.getElementById(id);if(el)sections.push({id,el,link});}
+});
+function updateActive(){
+  let current='';
+  for(const s of sections){if(s.el.getBoundingClientRect().top<=100)current=s.id;}
+  navLinks.forEach(l=>{if(l.getAttribute('href')?.startsWith('#'))l.classList.remove('active');});
+  const active=sections.find(s=>s.id===current);
+  if(active)active.link.classList.add('active');
+}
+window.addEventListener('scroll',updateActive,{passive:true});
+updateActive();
+
+const btn=document.getElementById('back-top');
+window.addEventListener('scroll',()=>{btn.classList.toggle('visible',window.scrollY>400);},{passive:true});
+document.querySelectorAll('.sidebar .nav-link, .sidebar .nav-page-link').forEach(l=>{
+  l.addEventListener('click',()=>{document.querySelector('.sidebar').classList.remove('open');});
+});
+</script>
+</body>
+</html>

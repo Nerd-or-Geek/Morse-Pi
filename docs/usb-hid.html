@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USB HID Keyboard — Morse-Pi</title>
+<meta name="description" content="Set up and use the Raspberry Pi as a USB keyboard with Morse-Pi — hardware requirements, configuration, and troubleshooting.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header class="site-header">
+  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+  <span class="logo"><a href="index.html">Morse-Pi</a></span>
+  <span class="tagline">Morse Code Trainer &amp; Practice Tool for Raspberry Pi</span>
+  <nav class="header-links">
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi" target="_blank">GitHub</a>
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues" target="_blank">Issues</a>
+  </nav>
+</header>
+
+<!-- ═══ LAYOUT ═══ -->
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="nav-group">
+    <a class="nav-page-link" href="index.html">Home</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="getting-started.html">Getting Started</a>
+    <a class="nav-link" href="getting-started.html#features">Features</a>
+    <a class="nav-link" href="getting-started.html#requirements">Requirements</a>
+    <a class="nav-link" href="getting-started.html#installation">Installation</a>
+    <a class="nav-link" href="getting-started.html#wiring">GPIO Wiring</a>
+    <a class="nav-link" href="getting-started.html#modes">Modes &amp; Tabs</a>
+    <a class="nav-link" href="getting-started.html#send-mode">SEND Mode</a>
+    <a class="nav-link" href="getting-started.html#encode-mode">ENCODE Mode</a>
+    <a class="nav-link" href="getting-started.html#decode-mode">DECODE Mode</a>
+    <a class="nav-link" href="getting-started.html#speed-mode">SPEED Trainer</a>
+    <a class="nav-link" href="getting-started.html#network-mode">Networking</a>
+    <a class="nav-link" href="getting-started.html#stats-mode">Statistics</a>
+    <a class="nav-link" href="getting-started.html#config-mode">Configuration</a>
+    <a class="nav-link" href="getting-started.html#shortcuts">Keyboard Shortcuts</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="maintenance.html">Maintenance</a>
+    <a class="nav-link" href="maintenance.html#updating">Updating</a>
+    <a class="nav-link" href="maintenance.html#packages">Package Management</a>
+    <a class="nav-link" href="maintenance.html#services">Service Management</a>
+    <a class="nav-link" href="maintenance.html#autostart">Auto-Start on Boot</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link current" href="usb-hid.html">USB HID Keyboard</a>
+    <a class="nav-link" href="#hid-setup">HID Setup</a>
+    <a class="nav-link" href="#hid-usage">Using HID Mode</a>
+    <a class="nav-link" href="#hid-troubleshoot">HID Troubleshooting</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="reference.html">Reference</a>
+    <a class="nav-link" href="reference.html#morse-table">Morse Code Table</a>
+    <a class="nav-link" href="reference.html#timing">Timing &amp; WPM</a>
+    <a class="nav-link" href="reference.html#settings-ref">Settings Reference</a>
+    <a class="nav-link" href="reference.html#api-routes">API Routes</a>
+    <a class="nav-link" href="reference.html#project-structure">Project Structure</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="troubleshooting.html">Troubleshooting</a>
+    <a class="nav-link" href="troubleshooting.html#common-issues">Common Issues</a>
+    <a class="nav-link" href="troubleshooting.html#gpio-errors">GPIO Errors</a>
+    <a class="nav-link" href="troubleshooting.html#connection-errors">Connection Errors</a>
+    <a class="nav-link" href="troubleshooting.html#hid-errors">USB HID Errors</a>
+    <a class="nav-link" href="troubleshooting.html#network-errors">Network Errors</a>
+  </div>
+</aside>
+
+<!-- ═══ MAIN CONTENT ═══ -->
+<main class="content">
+
+<h1>USB HID Keyboard</h1>
+<p class="subtitle">Turn your Raspberry Pi into a USB keyboard — decoded Morse code is typed as real keystrokes on any computer.</p>
+
+<!-- ── HID SETUP ──────────────────────────────────────── -->
+<h2 id="hid-setup">HID Setup</h2>
+<p>Morse-Pi can turn your Raspberry Pi into a <strong>USB keyboard</strong>. When connected to any computer via USB, the Pi appears as a standard HID keyboard device and sends real keystrokes.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li><strong>Pi Zero, Zero W, Zero 2 W, or Pi 4</strong> (must have USB OTG support)</li>
+  <li>Connect via the <strong>USB data port</strong>:
+    <ul>
+      <li>Pi Zero: the port labeled "USB" (not "PWR")</li>
+      <li>Pi 4: USB-C port</li>
+    </ul>
+  </li>
+  <li>A USB <strong>data cable</strong> — some cheap cables are power-only and won't work</li>
+</ul>
+
+<h3>What the installer configures</h3>
+<ol>
+  <li>Adds <code>dtoverlay=dwc2</code> to <code>/boot/config.txt</code> (or <code>/boot/firmware/config.txt</code>)</li>
+  <li>Loads <code>dwc2</code> and <code>libcomposite</code> kernel modules via <code>/etc/modules</code></li>
+  <li>Creates a gadget setup script at <code>/usr/local/bin/morse-pi-hid-setup.sh</code></li>
+  <li>Creates <code>morse-pi-hid.service</code> to run the gadget setup on boot</li>
+  <li>Creates a udev rule (<code>/etc/udev/rules.d/99-morse-pi-hid.rules</code>) so <code>/dev/hidg0</code> is writable by all users</li>
+</ol>
+
+<div class="callout warn">
+  <div class="callout-title">⚠ Reboot required</div>
+  USB HID keyboard mode requires a reboot after first installation to activate the kernel modules. Run <code>sudo reboot</code> after the installer finishes.
+</div>
+
+<!-- ── HID USAGE ──────────────────────────────────────── -->
+<h2 id="hid-usage">Using HID Mode</h2>
+<ol>
+  <li>Connect the Pi to a computer via USB (data port)</li>
+  <li>The computer recognizes it as "Morse Code Keyboard"</li>
+  <li>Open the Morse-Pi web UI → <strong>KB</strong> tab</li>
+  <li>Click <strong>Enable</strong></li>
+  <li>Open a text editor on the computer</li>
+  <li>Key Morse code — decoded characters appear in the text editor</li>
+</ol>
+
+<h3>Two modes</h3>
+<table>
+  <tr><th>Mode</th><th>Behavior</th></tr>
+  <tr><td><strong>Letters</strong></td><td>Each decoded Morse character (A–Z, 0–9, punctuation, space) is sent as the corresponding keystroke.</td></tr>
+  <tr><td><strong>Custom</strong></td><td>Each dot/dash paddle press immediately sends a configured key (default Z/X). No decoding — raw key mapping for use with Morse practice websites.</td></tr>
+</table>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Custom mode keys</div>
+  You can change which keys are sent for dot and dash in <strong>CONFIG → KB Dot Key / KB Dash Key</strong>. Defaults are <kbd>Z</kbd> for dot and <kbd>X</kbd> for dash.
+</div>
+
+<!-- ── HID TROUBLESHOOTING ────────────────────────────── -->
+<h2 id="hid-troubleshoot">HID Troubleshooting</h2>
+
+<h3><code>/dev/hidg0</code> doesn't exist</h3>
+<ul>
+  <li>Reboot after installation: <code>sudo reboot</code></li>
+  <li>Check if modules are loaded: <code>lsmod | grep dwc2</code></li>
+  <li>Check kernel messages: <code>dmesg | grep -i usb</code></li>
+  <li>Verify the HID service: <code>sudo systemctl status morse-pi-hid</code></li>
+</ul>
+
+<h3>Computer doesn't recognize the keyboard</h3>
+<ul>
+  <li>Use the <strong>data port</strong>, not the power-only port</li>
+  <li>Try a different USB cable (some are power-only)</li>
+  <li>Check Pi USB messages: <code>dmesg | grep -i gadget</code></li>
+</ul>
+
+<h3>Wrong characters being typed</h3>
+<ul>
+  <li>HID scan codes assume a US keyboard layout</li>
+  <li>If your computer has a different keyboard layout, some characters may map differently</li>
+</ul>
+
+<h3>"Permission denied" writing to /dev/hidg0</h3>
+<ul>
+  <li>Fix permissions: <code>sudo chmod 666 /dev/hidg0</code></li>
+  <li>The udev rule should handle this automatically — run <code>sudo udevadm trigger</code></li>
+  <li>Verify rule exists: <code>cat /etc/udev/rules.d/99-morse-pi-hid.rules</code></li>
+</ul>
+
+<h3>Manual HID setup</h3>
+<p>If the installer didn't configure HID, or you need to redo it manually:</p>
+<pre><code># Enable dwc2 overlay
+echo "dtoverlay=dwc2" | sudo tee -a /boot/config.txt
+
+# Add kernel modules
+echo "dwc2" | sudo tee -a /etc/modules
+echo "libcomposite" | sudo tee -a /etc/modules
+
+# Reboot
+sudo reboot</code></pre>
+
+<div class="site-footer">
+  Morse-Pi &mdash; MIT License &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi">GitHub</a> &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues">Report an Issue</a>
+</div>
+
+</main>
+</div>
+
+<a class="back-top" id="back-top" href="#" title="Back to top">↑</a>
+<script>
+const navLinks=document.querySelectorAll('.sidebar .nav-link[href^="#"]');
+const sections=[];
+navLinks.forEach(link=>{
+  const id=link.getAttribute('href')?.slice(1);
+  if(id){const el=document.getElementById(id);if(el)sections.push({id,el,link});}
+});
+function updateActive(){
+  let current='';
+  for(const s of sections){if(s.el.getBoundingClientRect().top<=100)current=s.id;}
+  navLinks.forEach(l=>{if(l.getAttribute('href')?.startsWith('#'))l.classList.remove('active');});
+  const active=sections.find(s=>s.id===current);
+  if(active)active.link.classList.add('active');
+}
+window.addEventListener('scroll',updateActive,{passive:true});
+updateActive();
+
+const btn=document.getElementById('back-top');
+window.addEventListener('scroll',()=>{btn.classList.toggle('visible',window.scrollY>400);},{passive:true});
+document.querySelectorAll('.sidebar .nav-link, .sidebar .nav-page-link').forEach(l=>{
+  l.addEventListener('click',()=>{document.querySelector('.sidebar').classList.remove('open');});
+});
+</script>
+</body>
+</html>

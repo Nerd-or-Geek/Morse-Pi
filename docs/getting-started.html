@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Getting Started — Morse-Pi</title>
+<meta name="description" content="Features, requirements, installation, GPIO wiring, and a complete guide to every mode in Morse-Pi.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header class="site-header">
+  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+  <span class="logo"><a href="index.html">Morse-Pi</a></span>
+  <span class="tagline">Morse Code Trainer &amp; Practice Tool for Raspberry Pi</span>
+  <nav class="header-links">
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi" target="_blank">GitHub</a>
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues" target="_blank">Issues</a>
+  </nav>
+</header>
+
+<!-- ═══ LAYOUT ═══ -->
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="nav-group">
+    <a class="nav-page-link" href="index.html">Home</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link current" href="getting-started.html">Getting Started</a>
+    <a class="nav-link" href="#features">Features</a>
+    <a class="nav-link" href="#requirements">Requirements</a>
+    <a class="nav-link" href="#installation">Installation</a>
+    <a class="nav-link" href="#wiring">GPIO Wiring</a>
+    <a class="nav-link" href="#modes">Modes &amp; Tabs</a>
+    <a class="nav-link" href="#send-mode">SEND Mode</a>
+    <a class="nav-link" href="#encode-mode">ENCODE Mode</a>
+    <a class="nav-link" href="#decode-mode">DECODE Mode</a>
+    <a class="nav-link" href="#speed-mode">SPEED Trainer</a>
+    <a class="nav-link" href="#network-mode">Networking</a>
+    <a class="nav-link" href="#stats-mode">Statistics</a>
+    <a class="nav-link" href="#config-mode">Configuration</a>
+    <a class="nav-link" href="#shortcuts">Keyboard Shortcuts</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="maintenance.html">Maintenance</a>
+    <a class="nav-link" href="maintenance.html#updating">Updating</a>
+    <a class="nav-link" href="maintenance.html#packages">Package Management</a>
+    <a class="nav-link" href="maintenance.html#services">Service Management</a>
+    <a class="nav-link" href="maintenance.html#autostart">Auto-Start on Boot</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="usb-hid.html">USB HID Keyboard</a>
+    <a class="nav-link" href="usb-hid.html#hid-setup">HID Setup</a>
+    <a class="nav-link" href="usb-hid.html#hid-usage">Using HID Mode</a>
+    <a class="nav-link" href="usb-hid.html#hid-troubleshoot">HID Troubleshooting</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="reference.html">Reference</a>
+    <a class="nav-link" href="reference.html#morse-table">Morse Code Table</a>
+    <a class="nav-link" href="reference.html#timing">Timing &amp; WPM</a>
+    <a class="nav-link" href="reference.html#settings-ref">Settings Reference</a>
+    <a class="nav-link" href="reference.html#api-routes">API Routes</a>
+    <a class="nav-link" href="reference.html#project-structure">Project Structure</a>
+  </div>
+  <div class="nav-group">
+    <a class="nav-page-link" href="troubleshooting.html">Troubleshooting</a>
+    <a class="nav-link" href="troubleshooting.html#common-issues">Common Issues</a>
+    <a class="nav-link" href="troubleshooting.html#gpio-errors">GPIO Errors</a>
+    <a class="nav-link" href="troubleshooting.html#connection-errors">Connection Errors</a>
+    <a class="nav-link" href="troubleshooting.html#hid-errors">USB HID Errors</a>
+    <a class="nav-link" href="troubleshooting.html#network-errors">Network Errors</a>
+  </div>
+</aside>
+
+<!-- ═══ MAIN CONTENT ═══ -->
+<main class="content">
+
+<!-- ── FEATURES ────────────────────────────────────────── -->
+<h1>Getting Started</h1>
+<p class="subtitle">Everything you need to set up Morse-Pi and start practicing Morse code.</p>
+
+<h2 id="features">Features</h2>
+<table>
+  <tr><th>Feature</th><th>Description</th></tr>
+  <tr><td><strong>SEND mode</strong></td><td>Key Morse in real time and watch character-by-character decoding</td></tr>
+  <tr><td><strong>ENCODE</strong></td><td>Type any text and see the Morse equivalent instantly</td></tr>
+  <tr><td><strong>DECODE</strong></td><td>Enter dots and dashes, get the decoded text — quiz-style training</td></tr>
+  <tr><td><strong>SPEED trainer</strong></td><td>Practice sending at a target WPM and get scored on accuracy</td></tr>
+  <tr><td><strong>STATS</strong></td><td>Track accuracy, longest streak, and session history</td></tr>
+  <tr><td><strong>Farnsworth timing</strong></td><td>Stretch gaps between letters and words — great for beginners</td></tr>
+  <tr><td><strong>Multi-Pi networking</strong></td><td>Discover other Morse-Pi devices on your LAN and exchange messages</td></tr>
+  <tr><td><strong>USB HID Keyboard</strong></td><td>Pi acts as a USB keyboard — decoded Morse becomes real keystrokes</td></tr>
+  <tr><td><strong>On-screen keys</strong></td><td>Works without hardware: <kbd>Space</kbd> = straight key, <kbd>Z</kbd>/<kbd>X</kbd> = paddles</td></tr>
+  <tr><td><strong>Physical GPIO key</strong></td><td>Connect a real Morse key or iambic paddle via GPIO pins</td></tr>
+  <tr><td><strong>Configurable tones</strong></td><td>Separate dot/dash frequencies, volume, and WPM — all from the browser</td></tr>
+  <tr><td><strong>Dual-pin speaker</strong></td><td>Push-pull differential drive across two GPIO pins for louder, cleaner audio</td></tr>
+  <tr><td><strong>Dark/light themes</strong></td><td>Switch between dark and light UI from CONFIG</td></tr>
+</table>
+
+<!-- ── REQUIREMENTS ────────────────────────────────────── -->
+<h2 id="requirements">Requirements</h2>
+
+<h3>Minimum (software only)</h3>
+<ul>
+  <li>Any computer with <strong>Python 3.9+</strong></li>
+  <li>A modern browser on the same machine or network</li>
+</ul>
+<div class="callout info">
+  <div class="callout-title">ℹ No Raspberry Pi needed</div>
+  The web UI works on any machine — you just won't have GPIO or USB HID features. On-screen keys and keyboard shortcuts still work.
+</div>
+
+<h3>Full hardware setup (Raspberry Pi)</h3>
+<ul>
+  <li><strong>Raspberry Pi</strong> — any model with 40-pin GPIO (Pi 3B+, Pi 4, Pi Zero 2 W, etc.)</li>
+  <li>A <strong>piezo buzzer</strong> or small speaker wired to one or two GPIO pins</li>
+  <li>A <strong>Morse key</strong> (straight key) or <strong>iambic paddle</strong> (two contacts)</li>
+</ul>
+
+<h3>For USB HID Keyboard mode</h3>
+<ul>
+  <li><strong>Pi Zero, Zero W, Zero 2 W, or Pi 4</strong> (must support USB OTG)</li>
+  <li>A USB data cable (not power-only)</li>
+  <li>Connect via the <strong>USB data port</strong> (on Pi Zero, the port labeled "USB" — not "PWR")</li>
+</ul>
+
+<!-- ── INSTALLATION ───────────────────────────────────── -->
+<h2 id="installation">Installation</h2>
+
+<h3>One-line install</h3>
+<p>SSH into your Raspberry Pi and run:</p>
+<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash</code></pre>
+
+<p>The installer performs four steps in order:</p>
+<ol>
+  <li><strong>USB HID Keyboard Gadget</strong> — configures the Pi to appear as a USB keyboard when plugged into a computer</li>
+  <li><strong>Packages</strong> — installs <code>python3</code>, <code>pip</code>, <code>git</code>, <code>flask</code>, <code>gpiozero</code>, <code>pigpio</code></li>
+  <li><strong>Repository</strong> — clones the code to <code>/opt/morse-pi</code></li>
+  <li><strong>Auto-start</strong> — creates a systemd service so Morse-Pi runs on every boot</li>
+</ol>
+
+<div class="callout warn">
+  <div class="callout-title">⚠ Reboot required after first install</div>
+  USB HID keyboard mode requires a reboot to activate the kernel modules. Run <code>sudo reboot</code> after the installer finishes.
+</div>
+
+<p>Once running, open your browser to the IP address shown on screen:</p>
+<pre><code>http://192.168.1.42:5000</code></pre>
+
+<h3>Manual installation</h3>
+<pre><code># 1. Clone
+git clone https://github.com/Nerd-or-Geek/Morse-Pi.git
+cd Morse-Pi
+
+# 2. Install dependencies
+sudo pip3 install flask --break-system-packages
+
+# On Raspberry Pi, also:
+sudo apt install python3-gpiozero pigpio python3-pigpio -y
+sudo systemctl enable pigpiod --now
+sudo usermod -aG gpio $USER
+
+# 3. Run
+cd morse-translator
+python3 app.py</code></pre>
+<p>Then open <code>http://localhost:5000</code> (or the Pi's IP from another device).</p>
+
+<!-- ── WIRING ─────────────────────────────────────────── -->
+<h2 id="wiring">GPIO Wiring</h2>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Pin numbers</div>
+  All pin numbers below are <strong>BCM</strong> (Broadcom) numbers, not physical pin header numbers. All assignments are reconfigurable from the CONFIG panel.
+</div>
+
+<h3>Straight key (single-pin mode)</h3>
+<table>
+  <tr><th>Component</th><th>GPIO (BCM)</th><th>Physical Pin</th><th>Notes</th></tr>
+  <tr><td>Key signal</td><td><strong>17</strong></td><td>Pin 11</td><td>Active-low (key shorts pin to GND)</td></tr>
+  <tr><td>Key ground</td><td>GND</td><td>Pin 9 or 14</td><td></td></tr>
+  <tr><td>Speaker +</td><td><strong>18</strong></td><td>Pin 12</td><td>Speaker pin 1</td></tr>
+  <tr><td>Speaker −</td><td><strong>13</strong></td><td>Pin 33</td><td>Speaker pin 2 (push-pull)</td></tr>
+</table>
+
+<div class="callout success">
+  <div class="callout-title">Dual-pin speaker (push-pull drive)</div>
+  Connect the speaker between <strong>two GPIO pins</strong> instead of between a GPIO pin and GND. The Pi drives them in anti-phase (one HIGH while the other is LOW, then they swap), doubling the voltage swing for louder, cleaner audio. Set both <strong>Speaker Pin 1</strong> and <strong>Speaker Pin 2</strong> in the CONFIG panel.
+</div>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Single-pin fallback</div>
+  If you leave Speaker Pin 2 empty, the speaker operates in single-pin PWM mode (speaker between the GPIO pin and GND). This works but produces quieter output.
+</div>
+
+<h3>Iambic paddle (dual-pin mode)</h3>
+<table>
+  <tr><th>Component</th><th>GPIO (BCM)</th><th>Physical Pin</th><th>Notes</th></tr>
+  <tr><td>Dot paddle</td><td><strong>22</strong></td><td>Pin 15</td><td>Active-low</td></tr>
+  <tr><td>Dash paddle</td><td><strong>27</strong></td><td>Pin 13</td><td>Active-low</td></tr>
+  <tr><td>Speaker +</td><td><strong>18</strong></td><td>Pin 12</td><td>Speaker pin 1</td></tr>
+  <tr><td>Speaker −</td><td><strong>13</strong></td><td>Pin 33</td><td>Speaker pin 2 (push-pull)</td></tr>
+</table>
+
+<h3>GPIO header pinout (subset)</h3>
+<div class="wiring-diagram"> ┌──────────────────────────────────┐
+ │  1  3V3   │  2  5V              │
+ │  3  BCM2  │  4  5V              │
+ │  5  BCM3  │  6  GND             │
+ │  7  BCM4  │  8  BCM14           │
+ │  9  GND   │ 10  BCM15           │
+ │ 11  BCM17 │ 12  BCM18 ← spkr + │  ← key (single)
+ │ 13  BCM27 │ 14  GND             │  ← dash (dual)
+ │ 15  BCM22 │ 16  BCM23           │  ← dot  (dual)
+ │  …        │  …                  │
+ │ 33  BCM13 │ 34  GND             │  ← spkr −
+ └──────────────────────────────────┘</div>
+
+<h3>Ground output pins</h3>
+<p>If your paddle's common wire is soldered to a GPIO pin instead of a physical GND pin, you can assign that GPIO as a <strong>Ground Output</strong> in the CONFIG or diagnostic panels. The Pi will drive that pin permanently LOW so it acts as a ground reference.</p>
+
+<!-- ══════════════════════════════════════════════════════
+     USING MORSE-PI
+     ══════════════════════════════════════════════════════ -->
+<h2 id="modes">Modes &amp; Tabs</h2>
+<p>The Morse-Pi web UI is a single-page application with nine tabs along the top navigation bar:</p>
+<table>
+  <tr><th>Tab</th><th>Purpose</th></tr>
+  <tr><td><strong>SEND</strong></td><td>Key Morse code in real time → live decoded text</td></tr>
+  <tr><td><strong>ENCODE</strong></td><td>Type plaintext → see Morse translation</td></tr>
+  <tr><td><strong>DECODE</strong></td><td>Quiz: see Morse → type the decoded answer</td></tr>
+  <tr><td><strong>SPEED</strong></td><td>Speed drill: key a phrase, measure WPM and accuracy</td></tr>
+  <tr><td><strong>KB</strong></td><td>USB HID keyboard settings and output</td></tr>
+  <tr><td><strong>STATS</strong></td><td>Accuracy and streak statistics</td></tr>
+  <tr><td><strong>CONFIG</strong></td><td>All settings (pins, tones, WPM, theme, Farnsworth, etc.)</td></tr>
+  <tr><td><strong>NET</strong></td><td>Multi-Pi networking: discover peers, send/receive messages</td></tr>
+  <tr><td><strong>HELP</strong></td><td>Built-in reference for shortcuts, wiring, and mode descriptions</td></tr>
+</table>
+
+<!-- ── SEND MODE ──────────────────────────────────────── -->
+<h2 id="send-mode">SEND Mode</h2>
+<p>SEND is the primary Morse code practice mode. Key Morse using your hardware key, on-screen buttons, or keyboard shortcuts, and watch your input decoded in real time.</p>
+
+<h3>How it works</h3>
+<ol>
+  <li>Press and hold your key (or <kbd>Space</kbd>) to generate dots and dashes</li>
+  <li>The <strong>symbol buffer</strong> shows your current dots/dashes as you key them</li>
+  <li>After a letter gap (3 dot units of silence), the character is decoded and appended to the output</li>
+  <li>After a word gap (7 dot units), a space is inserted</li>
+</ol>
+
+<h3>Input methods</h3>
+<table>
+  <tr><th>Method</th><th>How</th></tr>
+  <tr><td>Straight key (single pin)</td><td>Physical key on GPIO or <kbd>Space</kbd> bar — duration determines dot vs dash</td></tr>
+  <tr><td>Iambic paddle (dual pin)</td><td>Physical paddles on GPIO or <kbd>Z</kbd> (dot) / <kbd>X</kbd> (dash) keys</td></tr>
+  <tr><td>On-screen buttons</td><td>Click/tap the DOT and DASH buttons in the UI</td></tr>
+</table>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Straight key timing</div>
+  In straight key mode, the key-down duration is compared to 2× the dot unit. If shorter → dot; if longer → dash. The dot unit is calculated from your WPM setting: <code>dot_unit = 1200ms / WPM</code>.
+</div>
+
+<!-- ── ENCODE MODE ────────────────────────────────────── -->
+<h2 id="encode-mode">ENCODE Mode</h2>
+<p>Type or paste any text into the input field and instantly see the Morse code translation. Each character is broken down showing the letter and its Morse equivalent.</p>
+<ul>
+  <li>Click <strong>Play</strong> to hear the Morse code through the buzzer/speaker</li>
+  <li>Supports letters A–Z, numbers 0–9, and common punctuation</li>
+  <li>Spaces between words are shown as <code>/</code></li>
+</ul>
+
+<!-- ── DECODE MODE ────────────────────────────────────── -->
+<h2 id="decode-mode">DECODE Mode</h2>
+<p>A quiz-style trainer: the app shows a random word or phrase in Morse code. You type your decoded answer and submit.</p>
+<ul>
+  <li>Difficulty levels: <strong>Easy</strong> (short words), <strong>Medium</strong>, <strong>Hard</strong> (longer phrases)</li>
+  <li>Click <strong>Play</strong> to hear the Morse phrase as an audio hint</li>
+  <li>Tracks correct answers, wrong answers, current streak, and best streak</li>
+  <li>New phrase generated on each submission or when switching to DECODE mode</li>
+</ul>
+
+<!-- ── SPEED MODE ─────────────────────────────────────── -->
+<h2 id="speed-mode">SPEED Trainer</h2>
+<p>A speed drill that measures how fast and accurately you can key a displayed phrase.</p>
+<ol>
+  <li>A phrase is displayed on screen</li>
+  <li>Key the phrase using your paddle or keyboard</li>
+  <li>A timer starts automatically when you begin keying</li>
+  <li>Submit when done — the app compares your keyed Morse with the expected phrase</li>
+</ol>
+<p>Results include:</p>
+<ul>
+  <li><strong>WPM</strong> — your measured words-per-minute</li>
+  <li><strong>Accuracy</strong> — character-by-character comparison</li>
+  <li><strong>Elapsed time</strong></li>
+</ul>
+
+<!-- ── KEYBOARD MODE (brief) ──────────────────────────── -->
+<h2 id="keyboard-mode">USB Keyboard (KB)</h2>
+<p>The KB tab controls USB HID keyboard mode. When enabled, decoded Morse characters are sent as <em>real keystrokes</em> to whatever computer the Pi is plugged into via USB.</p>
+
+<table>
+  <tr><th>Mode</th><th>Behavior</th></tr>
+  <tr><td><strong>Letters</strong></td><td>Each decoded Morse character is sent as the corresponding keystroke.</td></tr>
+  <tr><td><strong>Custom</strong></td><td>Each dot/dash paddle press immediately sends a configured key (default Z/X). No decoding — raw key mapping.</td></tr>
+</table>
+<p>See the <a href="usb-hid.html">USB HID Keyboard</a> page for full setup and configuration details.</p>
+
+<!-- ── NETWORK MODE ───────────────────────────────────── -->
+<h2 id="network-mode">Networking (NET)</h2>
+<p>Multiple Morse-Pi devices on the same LAN automatically discover each other — no configuration needed.</p>
+
+<h3>How discovery works</h3>
+<ul>
+  <li>Each Pi broadcasts a <strong>UDP beacon</strong> on port 5001 every 3 seconds</li>
+  <li>The beacon contains the device name, IP address, and port</li>
+  <li>Other Pis listen for these beacons and maintain a peer list</li>
+  <li>Peers that haven't been seen for 15 seconds are automatically removed</li>
+</ul>
+
+<h3>Sending messages</h3>
+<ol>
+  <li>Open the <strong>NET</strong> tab</li>
+  <li>Select a discovered peer from the list</li>
+  <li>Type a message and click <strong>SEND</strong>, or key Morse using your paddle and send the decoded text</li>
+  <li>The message is sent via HTTP to the peer's <code>/receive_morse</code> endpoint</li>
+  <li>The receiving Pi plays the message through its speaker and shows it in the inbox</li>
+</ol>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Device name</div>
+  Set your device name in <strong>CONFIG → Device Name</strong> or directly in the NET tab. This is how other Pis identify your device.
+</div>
+
+<!-- ── STATS MODE ─────────────────────────────────────── -->
+<h2 id="stats-mode">Statistics</h2>
+<p>The STATS tab shows your practice history:</p>
+<ul>
+  <li><strong>Total attempts</strong> — decode and speed drills combined</li>
+  <li><strong>Correct answers</strong></li>
+  <li><strong>Current streak</strong> — consecutive correct answers</li>
+  <li><strong>Best streak</strong></li>
+</ul>
+<p>Stats are saved to <code>stats.json</code> and persist across restarts and updates. Click <strong>Reset</strong> to start fresh.</p>
+
+<!-- ── CONFIG MODE ────────────────────────────────────── -->
+<h2 id="config-mode">Configuration</h2>
+<p>All settings are configurable live from the <strong>CONFIG</strong> tab — no files to edit, no restarts needed.</p>
+<p>See the <a href="reference.html#settings-ref">Settings Reference</a> for a full table of every setting.</p>
+
+<h3>Key sections</h3>
+<ul>
+  <li><strong>Input Mode</strong> — switch between straight key (single pin) and iambic paddle (dual pin)</li>
+  <li><strong>Pin Assignment</strong> — choose which BCM pins are used for data, dot, dash, speaker, and ground</li>
+  <li><strong>Audio</strong> — dot frequency, dash frequency, volume, output type (speaker PWM or LED on/off)</li>
+  <li><strong>Speed</strong> — WPM target with a "Test WPM" button that plays "PARIS" at the configured speed</li>
+  <li><strong>Farnsworth Timing</strong> — enable stretched gaps with configurable letter and word gap multipliers</li>
+  <li><strong>Quiz</strong> — difficulty level and word categories</li>
+  <li><strong>Theme</strong> — dark or light UI theme</li>
+  <li><strong>Device Name</strong> — the name shown to other Pis on the network</li>
+</ul>
+
+<!-- ── SHORTCUTS ──────────────────────────────────────── -->
+<h2 id="shortcuts">Keyboard Shortcuts</h2>
+<table>
+  <tr><th>Key</th><th>Action</th></tr>
+  <tr><td><kbd>Space</kbd></td><td>Straight key — hold to dash, tap to dot</td></tr>
+  <tr><td><kbd>Z</kbd></td><td>Dot paddle (iambic / dual-pin mode)</td></tr>
+  <tr><td><kbd>X</kbd></td><td>Dash paddle (iambic / dual-pin mode)</td></tr>
+</table>
+<div class="callout info">
+  <div class="callout-title">ℹ Squeeze keying</div>
+  In dual-pin mode, holding both <kbd>Z</kbd> and <kbd>X</kbd> simultaneously activates squeeze/iambic keying — the keyer alternates between dots and dashes automatically.
+</div>
+
+<div class="site-footer">
+  Morse-Pi &mdash; MIT License &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi">GitHub</a> &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues">Report an Issue</a>
+</div>
+
+</main>
+</div>
+
+<a class="back-top" id="back-top" href="#" title="Back to top">↑</a>
+<script>
+// Sidebar active link highlighting (scroll spy)
+const navLinks=document.querySelectorAll('.sidebar .nav-link[href^="#"]');
+const sections=[];
+navLinks.forEach(link=>{
+  const id=link.getAttribute('href')?.slice(1);
+  if(id){const el=document.getElementById(id);if(el)sections.push({id,el,link});}
+});
+function updateActive(){
+  let current='';
+  for(const s of sections){if(s.el.getBoundingClientRect().top<=100)current=s.id;}
+  navLinks.forEach(l=>{if(l.getAttribute('href')?.startsWith('#'))l.classList.remove('active');});
+  const active=sections.find(s=>s.id===current);
+  if(active)active.link.classList.add('active');
+}
+window.addEventListener('scroll',updateActive,{passive:true});
+updateActive();
+
+const btn=document.getElementById('back-top');
+window.addEventListener('scroll',()=>{btn.classList.toggle('visible',window.scrollY>400);},{passive:true});
+document.querySelectorAll('.sidebar .nav-link, .sidebar .nav-page-link').forEach(l=>{
+  l.addEventListener('click',()=>{document.querySelector('.sidebar').classList.remove('open');});
+});
+</script>
+</body>
+</html>
