@@ -17,6 +17,7 @@ A full-featured Morse code trainer and practice tool built with Flask, designed 
 | **STATS** | Track accuracy, longest streak, and session history |
 | **Farnsworth timing** | Stretch the gaps between letters and words independently — great for beginners |
 | **Multi-Pi networking** | Discover other Morse-Pi devices on your LAN and send messages between them |
+| **USB HID Keyboard** | Use your Pi as a USB keyboard — send decoded Morse directly to any computer |
 | **Keyboard & on-screen keys** | Works without any hardware; `Space` = straight key, `Z`/`X` = dot/dash paddles |
 | **Physical GPIO key** | Connect a real Morse key or iambic paddle via Raspberry Pi GPIO pins |
 | **Configurable tones** | Adjust dot and dash frequencies, volume, and WPM from the browser |
@@ -90,12 +91,147 @@ The script will:
 2. Clone this repo to `/opt/morse-pi`
 3. Install Flask and dependencies to the system Python with `pip3`
 4. Register and start a `systemd` service that auto-starts on boot
-5. Open port 5000 in `ufw` if the firewall is active
+5. Configure USB HID gadget mode (allows Pi to act as a USB keyboard)
+6. Open port 5000 in `ufw` if the firewall is active
 
 Once complete, open your browser to the URL printed on screen, e.g.:
 
 ```
 http://192.168.1.42:5000
+```
+
+---
+
+## Auto-Start on Boot
+
+If you used the one-line installer, Morse-Pi **automatically starts when the Pi boots** — no extra configuration needed.
+
+The installer creates a systemd service (`morse-pi.service`) that:
+- Starts the web server on boot
+- Restarts automatically if it crashes
+- Runs as your normal user (not root)
+
+### Verify auto-start is working
+
+```bash
+# Check if the service is enabled (will start on boot)
+sudo systemctl is-enabled morse-pi
+# Should output: enabled
+
+# Check if the service is running right now
+sudo systemctl status morse-pi
+```
+
+### If auto-start isn't working
+
+Re-run the installer to fix it:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash
+```
+
+Or manually enable and start the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable morse-pi
+sudo systemctl start morse-pi
+```
+
+---
+
+## USB HID Keyboard Mode
+
+Morse-Pi can turn your Raspberry Pi into a **USB keyboard**. When connected to any computer via USB, the Pi appears as a standard keyboard and can send keystrokes based on decoded Morse code.
+
+### Requirements
+
+- **Raspberry Pi Zero, Zero W, Zero 2 W, or Pi 4** (must have USB OTG support)
+- Connect the Pi to your computer using the **USB data port** (not the power-only port)
+  - On Pi Zero: Use the port labeled "USB" (not "PWR")
+  - On Pi 4: Use one of the USB-C or USB-A ports
+
+### How it works
+
+1. Key Morse code using your paddle or the on-screen keys
+2. The decoded letters appear in the web UI
+3. Click the **KB** tab to enable USB keyboard mode
+4. Each decoded character is sent as a keystroke to the connected computer
+
+### Setup (automatic with installer)
+
+The installer automatically configures USB HID gadget mode:
+
+1. Enables the `dwc2` overlay in `/boot/config.txt`
+2. Loads the `dwc2` and `libcomposite` kernel modules
+3. Creates `/dev/hidg0` — the USB HID device
+4. Sets up a systemd service (`morse-pi-hid.service`) to configure the gadget on boot
+
+**After installation, you must reboot for USB HID to work:**
+
+```bash
+sudo reboot
+```
+
+### Verify USB HID is working
+
+After reboot, check that the HID device exists:
+
+```bash
+ls -la /dev/hidg0
+```
+
+You should see:
+```
+crw-rw-rw- 1 root root 236, 0 ... /dev/hidg0
+```
+
+Check the HID service status:
+
+```bash
+sudo systemctl status morse-pi-hid
+```
+
+### Using USB HID mode
+
+1. Connect your Pi to a computer via USB
+2. The computer should recognize it as "Morse Code Keyboard"
+3. Open the Morse-Pi web UI and go to the **KB** tab
+4. Enable keyboard mode
+5. Open a text editor on the connected computer
+6. Key Morse code — characters will be typed into the text editor
+
+### Keyboard mode options
+
+| Mode | Description |
+|---|---|
+| **Letters** | Sends decoded characters (A-Z, 0-9, punctuation) |
+| **Custom** | Sends custom key codes (e.g., dot = Z, dash = X) |
+
+### Troubleshooting USB HID
+
+**`/dev/hidg0` doesn't exist:**
+- Make sure you rebooted after installation
+- Check if modules are loaded: `lsmod | grep dwc2`
+- Check kernel messages: `dmesg | grep -i usb`
+
+**Computer doesn't recognize the keyboard:**
+- Use the correct USB port (data port, not power-only)
+- Try a different USB cable (some are power-only)
+- Check `dmesg` on the Pi for USB connection messages
+
+**Manual USB HID setup (if automatic setup failed):**
+
+```bash
+# Enable dwc2 overlay
+echo "dtoverlay=dwc2" | sudo tee -a /boot/config.txt
+
+# Add modules
+echo "dwc2" | sudo tee -a /etc/modules
+echo "libcomposite" | sudo tee -a /etc/modules
+
+# Reboot
+sudo reboot
 ```
 
 ---
@@ -126,14 +262,24 @@ Then open `http://localhost:5000` (or the Pi's IP from another device).
 
 ## Updating
 
-If you used the installer:
+Re-run the same install script — it automatically detects the existing installation and runs in **update mode**:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash
+```
+
+You'll be prompted to choose:
+- **Option 1 (Full update):** Check packages, update code, restart service
+- **Option 2 (Quick update):** Skip package checks, just update code and restart
+
+Your settings (`settings.json`) and stats (`stats.json`) are **preserved** during updates. The word list (`words.json`) is updated from the repository.
+
+### Manual update (alternative)
 
 ```bash
 sudo git -C /opt/morse-pi pull
 sudo systemctl restart morse-pi
 ```
-
-Or just re-run the install script — it will pull the latest code and restart the service automatically.
 
 ---
 
@@ -188,11 +334,20 @@ Settings are saved to `morse-translator/settings.json` and survive restarts.
 
 ## Service management
 
+### Main web app service
+
 ```bash
 sudo systemctl status  morse-pi    # check if running
 sudo systemctl restart morse-pi    # restart
 sudo systemctl stop    morse-pi    # stop
 sudo journalctl -u morse-pi -f     # live logs
+```
+
+### USB HID service
+
+```bash
+sudo systemctl status  morse-pi-hid    # check HID gadget status
+sudo systemctl restart morse-pi-hid    # reconfigure USB gadget
 ```
 
 ---
@@ -205,10 +360,16 @@ Morse-Pi/
 └── morse-translator/
     ├── app.py                  ← Flask app, GPIO control, Morse timing, networking
     ├── settings.json           ← saved user settings (auto-created)
+    ├── stats.json              ← user statistics (auto-created)
     ├── words.json              ← word list for quiz/speed modes
     └── templates/
         ├── index.html          ← single-page web UI
         └── diag.html           ← GPIO live diagnostic popup
+
+# Created by installer on Raspberry Pi:
+/etc/systemd/system/morse-pi.service       ← main app service
+/etc/systemd/system/morse-pi-hid.service   ← USB HID gadget service
+/usr/local/bin/morse-pi-hid-setup.sh       ← USB HID configuration script
 ```
 
 ---
