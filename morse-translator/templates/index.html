@@ -477,7 +477,7 @@ let cheatTabActive  = 'letters';
 let cheatOpen       = false;
 
 const SETTINGS_DEFAULTS = {
-  speaker_pin:18, speaker_pin2:null, output_type:'speaker',
+  speaker_pin:18, speaker_pin2:null, speaker_gnd_mode:'3v3', output_type:'speaker',
   pin_mode:'single', data_pin:17, dot_pin:22, dash_pin:27, ground_pin:null, grounded_pins:[],
   use_external_switch:false,
   dot_freq:700, dash_freq:500, volume:0.75,
@@ -872,6 +872,18 @@ function renderSettings(){
               ?'<span class="tag tag-green">Dual-Pin (Push-Pull)</span> &mdash; Anti-phase drive doubles the voltage swing for louder, cleaner audio. Both pins drive the speaker differentially.'
               :'<span class="tag tag-blue">Single-Pin</span> &mdash; Set a second pin to enable push-pull differential speaker drive for improved sound.'}</div>
           </div>
+          ${s.speaker_pin2==null ? `
+          <div class="setting-row">
+            <div class="setting-label">Speaker Wiring</div>
+            <div class="segmented" style="max-width:380px;">
+              <button class="segmented-btn ${s.speaker_gnd_mode==='3v3'?'active':''}" onclick="setSpeakerGndMode('3v3')">&#9889; GPIO + 3.3V</button>
+              <button class="segmented-btn ${s.speaker_gnd_mode==='gnd'?'active':''}" onclick="setSpeakerGndMode('gnd')">&#9178; GPIO + GND</button>
+            </div>
+            <div class="setting-help">${s.speaker_gnd_mode==='3v3'
+              ?'<span class="tag tag-orange">3.3V Reference</span> &mdash; Speaker is wired between GPIO pin and the 3.3V rail. Pin idles HIGH when silent.'
+              :'<span class="tag tag-blue">GND Reference</span> &mdash; Speaker is wired between GPIO pin and GND. Pin idles LOW when silent.'}</div>
+          </div>
+          ` : ''}
           <div class="setting-row">
             <div class="setting-label">Output Type</div>
             <div class="segmented">
@@ -974,7 +986,11 @@ function renderGpioMap(s) {
   if (s.output_type === 'led') {
     assign[s.speaker_pin] = {role:'LED OUT', col:'spkr'};
   } else {
-    assign[s.speaker_pin] = {role:s.speaker_pin2!=null?'SPKR +':'SPEAKER', col:'spkr'};
+    if (s.speaker_pin2!=null) {
+      assign[s.speaker_pin] = {role:'SPKR +', col:'spkr'};
+    } else {
+      assign[s.speaker_pin] = {role:s.speaker_gnd_mode==='3v3'?'SPKR (3.3V)':'SPEAKER', col:'spkr'};
+    }
   }
   if (s.speaker_pin2 != null) {
     assign[s.speaker_pin2] = {role:s.output_type==='led'?'LED OUT 2':'SPKR −', col:'spkr'};
@@ -1048,7 +1064,11 @@ function renderGpioMap(s) {
         ${gndPins.map(p=>`<span class="pin-badge">Pin&nbsp;${p}</span>`).join('')}
         <span style="margin-left:6px;">&mdash; connect your paddle/key common leg to any of these.</span>
       </div>
-      <div style="margin-top:10px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);">&#9888; Speaker: ${s.speaker_pin2!=null?'Dual-pin push-pull mode active &mdash; speaker is driven differentially between both pins for maximum volume.':'Single-pin mode &mdash; use a 100&ndash;470&Omega; series resistor between GPIO and speaker. Set Pin 2 for push-pull drive.'}</div>
+      <div style="margin-top:10px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);">&#9888; Speaker: ${s.speaker_pin2!=null
+        ?'Dual-pin push-pull mode active &mdash; speaker is driven differentially between both pins for maximum volume.'
+        :(s.speaker_gnd_mode==='3v3'
+          ?'Single-pin + 3.3V mode &mdash; speaker wired between GPIO and 3.3V rail. Use a 100&ndash;470&Omega; series resistor.'
+          :'Single-pin + GND mode &mdash; speaker wired between GPIO and GND. Use a 100&ndash;470&Omega; series resistor. Set Pin 2 for push-pull drive.')}</div>
     </div>`;
 }
 
@@ -1093,6 +1113,7 @@ function doAssignPin(bcm, settingKey) {
   ['data_pin','dot_pin','dash_pin','speaker_pin','speaker_pin2'].forEach(k=>{if(settings[k]===bcm)settings[k]=null;});
   if(settingKey) settings[settingKey]=bcm;
   const payload={pin_mode:settings.pin_mode,output_type:settings.output_type,
+    speaker_gnd_mode:settings.speaker_gnd_mode||'3v3',
     data_pin:settings.data_pin,dot_pin:settings.dot_pin,
     dash_pin:settings.dash_pin,speaker_pin:settings.speaker_pin,
     speaker_pin2:settings.speaker_pin2};
@@ -1428,22 +1449,24 @@ function renderKeyboard(){
         <div class="settings-section-title">&#9889; Keyboard Connection</div>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
           <div class="segmented" style="flex:1;min-width:180px;">
-            <button class="segmented-btn ${kbEnabled?'':'active'}" onclick="setKbEnabled(false)" ${!usbHidAvailable?'disabled':''}>DISABLED</button>
-            <button class="segmented-btn ${kbEnabled?'active':''}" onclick="setKbEnabled(true)" ${!usbHidAvailable?'disabled':''}>ENABLED</button>
+            <button class="segmented-btn ${kbEnabled?'':'active'}" onclick="setKbEnabled(false)">DISABLED</button>
+            <button class="segmented-btn ${kbEnabled?'active':''}" onclick="setKbEnabled(true)">ENABLED</button>
           </div>
           <div class="status-pill" style="font-size:0.6rem;">
-            <div class="dot ${kbEnabled && usbHidAvailable?'ok':(usbHidAvailable?'':'err')}" id="kb-status-dot"></div>
-            ${kbEnabled && usbHidAvailable?'ACTIVE':(usbHidAvailable?'STANDBY':'NOT AVAILABLE')}
+            <div class="dot ${kbEnabled && usbHidAvailable?'ok':(kbEnabled?'warn':(usbHidAvailable?'':'err'))}" id="kb-status-dot"></div>
+            ${kbEnabled && usbHidAvailable?'ACTIVE':(kbEnabled?'ENABLED · NO DEVICE':(usbHidAvailable?'STANDBY':'NOT AVAILABLE'))}
           </div>
         </div>
-        <div style="display:flex;gap:10px;margin-top:10px;">
+        <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap;">
           <div class="status-pill" style="font-size:0.55rem;">
             <div class="dot ${hidClass}"></div>
             ${hidStatus}
           </div>
+          <button class="btn btn-ghost btn-xs" onclick="recheckHid()" style="font-size:0.55rem;padding:2px 10px;">&#8635; Re-check</button>
+          ${!usbHidAvailable ? '<button class="btn btn-ghost btn-xs" onclick="tryHidSetup()" style="font-size:0.55rem;padding:2px 10px;">&#9881; Try Setup</button>' : ''}
         </div>
         <p class="setting-help" style="margin-top:8px;">When enabled, decoded Morse letters will be sent as keystrokes to your connected computer via USB.</p>
-        ${!usbHidAvailable ? '<p class="setting-help" style="color:var(--danger);">USB HID device (/dev/hidg0) not found. See setup instructions below.</p>' : ''}
+        ${!usbHidAvailable ? '<p class="setting-help" style="color:var(--danger);">USB HID device (/dev/hidg0) not found. Try the Re-check or Try Setup buttons above, or reboot the Pi.</p>' : ''}
       </div>
       
       <hr class="sep">
@@ -1508,14 +1531,26 @@ function renderKeyboard(){
         <div class="settings-section-title">&#9432; Setup Instructions</div>
         <div class="help-card" style="background:var(--bg);">
           <ul>
-            <li><span>1. Enable USB OTG mode on your Pi</span></li>
-            <li><span>2. Connect Pi to computer via USB data port</span></li>
-            <li><span>3. Pi will appear as a USB keyboard</span></li>
-            <li><span>4. Enable keyboard mode above</span></li>
-            <li><span>5. Key Morse code → letters typed on computer</span></li>
+            <li><span>1. Run <code>install.sh</code> as root on the Pi</span></li>
+            <li><span>2. <b>Reboot the Pi</b> after install (required for USB modules)</span></li>
+            <li><span>3. Connect Pi to computer via <b>USB data port</b> (not power-only)</span></li>
+            <li><span>4. Pi will appear as a USB keyboard to your computer</span></li>
+            <li><span>5. Enable keyboard mode above → key Morse → letters typed on computer</span></li>
           </ul>
         </div>
-        <p class="setting-help" style="margin-top:8px;">Requires <code>dtoverlay=dwc2</code> in /boot/config.txt and <code>libcomposite</code> kernel module.</p>
+        <p class="setting-help" style="margin-top:8px;">Requires <code>dtoverlay=dwc2</code> in /boot/config.txt, <code>dwc2</code> and <code>libcomposite</code> in /etc/modules, and the <code>morse-pi-hid</code> systemd service.</p>
+        ${!usbHidAvailable ? `
+        <div class="help-card" style="background:var(--bg);margin-top:10px;border-left:3px solid var(--danger);">
+          <div style="font-size:0.7rem;font-weight:700;color:var(--danger);margin-bottom:6px;">TROUBLESHOOTING</div>
+          <ul style="font-size:0.75rem;line-height:1.7;">
+            <li>Reboot first: <code>sudo reboot</code></li>
+            <li>Check service: <code>sudo systemctl status morse-pi-hid</code></li>
+            <li>Check modules: <code>lsmod | grep dwc2</code></li>
+            <li>Manual setup: <code>sudo /usr/local/bin/morse-pi-hid-setup.sh</code></li>
+            <li>Re-run installer: <code>sudo bash install.sh</code></li>
+          </ul>
+        </div>
+        ` : ''}
       </div>
     </div>`;
 }
@@ -1525,7 +1560,11 @@ function setKbEnabled(val){
     if(res.ok){
       kbEnabled = res.kb_enabled;
       usbHidAvailable = res.usb_hid_available;
-      toast(val ? 'Keyboard mode enabled' : 'Keyboard mode disabled', 'info');
+      if(res.warning){
+        toast(res.warning, 'warning', 5000);
+      } else {
+        toast(val ? 'Keyboard mode enabled' : 'Keyboard mode disabled', 'info');
+      }
     } else {
       toast(res.error || 'Failed to enable keyboard', 'error');
     }
@@ -1539,6 +1578,35 @@ function setKbMode(mode){
     }
     renderContent();
   }).catch(()=>toast('Failed to update mode','error'));
+}
+function recheckHid(){
+  toast('Checking USB HID…','info',1500);
+  api('/kb_status').then(res=>{
+    usbHidAvailable = res.usb_hid_available;
+    kbEnabled = res.kb_enabled;
+    renderContent();
+    if(res.usb_hid_available){
+      toast('USB HID device found!','success');
+    } else {
+      toast('/dev/hidg0 not found. Try "Try Setup" or reboot.','warning',4000);
+    }
+  }).catch(()=>toast('Failed to check HID status','error'));
+}
+function tryHidSetup(){
+  toast('Attempting HID gadget setup…','info',2000);
+  api('/kb_hid_setup','POST').then(res=>{
+    if(res.ok){
+      usbHidAvailable = res.usb_hid_available;
+      renderContent();
+      if(res.usb_hid_available){
+        toast('HID gadget activated! /dev/hidg0 is ready.','success');
+      } else {
+        toast(res.message || 'Setup ran but /dev/hidg0 still not found. A reboot may be needed.','warning',5000);
+      }
+    } else {
+      toast(res.error || 'HID setup failed','error',5000);
+    }
+  }).catch(()=>toast('Failed to run HID setup','error'));
 }
 function setKbDotKey(key){
   const newKey = key.toLowerCase() || 'z';
@@ -1793,9 +1861,10 @@ function copyText(text){if(!text)return;navigator.clipboard?.writeText(text).the
 // ── Settings helpers ───────────────────────────
 function setPinMode(mode){settings.pin_mode=mode;renderContent();}
 function setOutputType(type){settings.output_type=type;renderContent();}
+function setSpeakerGndMode(mode){settings.speaker_gnd_mode=mode;renderContent();}
 function saveSettings(){
   const keys=['speaker_pin','dot_freq','dash_freq','wpm_target','difficulty','data_pin','dot_pin','dash_pin'];
-  const data={pin_mode:settings.pin_mode,output_type:settings.output_type,use_external_switch:settings.use_external_switch||false};
+  const data={pin_mode:settings.pin_mode,output_type:settings.output_type,speaker_gnd_mode:settings.speaker_gnd_mode||'3v3',use_external_switch:settings.use_external_switch||false};
   keys.forEach(k=>{const el=document.getElementById('s-'+k);if(el)data[k]=el.value;});
   // Speaker pin 2: nullable
   const sp2El=document.getElementById('s-speaker_pin2');

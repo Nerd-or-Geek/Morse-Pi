@@ -432,7 +432,11 @@ function roleLabel(bcm, data) {
   const dop = data.dot_pin;
   const dap = data.dash_pin;
   const grounded = data.grounded_pins || [];
-  if (bcm === sp)  return sp2 != null ? 'SPKR +' : 'SPEAKER';
+  const gndMode = data.speaker_gnd_mode || '3v3';
+  if (bcm === sp) {
+    if (sp2 != null) return 'SPKR +';
+    return gndMode === '3v3' ? 'SPKR (3.3V)' : 'SPEAKER';
+  }
   if (bcm === sp2) return 'SPKR \u2212';
   if (bcm === gp)  return 'GND OUT';
   if (grounded.includes(bcm)) return 'GROUNDED';
@@ -485,7 +489,10 @@ function renderHero(data) {
   } else {
     if (dp  != null) keyPins.push({bcm: dp,  role: 'DATA KEY'});
   }
-  if (sp  != null) keyPins.push({bcm: sp,  role: sp2 != null ? 'SPKR +' : 'SPEAKER'});
+  if (sp  != null) {
+    const spRole = sp2 != null ? 'SPKR +' : (data.speaker_gnd_mode === '3v3' ? 'SPKR (3.3V)' : 'SPEAKER');
+    keyPins.push({bcm: sp,  role: spRole});
+  }
   if (sp2 != null) keyPins.push({bcm: sp2, role: 'SPKR \u2212'});
 
   const hero = document.getElementById('hero-section');

@@ -4,6 +4,7 @@ import threading
 import json
 import random
 import os
+import subprocess
 import socket
 import struct
 import uuid as _uuid_mod
@@ -50,6 +51,7 @@ SETTINGS_FILE = "settings.json"
 DEFAULT_SETTINGS = {
     "speaker_pin": 18,
     "speaker_pin2": None,  # second GPIO pin for push-pull speaker drive
+    "speaker_gnd_mode": "3v3",  # "gnd" = other terminal to GND, "3v3" = other terminal to 3.3V (single-pin only)
     "output_type": "speaker",  # "speaker" or "led"
     "pin_mode": "single",
     "data_pin": 17,
@@ -787,11 +789,14 @@ def init_gpio():
         if sp2 is not None and _pigpio:
             beeper = None  # no gpiozero PWMOutputDevice needed
         else:
-            # Single-pin speaker: use gpiozero PWMOutputDevice as before
+            # Single-pin speaker: use gpiozero PWMOutputDevice
+            # When other terminal is at 3.3V, idle state must be HIGH (3.3V) to avoid DC through speaker
+            gnd_mode = settings.get("speaker_gnd_mode", "3v3")
+            off_value = 1 if gnd_mode == "3v3" else 0
             beeper = PWMOutputDevice(
                 sp1,
                 frequency=max(1, int(settings["dot_freq"])),
-                initial_value=0
+                initial_value=off_value
             )
 
         # Ground output pin (legacy single pin): drive LOW so paddle common wire works on a GPIO pin
@@ -844,6 +849,8 @@ def play_tone(freq, duration=None, duty=None):
     _dual = _spk_pins[1] is not None and _pigpio
     if not _dual and not beeper:
         return
+    gnd_mode = settings.get("speaker_gnd_mode", "3v3")
+    off_val = 1 if gnd_mode == "3v3" else 0  # idle value when not playing
     with lock:
         try:
             output_type = settings.get("output_type", "speaker")
@@ -866,8 +873,9 @@ def play_tone(freq, duration=None, duty=None):
                 vol = float(duty) if duty is not None else settings["volume"]
 
                 if output_type == "led":
+                    # LED on: for 3.3V ref LOW drives current; for GND ref HIGH drives current
                     beeper.frequency = 1000
-                    beeper.value = 1.0
+                    beeper.value = 0 if gnd_mode == "3v3" else 1.0
                 else:
                     vol = max(0.01, min(0.95, vol))
                     beeper.frequency = max(100, min(4000, int(freq)))
@@ -875,7 +883,7 @@ def play_tone(freq, duration=None, duty=None):
 
                 if duration:
                     time.sleep(duration)
-                    beeper.value = 0
+                    beeper.value = off_val
         except Exception:
             pass
 
@@ -886,7 +894,9 @@ def stop_tone():
         _stop_wave()
     elif beeper:
         try:
-            beeper.value = 0
+            # When reference is 3.3V, idle = HIGH (no voltage diff); when GND, idle = LOW
+            gnd_mode = settings.get("speaker_gnd_mode", "3v3")
+            beeper.value = 1 if gnd_mode == "3v3" else 0
         except Exception:
             pass
 
@@ -1168,6 +1178,7 @@ def gpio_poll():
         "dash_pin":       settings.get("dash_pin"),
         "speaker_pin":    settings.get("speaker_pin"),
         "speaker_pin2":   settings.get("speaker_pin2"),
+        "speaker_gnd_mode": settings.get("speaker_gnd_mode", "3v3"),
         "ground_pin":     settings.get("ground_pin"),
         "grounded_pins":  settings.get("grounded_pins", []),
         "states":         get_all_pin_states(),
@@ -1731,20 +1742,74 @@ def kb_enable():
     data = request.json or {}
     enabled = data.get("enabled", False)
     
-    # Check if USB HID is available before enabling
-    if enabled and not _check_usb_hid():
-        return jsonify({
-            "ok": False, 
-            "error": "USB HID device not available. Enable USB gadget mode on the Pi.",
-            "usb_hid_available": False
-        })
-    
+    # Always allow toggling — actual HID sends check availability per-call
+    _check_usb_hid()
     settings["kb_enabled"] = bool(enabled)
     save_settings_to_file(settings)
+    
+    warning = None
+    if enabled and not USB_HID_AVAILABLE:
+        warning = "Keyboard enabled but /dev/hidg0 not found. Keystrokes won't send until HID device is available. Try rebooting the Pi."
+    
     return jsonify({
         "ok": True,
         "kb_enabled": settings["kb_enabled"],
-        "usb_hid_available": USB_HID_AVAILABLE
+        "usb_hid_available": USB_HID_AVAILABLE,
+        "warning": warning
+    })
+
+@app.route("/kb_hid_setup", methods=["POST"])
+def kb_hid_setup():
+    """Attempt to activate the USB HID gadget (requires root)."""
+    HID_SCRIPT = "/usr/local/bin/morse-pi-hid-setup.sh"
+    HID_SERVICE = "morse-pi-hid"
+    
+    # Already available?
+    if _check_usb_hid():
+        return jsonify({"ok": True, "usb_hid_available": True, "message": "HID device already available."})
+    
+    # Try starting the systemd service first (preferred)
+    try:
+        subprocess.run(["sudo", "systemctl", "start", HID_SERVICE], capture_output=True, timeout=10)
+    except Exception:
+        pass
+    
+    if _check_usb_hid():
+        return jsonify({"ok": True, "usb_hid_available": True, "message": "HID gadget activated via service."})
+    
+    # Try running the setup script directly
+    if os.path.exists(HID_SCRIPT):
+        try:
+            result = subprocess.run(["sudo", HID_SCRIPT], capture_output=True, text=True, timeout=10)
+            _check_usb_hid()
+            if USB_HID_AVAILABLE:
+                return jsonify({"ok": True, "usb_hid_available": True, "message": "HID gadget activated via setup script."})
+            else:
+                return jsonify({
+                    "ok": True, "usb_hid_available": False,
+                    "message": f"Setup script ran but /dev/hidg0 not found. You may need to reboot. Script output: {result.stderr or result.stdout}"
+                })
+        except subprocess.TimeoutExpired:
+            return jsonify({"ok": False, "error": "HID setup script timed out."})
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Failed to run HID setup: {e}"})
+    
+    # Try modprobe + service as last resort
+    try:
+        subprocess.run(["sudo", "modprobe", "libcomposite"], capture_output=True, timeout=5)
+        subprocess.run(["sudo", "modprobe", "dwc2"], capture_output=True, timeout=5)
+        subprocess.run(["sudo", "systemctl", "start", HID_SERVICE], capture_output=True, timeout=10)
+    except Exception:
+        pass
+    
+    _check_usb_hid()
+    if USB_HID_AVAILABLE:
+        return jsonify({"ok": True, "usb_hid_available": True, "message": "HID gadget activated after loading modules."})
+    
+    return jsonify({
+        "ok": False,
+        "usb_hid_available": False,
+        "error": "Could not activate HID gadget. Ensure install.sh was run as root, then reboot the Pi."
     })
 
 @app.route("/kb_mode", methods=["POST"])
