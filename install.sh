@@ -27,18 +27,38 @@ PORT=5000
 
 # ── Sanity checks ──────────────────────────────────────────────────────────────
 # Detect if this is an update or fresh install
+SKIP_PACKAGES=false
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
   banner "Morse-Pi Updater"
   echo -e "  ${GRN}★ Existing installation detected — will update${RST}"
+  echo -e "  Repo   : ${BLD}${REPO_URL}${RST}"
+  echo -e "  Branch : ${BLD}${BRANCH}${RST}"
+  echo -e "  Target : ${BLD}${INSTALL_DIR}${RST}"
+  echo -e "  Port   : ${BLD}${PORT}${RST}"
+  echo ""
+  
+  # Interactive prompt for update options
+  echo -e "${BLD}Update Options:${RST}"
+  echo -e "  ${CYN}1)${RST} Full update (check packages + update code + restart service)"
+  echo -e "  ${CYN}2)${RST} Quick update (skip packages, just update code + restart service)"
+  echo ""
+  read -p "Choose option [1/2, default=1]: " UPDATE_CHOICE
+  if [[ "${UPDATE_CHOICE}" == "2" ]]; then
+    SKIP_PACKAGES=true
+    info "Skipping package checks — quick update mode"
+  else
+    info "Full update mode selected"
+  fi
+  echo ""
 else
   banner "Morse-Pi Installer"
   echo -e "  ${CYN}★ Fresh installation${RST}"
+  echo -e "  Repo   : ${BLD}${REPO_URL}${RST}"
+  echo -e "  Branch : ${BLD}${BRANCH}${RST}"
+  echo -e "  Target : ${BLD}${INSTALL_DIR}${RST}"
+  echo -e "  Port   : ${BLD}${PORT}${RST}"
+  echo ""
 fi
-echo -e "  Repo   : ${BLD}${REPO_URL}${RST}"
-echo -e "  Branch : ${BLD}${BRANCH}${RST}"
-echo -e "  Target : ${BLD}${INSTALL_DIR}${RST}"
-echo -e "  Port   : ${BLD}${PORT}${RST}"
-echo ""
 
 if [[ $EUID -ne 0 ]]; then
   die "Run this installer with sudo: sudo bash install.sh"
@@ -52,7 +72,11 @@ else
 fi
 
 # ── System packages ────────────────────────────────────────────────────────────
-banner "Step 1 / 5 — System packages"
+if [[ "${SKIP_PACKAGES}" == "true" ]]; then
+  banner "Step 1 / 5 — System packages (SKIPPED)"
+  info "Skipping package checks as requested"
+else
+  banner "Step 1 / 5 — System packages"
 info "Refreshing package lists…"
 apt-get update -qq
 
@@ -92,6 +116,7 @@ if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
     ok "pigpiod already running"
   fi
 fi
+fi  # end SKIP_PACKAGES check
 
 # ── Clone / update repo ────────────────────────────────────────────────────────
 banner "Step 2 / 5 — Repository"
@@ -289,14 +314,32 @@ info "Reloading systemd daemon…"
 systemctl daemon-reload
 ok "systemd reloaded"
 
+# Always ensure service is enabled (will start on boot)
+if ! systemctl is-enabled --quiet "${SERVICE_NAME}" 2>/dev/null; then
+  info "Enabling ${SERVICE_NAME} to start on boot…"
+  systemctl enable "${SERVICE_NAME}"
+  ok "${SERVICE_NAME} enabled"
+else
+  ok "${SERVICE_NAME} already enabled for boot"
+fi
+
+# Always ensure service is running (stop first if active to pick up changes)
 if systemctl is-active --quiet "${SERVICE_NAME}"; then
-  info "Restarting ${SERVICE_NAME}…"
+  info "Restarting ${SERVICE_NAME} to apply changes…"
   systemctl restart "${SERVICE_NAME}"
   ok "${SERVICE_NAME} restarted"
 else
-  info "Enabling and starting ${SERVICE_NAME}…"
-  systemctl enable "${SERVICE_NAME}" --now
-  ok "${SERVICE_NAME} enabled and started"
+  info "Starting ${SERVICE_NAME}…"
+  systemctl start "${SERVICE_NAME}"
+  ok "${SERVICE_NAME} started"
+fi
+
+# Verify the service is actually running
+sleep 1
+if systemctl is-active --quiet "${SERVICE_NAME}"; then
+  ok "${SERVICE_NAME} is running"
+else
+  warn "${SERVICE_NAME} may have failed to start. Check: sudo journalctl -u ${SERVICE_NAME} -n 50"
 fi
 
 # Wait briefly for the service to come up before showing the URL
