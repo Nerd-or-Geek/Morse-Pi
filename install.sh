@@ -99,22 +99,34 @@ if [[ -d "${INSTALL_DIR}/.git" ]]; then
   IS_UPDATE=true
   info "Existing installation found at ${INSTALL_DIR}. Updating…"
   
-  # Backup settings.json before git reset (preserves user configuration)
+  # Backup settings.json and stats.json before git reset (preserves user data)
+  # Note: words.json is NOT backed up so it gets updated from the repo
   SETTINGS_BACKUP=""
+  STATS_BACKUP=""
   if [[ -f "${APP_DIR}/settings.json" ]]; then
     SETTINGS_BACKUP=$(mktemp)
     cp "${APP_DIR}/settings.json" "${SETTINGS_BACKUP}"
     info "Backed up settings.json"
   fi
+  if [[ -f "${APP_DIR}/stats.json" ]]; then
+    STATS_BACKUP=$(mktemp)
+    cp "${APP_DIR}/stats.json" "${STATS_BACKUP}"
+    info "Backed up stats.json"
+  fi
   
   git -C "${INSTALL_DIR}" fetch --quiet origin "${BRANCH}"
   git -C "${INSTALL_DIR}" reset --hard "origin/${BRANCH}" --quiet
   
-  # Restore settings.json after git reset
+  # Restore settings.json and stats.json after git reset
   if [[ -n "${SETTINGS_BACKUP}" && -f "${SETTINGS_BACKUP}" ]]; then
     cp "${SETTINGS_BACKUP}" "${APP_DIR}/settings.json"
     rm -f "${SETTINGS_BACKUP}"
     ok "Restored user settings.json"
+  fi
+  if [[ -n "${STATS_BACKUP}" && -f "${STATS_BACKUP}" ]]; then
+    cp "${STATS_BACKUP}" "${APP_DIR}/stats.json"
+    rm -f "${STATS_BACKUP}"
+    ok "Restored user stats.json"
   fi
   
   ok "Repository updated to latest ${BRANCH}"
