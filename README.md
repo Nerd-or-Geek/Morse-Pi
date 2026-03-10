@@ -86,13 +86,11 @@ Pi GPIO header (subset)
 curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash
 ```
 
-The script will:
-1. Install system packages (`python3`, `pip`, `git`, `python3-gpiozero`, `pigpio`, `python3-pigpio`)
-2. Clone this repo to `/opt/morse-pi`
-3. Install Flask and dependencies to the system Python with `pip3`
-4. Register and start a `systemd` service that auto-starts on boot
-5. Configure USB HID gadget mode (allows Pi to act as a USB keyboard)
-6. Open port 5000 in `ufw` if the firewall is active
+The install script will:
+1. **Configure USB HID keyboard gadget** — sets up the Pi to appear as a USB keyboard when plugged into a computer
+2. **Install all required packages** — `python3`, `pip`, `git`, `flask`, `gpiozero`, `pigpio`
+3. **Clone the repository** to `/opt/morse-pi`
+4. **Set up auto-start on boot** — creates a `systemd` service so Morse-Pi runs automatically
 
 Once complete, open your browser to the URL printed on screen, e.g.:
 
@@ -124,10 +122,10 @@ sudo systemctl status morse-pi
 
 ### If auto-start isn't working
 
-Re-run the installer to fix it:
+Re-run the update script to fix it:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update.sh | sudo bash
 ```
 
 Or manually enable and start the service:
@@ -262,17 +260,27 @@ Then open `http://localhost:5000` (or the Pi's IP from another device).
 
 ## Updating
 
-Re-run the same install script — it automatically detects the existing installation and runs in **update mode**:
+Use the dedicated update script to pull the latest code:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update.sh | sudo bash
 ```
 
-You'll be prompted to choose:
-- **Option 1 (Full update):** Check packages, update code, restart service
-- **Option 2 (Quick update):** Skip package checks, just update code and restart
+The update script will:
+1. **Verify USB HID** — ensures the HID gadget is properly configured
+2. **Update all code** — pulls the latest HTML, Python, and other files from the repo
+3. **Preserve your settings** — `settings.json` and `stats.json` are kept intact
+4. **Ensure auto-start** — recreates the systemd service and restarts
 
-Your settings (`settings.json`) and stats (`stats.json`) are **preserved** during updates. The word list (`words.json`) is updated from the repository.
+### Update packages only
+
+To update system and Python packages without changing application code:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/packages.sh | sudo bash
+```
+
+This upgrades `flask`, `gpiozero`, `pigpio`, and other dependencies to their latest versions, then restarts the service.
 
 ### Manual update (alternative)
 
@@ -356,20 +364,23 @@ sudo systemctl restart morse-pi-hid    # reconfigure USB gadget
 
 ```
 Morse-Pi/
-├── install.sh                  ← one-line installer for Raspberry Pi
+├── install.sh                  ← fresh installer (HID + packages + clone + systemd)
+├── update.sh                   ← updater (verify HID + pull code + restart)
+├── packages.sh                 ← package updater (upgrade apt + pip packages)
 └── morse-translator/
     ├── app.py                  ← Flask app, GPIO control, Morse timing, networking
-    ├── settings.json           ← saved user settings (auto-created)
-    ├── stats.json              ← user statistics (auto-created)
+    ├── settings.json           ← saved user settings (auto-created, preserved on update)
+    ├── stats.json              ← user statistics (auto-created, preserved on update)
     ├── words.json              ← word list for quiz/speed modes
     └── templates/
         ├── index.html          ← single-page web UI
         └── diag.html           ← GPIO live diagnostic popup
 
 # Created by installer on Raspberry Pi:
-/etc/systemd/system/morse-pi.service       ← main app service
+/etc/systemd/system/morse-pi.service       ← main app service (auto-start on boot)
 /etc/systemd/system/morse-pi-hid.service   ← USB HID gadget service
 /usr/local/bin/morse-pi-hid-setup.sh       ← USB HID configuration script
+/etc/udev/rules.d/99-morse-pi-hid.rules    ← udev rule for /dev/hidg0 permissions
 ```
 
 ---

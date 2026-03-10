@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Morse-Pi  —  Fresh Installer
+#  Morse-Pi  —  Updater
 #  Run on your Raspberry Pi with:
-#    curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash
+#    curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update.sh | sudo bash
 #
-#  This script performs a FRESH install:
-#    1. Configure USB HID keyboard gadget
-#    2. Install all required packages
-#    3. Clone the repository
-#    4. Set up auto-start on boot
+#  This script updates an existing Morse-Pi installation:
+#    1. Verify / fix USB HID gadget setup
+#    2. Pull latest code (preserves settings.json and stats.json)
+#    3. Ensure auto-start on boot
 #
-#  For updating an existing install, use update.sh
+#  For a fresh install, use install.sh
 #  For updating packages only, use packages.sh
 # =============================================================================
 set -euo pipefail
@@ -38,8 +37,8 @@ HID_SCRIPT="/usr/local/bin/morse-pi-hid-setup.sh"
 PORT=5000
 
 # ── Sanity checks ─────────────────────────────────────────────────────────────
-banner "Morse-Pi Installer"
-echo -e "  ${CYN}★ Fresh installation${RST}"
+banner "Morse-Pi Updater"
+echo -e "  ${GRN}★ Updating existing installation${RST}"
 echo -e "  Repo   : ${BLD}${REPO_URL}${RST}"
 echo -e "  Branch : ${BLD}${BRANCH}${RST}"
 echo -e "  Target : ${BLD}${INSTALL_DIR}${RST}"
@@ -47,14 +46,13 @@ echo -e "  Port   : ${BLD}${PORT}${RST}"
 echo ""
 
 if [[ $EUID -ne 0 ]]; then
-  die "Run this installer with sudo:  sudo bash install.sh"
+  die "Run this script with sudo:  sudo bash update.sh"
 fi
 
-if [[ -d "${INSTALL_DIR}/.git" ]]; then
-  warn "Existing installation detected at ${INSTALL_DIR}."
-  warn "Use update.sh to update, or remove ${INSTALL_DIR} first for a fresh install."
-  die "Aborting — use update.sh instead."
+if [[ ! -d "${INSTALL_DIR}/.git" ]]; then
+  die "No existing installation found at ${INSTALL_DIR}. Run install.sh for a fresh install."
 fi
+ok "Existing installation found"
 
 IS_PI=false
 if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
@@ -75,9 +73,9 @@ fi
 info "Service will run as user: ${RUN_USER}"
 
 # ===========================================================================
-#  STEP 1 — USB HID Keyboard Gadget
+#  STEP 1 — Verify / fix USB HID Keyboard Gadget
 # ===========================================================================
-banner "Step 1 / 4 — USB HID Keyboard Gadget"
+banner "Step 1 / 3 — USB HID Keyboard Gadget"
 
 HID_NEEDS_REBOOT=false
 
@@ -92,7 +90,7 @@ if [[ "${IS_PI}" == "true" ]]; then
 
   # ── Enable dwc2 overlay ──
   if grep -q "^dtoverlay=dwc2" "${CONFIG_TXT}" 2>/dev/null; then
-    ok "dwc2 overlay already enabled in ${CONFIG_TXT}"
+    ok "dwc2 overlay enabled"
   else
     info "Enabling dwc2 overlay in ${CONFIG_TXT}…"
     echo "dtoverlay=dwc2" >> "${CONFIG_TXT}"
@@ -100,9 +98,9 @@ if [[ "${IS_PI}" == "true" ]]; then
     HID_NEEDS_REBOOT=true
   fi
 
-  # ── Add dwc2 module ──
+  # ── dwc2 module ──
   if grep -q "^dwc2" /etc/modules 2>/dev/null; then
-    ok "dwc2 module already in /etc/modules"
+    ok "dwc2 module loaded"
   else
     info "Adding dwc2 to /etc/modules…"
     echo "dwc2" >> /etc/modules
@@ -110,9 +108,9 @@ if [[ "${IS_PI}" == "true" ]]; then
     HID_NEEDS_REBOOT=true
   fi
 
-  # ── Add libcomposite module ──
+  # ── libcomposite module ──
   if grep -q "^libcomposite" /etc/modules 2>/dev/null; then
-    ok "libcomposite module already in /etc/modules"
+    ok "libcomposite module loaded"
   else
     info "Adding libcomposite to /etc/modules…"
     echo "libcomposite" >> /etc/modules
@@ -120,9 +118,12 @@ if [[ "${IS_PI}" == "true" ]]; then
     HID_NEEDS_REBOOT=true
   fi
 
-  # ── Create USB HID gadget setup script ──
-  info "Writing HID gadget setup script to ${HID_SCRIPT}…"
-  cat > "${HID_SCRIPT}" <<'HIDEOF'
+  # ── HID gadget setup script ──
+  if [[ -x "${HID_SCRIPT}" ]]; then
+    ok "HID setup script exists at ${HID_SCRIPT}"
+  else
+    info "Writing HID gadget setup script to ${HID_SCRIPT}…"
+    cat > "${HID_SCRIPT}" <<'HIDEOF'
 #!/bin/bash
 # Morse-Pi USB HID Keyboard Gadget Setup
 set -e
@@ -131,12 +132,10 @@ modprobe libcomposite 2>/dev/null || true
 
 GADGET_DIR="/sys/kernel/config/usb_gadget/morse-pi-keyboard"
 
-# Already configured — nothing to do
 if [[ -d "${GADGET_DIR}" ]]; then
   exit 0
 fi
 
-# Ensure configfs is mounted
 if [[ ! -d /sys/kernel/config/usb_gadget ]]; then
   mount -t configfs none /sys/kernel/config 2>/dev/null || true
   if [[ ! -d /sys/kernel/config/usb_gadget ]]; then
@@ -148,37 +147,30 @@ fi
 mkdir -p "${GADGET_DIR}"
 cd "${GADGET_DIR}"
 
-# USB device descriptor
-echo 0x1d6b > idVendor   # Linux Foundation
-echo 0x0104 > idProduct  # Multifunction Composite Gadget
+echo 0x1d6b > idVendor
+echo 0x0104 > idProduct
 echo 0x0100 > bcdDevice
 echo 0x0200 > bcdUSB
 
-# Device strings
 mkdir -p strings/0x409
 echo "fedcba9876543210"    > strings/0x409/serialnumber
 echo "Morse-Pi"            > strings/0x409/manufacturer
 echo "Morse Code Keyboard" > strings/0x409/product
 
-# HID function
 mkdir -p functions/hid.usb0
-echo 1 > functions/hid.usb0/protocol       # Keyboard
-echo 1 > functions/hid.usb0/subclass       # Boot interface subclass
+echo 1 > functions/hid.usb0/protocol
+echo 1 > functions/hid.usb0/subclass
 echo 8 > functions/hid.usb0/report_length
 
-# Standard HID keyboard report descriptor
 echo -ne '\x05\x01\x09\x06\xa1\x01\x05\x07\x19\xe0\x29\xe7\x15\x00\x25\x01\x75\x01\x95\x08\x81\x02\x95\x01\x75\x08\x81\x03\x95\x05\x75\x01\x05\x08\x19\x01\x29\x05\x91\x02\x95\x01\x75\x03\x91\x03\x95\x06\x75\x08\x15\x00\x25\x65\x05\x07\x19\x00\x29\x65\x81\x00\xc0' \
   > functions/hid.usb0/report_desc
 
-# Configuration
 mkdir -p configs/c.1/strings/0x409
 echo "Config 1: Keyboard" > configs/c.1/strings/0x409/configuration
 echo 250 > configs/c.1/MaxPower
 
-# Link function to configuration
 ln -sf functions/hid.usb0 configs/c.1/
 
-# Activate
 UDC=$(ls /sys/class/udc | head -n1)
 if [[ -n "${UDC}" ]]; then
   echo "${UDC}" > UDC
@@ -188,23 +180,28 @@ else
   exit 1
 fi
 HIDEOF
-  chmod +x "${HID_SCRIPT}"
-  ok "HID setup script created"
+    chmod +x "${HID_SCRIPT}"
+    ok "HID setup script created"
+  fi
 
-  # ── udev rule so /dev/hidg0 is world-writable ──
+  # ── udev rule ──
   UDEV_RULE="/etc/udev/rules.d/99-morse-pi-hid.rules"
-  info "Creating udev rule for /dev/hidg0 permissions…"
-  cat > "${UDEV_RULE}" <<'UDEVEOF'
-# Morse-Pi: allow non-root write access to USB HID gadget device
+  if [[ -f "${UDEV_RULE}" ]]; then
+    ok "udev rule exists"
+  else
+    info "Creating udev rule for /dev/hidg0 permissions…"
+    cat > "${UDEV_RULE}" <<'UDEVEOF'
 KERNEL=="hidg[0-9]*", MODE="0666"
 UDEVEOF
-  udevadm control --reload-rules 2>/dev/null || true
-  udevadm trigger 2>/dev/null || true
-  ok "udev rule created at ${UDEV_RULE}"
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger 2>/dev/null || true
+    ok "udev rule created"
+  fi
 
-  # ── systemd service for HID gadget ──
-  info "Creating HID systemd service…"
-  cat > "${HID_SERVICE_FILE}" <<HIDSVCEOF
+  # ── HID systemd service ──
+  if [[ ! -f "${HID_SERVICE_FILE}" ]]; then
+    info "Creating HID systemd service…"
+    cat > "${HID_SERVICE_FILE}" <<HIDSVCEOF
 [Unit]
 Description=Morse-Pi USB HID Keyboard Gadget
 DefaultDependencies=no
@@ -219,21 +216,30 @@ RemainAfterExit=yes
 [Install]
 WantedBy=sysinit.target
 HIDSVCEOF
+    systemctl daemon-reload
+  fi
 
-  systemctl daemon-reload
-  systemctl enable "${HID_SERVICE_NAME}" 2>&1
-  ok "HID service enabled for boot"
+  if ! systemctl is-enabled --quiet "${HID_SERVICE_NAME}" 2>/dev/null; then
+    systemctl enable "${HID_SERVICE_NAME}" 2>&1
+    ok "HID service enabled for boot"
+  else
+    ok "HID service already enabled"
+  fi
 
-  # Try to start now (may fail if modules aren't loaded yet — that's fine)
-  if [[ -d /sys/kernel/config/usb_gadget ]] || modprobe libcomposite 2>/dev/null; then
-    if systemctl start "${HID_SERVICE_NAME}" 2>/dev/null; then
-      ok "HID gadget is active now"
+  # Start if not already running
+  if ! systemctl is-active --quiet "${HID_SERVICE_NAME}" 2>/dev/null; then
+    if [[ -d /sys/kernel/config/usb_gadget ]] || modprobe libcomposite 2>/dev/null; then
+      if systemctl start "${HID_SERVICE_NAME}" 2>/dev/null; then
+        ok "HID gadget activated"
+      else
+        warn "HID gadget couldn't start — will work after reboot"
+        HID_NEEDS_REBOOT=true
+      fi
     else
-      warn "HID gadget couldn't start yet — will work after reboot"
       HID_NEEDS_REBOOT=true
     fi
   else
-    HID_NEEDS_REBOOT=true
+    ok "HID gadget already active"
   fi
 
   if [[ -e /dev/hidg0 ]]; then
@@ -245,140 +251,72 @@ HIDSVCEOF
     warn "A reboot is required for USB HID to fully activate"
   fi
 else
-  info "Not a Raspberry Pi — skipping USB HID gadget setup"
+  info "Not a Raspberry Pi — skipping USB HID check"
 fi
 
 # ===========================================================================
-#  STEP 2 — Install packages
+#  STEP 2 — Update code (preserve settings.json and stats.json)
 # ===========================================================================
-banner "Step 2 / 4 — Packages"
+banner "Step 2 / 3 — Update code"
 
-info "Refreshing package lists…"
-apt-get update -qq
-
-PKGS=(python3 python3-pip git)
-for pkg in "${PKGS[@]}"; do
-  if dpkg -s "$pkg" &>/dev/null; then
-    ok "$pkg already installed"
-  else
-    info "Installing $pkg…"
-    apt-get install -y "$pkg" -qq
-    ok "$pkg installed"
-  fi
-done
-
-# GPIO libraries (Pi only)
-if [[ "${IS_PI}" == "true" ]]; then
-  for pkg in python3-gpiozero pigpio python3-pigpio; do
-    if dpkg -s "$pkg" &>/dev/null; then
-      ok "$pkg already installed"
-    else
-      info "Installing $pkg…"
-      apt-get install -y "$pkg" -qq
-      ok "$pkg installed"
-    fi
-  done
-
-  # pigpio daemon
-  if ! systemctl is-enabled pigpiod &>/dev/null; then
-    info "Enabling pigpio daemon…"
-    systemctl enable pigpiod --now
-    ok "pigpiod enabled and started"
-  elif ! systemctl is-active pigpiod &>/dev/null; then
-    info "Starting pigpio daemon…"
-    systemctl start pigpiod
-    ok "pigpiod started"
-  else
-    ok "pigpiod already running"
-  fi
+# Stop the service while we update files
+if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
+  info "Stopping ${SERVICE_NAME} for update…"
+  systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
+  ok "Service stopped"
 fi
 
-# Python packages
-pkg_ok(){ python3 -c "import $1" 2>/dev/null; }
-
-if pkg_ok flask; then
-  ok "flask already installed ($(python3 -c 'import flask;print(flask.__version__)' 2>/dev/null))"
-else
-  info "Installing flask…"
-  pip3 install flask --quiet --break-system-packages
-  ok "flask installed"
+# Backup user data files
+SETTINGS_BACKUP=""
+STATS_BACKUP=""
+if [[ -f "${APP_DIR}/settings.json" ]]; then
+  SETTINGS_BACKUP=$(mktemp)
+  cp "${APP_DIR}/settings.json" "${SETTINGS_BACKUP}"
+  info "Backed up settings.json"
+fi
+if [[ -f "${APP_DIR}/stats.json" ]]; then
+  STATS_BACKUP=$(mktemp)
+  cp "${APP_DIR}/stats.json" "${STATS_BACKUP}"
+  info "Backed up stats.json"
 fi
 
-if pkg_ok gpiozero; then
-  ok "gpiozero already installed"
-else
-  info "Installing gpiozero…"
-  pip3 install gpiozero --quiet --break-system-packages
-  ok "gpiozero installed"
+# Pull latest code (hard reset to discard any local changes)
+info "Fetching latest from ${BRANCH}…"
+git -C "${INSTALL_DIR}" fetch --quiet origin "${BRANCH}"
+git -C "${INSTALL_DIR}" reset --hard "origin/${BRANCH}" --quiet
+ok "Code updated to latest ${BRANCH}"
+
+# Restore user data
+if [[ -n "${SETTINGS_BACKUP}" && -f "${SETTINGS_BACKUP}" ]]; then
+  cp "${SETTINGS_BACKUP}" "${APP_DIR}/settings.json"
+  rm -f "${SETTINGS_BACKUP}"
+  ok "Restored settings.json"
 fi
-
-# ===========================================================================
-#  STEP 3 — Clone the repository
-# ===========================================================================
-banner "Step 3 / 4 — Repository"
-
-info "Cloning ${REPO_URL} → ${INSTALL_DIR}…"
-git clone --branch "${BRANCH}" --depth 1 "${REPO_URL}" "${INSTALL_DIR}"
-ok "Repository cloned"
+if [[ -n "${STATS_BACKUP}" && -f "${STATS_BACKUP}" ]]; then
+  cp "${STATS_BACKUP}" "${APP_DIR}/stats.json"
+  rm -f "${STATS_BACKUP}"
+  ok "Restored stats.json"
+fi
 
 if [[ ! -f "${APP_DIR}/app.py" ]]; then
-  die "app.py not found at ${APP_DIR} — check REPO_URL and directory structure."
+  die "app.py not found after update — something went wrong."
 fi
 ok "app.py verified"
 
-# Install from requirements.txt if present
-if [[ -f "${INSTALL_DIR}/requirements.txt" ]]; then
-  info "Installing from requirements.txt…"
-  pip3 install -r "${INSTALL_DIR}/requirements.txt" --quiet --break-system-packages
-  ok "requirements.txt packages installed"
-fi
+# Remove leftover virtual environments from old installs
+for leftover in "${INSTALL_DIR}/venv" "${INSTALL_DIR}/.venv" "${INSTALL_DIR}/env" "${APP_DIR}/venv" "${APP_DIR}/.venv" "${APP_DIR}/env"; do
+  [[ -d "${leftover}" ]] && rm -rf "${leftover}"
+done
 
-# Set ownership
+# Fix ownership
 chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}"
 chmod -R u+rw "${INSTALL_DIR}"
 ok "Ownership set to ${RUN_USER}"
 
-# Create default settings.json
-SETTINGS_FILE="${APP_DIR}/settings.json"
-if [[ ! -f "${SETTINGS_FILE}" ]]; then
-  info "Creating default settings.json…"
-  cat > "${SETTINGS_FILE}" <<'SETEOF'
-{
-  "speaker_pin": 18,
-  "output_type": "speaker",
-  "pin_mode": "single",
-  "data_pin": 17,
-  "dot_pin": 22,
-  "dash_pin": 27,
-  "ground_pin": null,
-  "grounded_pins": [],
-  "use_external_switch": false,
-  "dot_freq": 700,
-  "dash_freq": 500,
-  "volume": 0.75,
-  "wpm_target": 20,
-  "theme": "dark",
-  "difficulty": "easy",
-  "device_name": "Morse Pi"
-}
-SETEOF
-  chown "${RUN_USER}:${RUN_USER}" "${SETTINGS_FILE}"
-  chmod 644 "${SETTINGS_FILE}"
-  ok "settings.json created"
-fi
-
-# Add user to gpio group
-if getent group gpio &>/dev/null; then
-  if ! id -nG "${RUN_USER}" | grep -qw "gpio"; then
-    usermod -aG gpio "${RUN_USER}"
-    ok "${RUN_USER} added to gpio group"
-  fi
-fi
-
 # ===========================================================================
-#  STEP 4 — Auto-start on boot (systemd)
+#  STEP 3 — Ensure auto-start on boot
 # ===========================================================================
-banner "Step 4 / 4 — Auto-start on boot"
+banner "Step 3 / 3 — Auto-start on boot"
 
 # Remove stale drop-in overrides
 DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.service.d"
@@ -419,6 +357,7 @@ ok "systemd daemon reloaded"
 systemctl enable "${SERVICE_NAME}" 2>&1
 ok "${SERVICE_NAME} enabled for auto-start"
 
+info "Starting ${SERVICE_NAME}…"
 systemctl start "${SERVICE_NAME}"
 
 sleep 2
@@ -432,19 +371,16 @@ fi
 # Firewall
 if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
   if ! ufw status | grep -q "${PORT}"; then
-    info "Opening port ${PORT} in ufw…"
     ufw allow ${PORT}/tcp --quiet
-    ok "Port ${PORT} allowed"
-  else
-    ok "Port ${PORT} already allowed in ufw"
+    ok "Port ${PORT} opened in ufw"
   fi
 fi
 
 # ===========================================================================
 #  Done
 # ===========================================================================
-banner "Installation complete!"
-echo -e "${GRN}${BLD}Morse-Pi is running!${RST}"
+banner "Update complete!"
+echo -e "${GRN}${BLD}Morse-Pi has been updated and restarted!${RST}"
 
 IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' | grep -v '^127\.' | head -5)
 echo ""
@@ -462,6 +398,3 @@ if [[ "${HID_NEEDS_REBOOT}" == "true" ]]; then
   echo -e "  ${YEL}${BLD}⚠  Reboot required for USB HID keyboard:  sudo reboot${RST}"
   echo ""
 fi
-echo -e "  To update later:"
-echo -e "    ${BLD}curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update.sh | sudo bash${RST}"
-echo ""
