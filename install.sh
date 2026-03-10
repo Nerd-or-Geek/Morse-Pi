@@ -171,6 +171,46 @@ else
 fi
 info "Service will run as user: ${RUN_USER}"
 
+# Ensure the app directory is owned by the service user (so settings.json can be written)
+info "Setting ownership of ${APP_DIR} to ${RUN_USER}…"
+chown -R "${RUN_USER}:${RUN_USER}" "${APP_DIR}"
+chmod -R u+rw "${APP_DIR}"
+ok "Directory permissions set"
+
+# Create initial settings.json if it doesn't exist (prevents permission issues on first run)
+SETTINGS_FILE="${APP_DIR}/settings.json"
+if [[ ! -f "${SETTINGS_FILE}" ]]; then
+  info "Creating initial settings.json…"
+  cat > "${SETTINGS_FILE}" <<'SETTINGS_EOF'
+{
+  "speaker_pin": 18,
+  "output_type": "speaker",
+  "pin_mode": "single",
+  "data_pin": 17,
+  "dot_pin": 22,
+  "dash_pin": 27,
+  "ground_pin": null,
+  "grounded_pins": [],
+  "use_external_switch": false,
+  "dot_freq": 700,
+  "dash_freq": 500,
+  "volume": 0.75,
+  "wpm_target": 20,
+  "theme": "dark",
+  "difficulty": "easy",
+  "device_name": "Morse Pi"
+}
+SETTINGS_EOF
+  chown "${RUN_USER}:${RUN_USER}" "${SETTINGS_FILE}"
+  chmod 644 "${SETTINGS_FILE}"
+  ok "settings.json created"
+else
+  # Ensure existing settings.json is writable
+  chown "${RUN_USER}:${RUN_USER}" "${SETTINGS_FILE}"
+  chmod 644 "${SETTINGS_FILE}"
+  ok "settings.json permissions verified"
+fi
+
 # Add user to gpio group so gpiozero can access hardware without sudo
 if getent group gpio &>/dev/null; then
   if ! id -nG "${RUN_USER}" | grep -qw "gpio"; then

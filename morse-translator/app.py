@@ -58,7 +58,12 @@ DEFAULT_SETTINGS = {
     "farnsworth_enabled": False,
     "farnsworth_letter_mult": 2.0,
     "farnsworth_word_mult": 2.0,
-    "device_name": "Morse Pi"
+    "device_name": "Morse Pi",
+    # USB HID Keyboard settings
+    "kb_enabled": False,
+    "kb_mode": "letters",  # "letters" or "custom"
+    "kb_dot_key": "z",
+    "kb_dash_key": "x"
 }
 
 def load_settings():
@@ -217,6 +222,7 @@ state = {
     "net_morse_buffer": "",    # buffer for key-based network sending
     "net_morse_output": "",    # decoded text from key input for network
     "net_key_mode": False,     # True when using key to compose network message
+    "kb_output": "",           # buffer showing what keyboard mode has typed
 }
 
 pin_states = {}  # {bcm: bool} live state updated by poll thread + callbacks
@@ -331,6 +337,84 @@ dash_btn   = None
 ground_out = None  # OutputDevice held LOW to act as a GND pin
 grounded_outputs = []  # List of OutputDevices for grounded_pins
 
+# ── USB HID Keyboard ─────────────────────────────────────────────────────────
+USB_HID_DEVICE = "/dev/hidg0"
+USB_HID_AVAILABLE = False
+
+# USB HID keyboard scan codes (lowercase letters, numbers, common symbols)
+HID_KEYCODES = {
+    'a': 0x04, 'b': 0x05, 'c': 0x06, 'd': 0x07, 'e': 0x08, 'f': 0x09,
+    'g': 0x0a, 'h': 0x0b, 'i': 0x0c, 'j': 0x0d, 'k': 0x0e, 'l': 0x0f,
+    'm': 0x10, 'n': 0x11, 'o': 0x12, 'p': 0x13, 'q': 0x14, 'r': 0x15,
+    's': 0x16, 't': 0x17, 'u': 0x18, 'v': 0x19, 'w': 0x1a, 'x': 0x1b,
+    'y': 0x1c, 'z': 0x1d,
+    '1': 0x1e, '2': 0x1f, '3': 0x20, '4': 0x21, '5': 0x22,
+    '6': 0x23, '7': 0x24, '8': 0x25, '9': 0x26, '0': 0x27,
+    ' ': 0x2c,  # space
+    '.': 0x37, ',': 0x36, '/': 0x38, '-': 0x2d, '=': 0x2e,
+    '?': 0x38,  # ? is shift+/
+    "'": 0x34, '"': 0x34,  # quotes
+}
+
+# Check if USB HID device exists
+def _check_usb_hid():
+    global USB_HID_AVAILABLE
+    USB_HID_AVAILABLE = os.path.exists(USB_HID_DEVICE)
+    return USB_HID_AVAILABLE
+
+def _hid_send_key(char):
+    """Send a single character as a USB HID keystroke."""
+    if not settings.get("kb_enabled", False):
+        return False
+    if not _check_usb_hid():
+        return False
+    
+    char_lower = char.lower()
+    keycode = HID_KEYCODES.get(char_lower)
+    if keycode is None:
+        return False
+    
+    # Determine if shift is needed (uppercase letter or special chars)
+    modifier = 0x00
+    if char.isupper() or char in '?!"':
+        modifier = 0x02  # Left Shift
+    
+    try:
+        # HID report: modifier, reserved, keycode1-6
+        report = bytes([modifier, 0x00, keycode, 0x00, 0x00, 0x00, 0x00, 0x00])
+        release = bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        
+        with open(USB_HID_DEVICE, 'rb+') as fd:
+            fd.write(report)
+            fd.flush()
+            time.sleep(0.02)  # Brief delay between press and release
+            fd.write(release)
+            fd.flush()
+        return True
+    except Exception as e:
+        print(f"USB HID error: {e}")
+        return False
+
+def _hid_send_string(text):
+    """Send a string as USB HID keystrokes."""
+    for char in text:
+        _hid_send_key(char)
+        time.sleep(0.01)
+
+def _hid_send_custom_key(key_char):
+    """Send a custom key (for paddle-to-key mapping in custom mode)."""
+    if not settings.get("kb_enabled", False):
+        return False
+    
+    # Handle special key names
+    if key_char.lower() == 'space' or key_char == ' ':
+        return _hid_send_key(' ')
+    
+    return _hid_send_key(key_char)
+
+# Check USB HID availability at startup
+_check_usb_hid()
+
 # ── Iambic Keyer ─────────────────────────────────────────────────────────────
 _KEYER_IDLE = 'IDLE'
 _KEYER_DOT  = 'SENDING_DOT'
@@ -415,6 +499,11 @@ def _keyer_do_finalize_letter():
             state['send_output']          += char
             state['current_morse_buffer']  = ''
             send_buffer.clear()
+            
+            # USB HID Keyboard: send character if enabled in letters mode
+            if settings.get("kb_enabled", False) and settings.get("kb_mode", "letters") == "letters":
+                _hid_send_key(char)
+                state['kb_output'] = (state.get('kb_output', '') + char)[-100:]  # Keep last 100 chars
 
 
 def _keyer_do_finalize_word():
@@ -428,6 +517,11 @@ def _keyer_do_finalize_word():
         out = state['send_output']
         if out and not out.endswith(' '):
             state['send_output'] += ' '
+            
+            # USB HID Keyboard: send space if enabled in letters mode
+            if settings.get("kb_enabled", False) and settings.get("kb_mode", "letters") == "letters":
+                _hid_send_key(' ')
+                state['kb_output'] = (state.get('kb_output', '') + ' ')[-100:]
 
 
 def _iambic_keyer_worker():
@@ -493,6 +587,14 @@ def _iambic_keyer_worker():
             _keyer_emit('.')
             pin_states[settings.get('dot_pin', 22)] = True
             play_tone(settings['dot_freq'])
+            
+            # USB HID Keyboard: send custom dot key immediately in custom mode
+            if settings.get("kb_enabled", False) and settings.get("kb_mode") == "custom":
+                key_char = settings.get("kb_dot_key", "z")
+                if _hid_send_custom_key(key_char):
+                    display_char = ' ' if key_char == 'space' else key_char
+                    state['kb_output'] = (state.get('kb_output', '') + display_char)[-100:]
+            
             end = time.time() + du
             opp = False
             while time.time() < end and not _keyer_stop.is_set():
@@ -510,6 +612,14 @@ def _iambic_keyer_worker():
             _keyer_emit('-')
             pin_states[settings.get('dash_pin', 27)] = True
             play_tone(settings['dash_freq'])
+            
+            # USB HID Keyboard: send custom dash key immediately in custom mode
+            if settings.get("kb_enabled", False) and settings.get("kb_mode") == "custom":
+                key_char = settings.get("kb_dash_key", "x")
+                if _hid_send_custom_key(key_char):
+                    display_char = ' ' if key_char == 'space' else key_char
+                    state['kb_output'] = (state.get('kb_output', '') + display_char)[-100:]
+            
             end = time.time() + du * 3
             opp = False
             while time.time() < end and not _keyer_stop.is_set():
@@ -738,6 +848,14 @@ def send_button_released():
     symbol = '.' if duration < _get_dot_unit() * 2 else '-'
     send_buffer.append(symbol)
     state["current_morse_buffer"] = ''.join(send_buffer)
+    
+    # USB HID Keyboard: send custom key immediately in custom mode (single-pin)
+    if settings.get("kb_enabled", False) and settings.get("kb_mode") == "custom":
+        key_char = settings.get("kb_dot_key" if symbol == '.' else "kb_dash_key", "z")
+        if _hid_send_custom_key(key_char):
+            display_char = ' ' if key_char == 'space' else key_char
+            state['kb_output'] = (state.get('kb_output', '') + display_char)[-100:]
+    
     # Cancel previous timer, start new letter-gap timer (Farnsworth-aware)
     if send_gap_timer:
         send_gap_timer.cancel()
@@ -758,6 +876,12 @@ def finalize_letter():
         state["send_output"] += char
         state["current_morse_buffer"] = ""
         send_buffer.clear()
+        
+        # USB HID Keyboard: send decoded letter in letters mode (single-pin)
+        if settings.get("kb_enabled", False) and settings.get("kb_mode", "letters") == "letters":
+            _hid_send_key(char)
+            state['kb_output'] = (state.get('kb_output', '') + char)[-100:]
+        
         # Start word gap timer (Farnsworth-aware)
         send_gap_timer = threading.Timer(_get_word_extra_secs(), finalize_word)
         send_gap_timer.start()
@@ -772,6 +896,11 @@ def finalize_word():
     if not send_active:
         if state["send_output"] and not state["send_output"].endswith(' '):
             state["send_output"] += ' '
+            
+            # USB HID Keyboard: send space in letters mode (single-pin)
+            if settings.get("kb_enabled", False) and settings.get("kb_mode", "letters") == "letters":
+                _hid_send_key(' ')
+                state['kb_output'] = (state.get('kb_output', '') + ' ')[-100:]
 
 def force_finalize_letter():
     finalize_letter()
@@ -905,8 +1034,17 @@ def index():
 
 @app.route("/status")
 def status():
-    return jsonify({**state, "gpio_available": GPIO_AVAILABLE,
-                    "pin_states": pin_states, "keyer_state": keyer_state_label})
+    return jsonify({
+        **state,
+        "gpio_available": GPIO_AVAILABLE,
+        "pin_states": pin_states,
+        "keyer_state": keyer_state_label,
+        "kb_enabled": settings.get("kb_enabled", False),
+        "kb_mode": settings.get("kb_mode", "letters"),
+        "kb_dot_key": settings.get("kb_dot_key", "z"),
+        "kb_dash_key": settings.get("kb_dash_key", "x"),
+        "usb_hid_available": USB_HID_AVAILABLE,
+    })
 
 @app.route("/diag")
 def diag():
@@ -992,11 +1130,16 @@ def wpm_test():
 
 @app.route("/save_settings", methods=["POST"])
 def save_settings_route():
-    data = request.json
+    data = request.json or {}
     COERCE_INT          = {"speaker_pin", "data_pin", "dot_pin", "dash_pin", "dot_freq", "dash_freq", "wpm_target"}
     COERCE_NULLABLE_INT = {"ground_pin"}
     COERCE_FLOAT = {"volume", "farnsworth_letter_mult", "farnsworth_word_mult"}
-    COERCE_BOOL  = {"use_external_switch", "farnsworth_enabled"}
+    COERCE_BOOL  = {"use_external_switch", "farnsworth_enabled", "kb_enabled"}
+    
+    # If no data provided, just return current settings (no-op)
+    if not data:
+        return jsonify(settings)
+    
     for k, v in data.items():
         if k in COERCE_NULLABLE_INT:
             settings[k] = int(v) if v is not None else None
@@ -1246,12 +1389,23 @@ def assign_gpio():
     """
     data = request.json or {}
     bcm = data.get("bcm")
-    role = data.get("role")  # speaker_pin, data_pin, dot_pin, dash_pin, ground, clear
+    role = data.get("role")  # Various formats accepted: dot/dot_pin, dash/dash_pin, etc.
     
     if bcm is None or role is None:
         return jsonify({"ok": False, "error": "missing bcm or role"})
     
     bcm = int(bcm)
+    
+    # Normalize role names (accept both short and long forms)
+    role_map = {
+        "dot": "dot_pin",
+        "dash": "dash_pin",
+        "straight": "data_pin",
+        "data": "data_pin",
+        "speaker": "speaker_pin",
+        "led": "speaker_pin",
+    }
+    role = role_map.get(role, role)
     
     # Get protected pins (keys can't be grounded)
     key_pins = set()
@@ -1434,6 +1588,125 @@ def net_send_morse():
         return jsonify({"ok": True, "result": result, "sent_text": text})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+# ── USB HID Keyboard routes ────────────────────────────────────────────────────
+
+@app.route("/kb_status")
+def kb_status():
+    """Return keyboard status for polling."""
+    _check_usb_hid()  # Refresh availability check
+    return jsonify({
+        "kb_enabled": settings.get("kb_enabled", False),
+        "kb_mode": settings.get("kb_mode", "letters"),
+        "kb_dot_key": settings.get("kb_dot_key", "z"),
+        "kb_dash_key": settings.get("kb_dash_key", "x"),
+        "kb_output": state.get("kb_output", ""),
+        "usb_hid_available": USB_HID_AVAILABLE,
+    })
+
+@app.route("/kb_enable", methods=["POST"])
+def kb_enable():
+    """Enable or disable USB HID keyboard mode."""
+    data = request.json or {}
+    enabled = data.get("enabled", False)
+    
+    # Check if USB HID is available before enabling
+    if enabled and not _check_usb_hid():
+        return jsonify({
+            "ok": False, 
+            "error": "USB HID device not available. Enable USB gadget mode on the Pi.",
+            "usb_hid_available": False
+        })
+    
+    settings["kb_enabled"] = bool(enabled)
+    save_settings_to_file(settings)
+    return jsonify({
+        "ok": True,
+        "kb_enabled": settings["kb_enabled"],
+        "usb_hid_available": USB_HID_AVAILABLE
+    })
+
+@app.route("/kb_mode", methods=["POST"])
+def kb_mode():
+    """Set keyboard mode (letters or custom)."""
+    data = request.json or {}
+    mode = data.get("mode", "letters")
+    if mode not in ["letters", "custom"]:
+        return jsonify({"ok": False, "error": "Invalid mode. Use 'letters' or 'custom'."})
+    
+    settings["kb_mode"] = mode
+    save_settings_to_file(settings)
+    return jsonify({
+        "ok": True,
+        "kb_mode": settings["kb_mode"]
+    })
+
+@app.route("/kb_set_keys", methods=["POST"])
+def kb_set_keys():
+    """Set custom dot and dash keys for custom keyboard mode."""
+    data = request.json or {}
+    dot_key = data.get("dot_key")
+    dash_key = data.get("dash_key")
+    
+    if dot_key is not None:
+        # Validate key - must be a single character or special key name
+        if len(dot_key) == 1 and dot_key.lower() in HID_KEYCODES:
+            settings["kb_dot_key"] = dot_key.lower()
+        elif dot_key.lower() == 'space':
+            settings["kb_dot_key"] = 'space'
+        else:
+            return jsonify({"ok": False, "error": f"Invalid dot key: {dot_key}"})
+    
+    if dash_key is not None:
+        if len(dash_key) == 1 and dash_key.lower() in HID_KEYCODES:
+            settings["kb_dash_key"] = dash_key.lower()
+        elif dash_key.lower() == 'space':
+            settings["kb_dash_key"] = 'space'
+        else:
+            return jsonify({"ok": False, "error": f"Invalid dash key: {dash_key}"})
+    
+    save_settings_to_file(settings)
+    return jsonify({
+        "ok": True,
+        "kb_dot_key": settings["kb_dot_key"],
+        "kb_dash_key": settings["kb_dash_key"]
+    })
+
+@app.route("/kb_clear", methods=["POST"])
+def kb_clear():
+    """Clear the keyboard output buffer."""
+    state["kb_output"] = ""
+    return jsonify({"ok": True, "kb_output": ""})
+
+@app.route("/kb_send_custom", methods=["POST"])
+def kb_send_custom():
+    """Send a custom key when in custom keyboard mode (for paddle-to-key mapping)."""
+    if not settings.get("kb_enabled", False):
+        return jsonify({"ok": False, "error": "Keyboard not enabled"})
+    if settings.get("kb_mode") != "custom":
+        return jsonify({"ok": False, "error": "Not in custom mode"})
+    
+    data = request.json or {}
+    key_type = data.get("type")  # "dot" or "dash"
+    
+    if key_type == "dot":
+        key_char = settings.get("kb_dot_key", "z")
+    elif key_type == "dash":
+        key_char = settings.get("kb_dash_key", "x")
+    else:
+        return jsonify({"ok": False, "error": "Invalid key type. Use 'dot' or 'dash'."})
+    
+    success = _hid_send_custom_key(key_char)
+    if success:
+        # Track in kb_output
+        display_char = ' ' if key_char == 'space' else key_char
+        state["kb_output"] = (state.get("kb_output", "") + display_char)[-100:]
+    
+    return jsonify({
+        "ok": success,
+        "key_sent": key_char,
+        "kb_output": state.get("kb_output", "")
+    })
 
 @app.route("/key_press", methods=["POST"])
 def key_press():

@@ -81,7 +81,29 @@
     .header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 16px 0 22px; border-bottom: 1px solid var(--border);
-      margin-bottom: 18px; flex-wrap: wrap; gap: 10px;
+      margin-bottom: 18px; flex-wrap: wrap; gap: 10px; position: relative;
+    }
+    .header-left { display: flex; flex-direction: column; gap: 2px; }
+    .header-center {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    .device-name {
+      font-family: 'Orbitron', monospace;
+      font-weight: 700;
+      font-size: 1.3rem;
+      letter-spacing: 0.08em;
+      background: linear-gradient(135deg, var(--accent), var(--accent3));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      white-space: nowrap;
+    }
+    @media (max-width: 800px) {
+      .header-center { flex: none; width: 100%; order: 3; margin-top: 4px; justify-content: center; }
     }
     .logo {
       font-family: 'Orbitron', monospace; font-weight: 900; font-size: 1.55rem;
@@ -353,6 +375,8 @@
     .tag-green { background:rgba(57,255,20,0.12);  color:var(--accent3); border:1px solid rgba(57,255,20,0.25); }
     .tag-blue  { background:rgba(0,212,255,0.12);  color:var(--accent);  border:1px solid rgba(0,212,255,0.25); }
     .tag-orange{ background:rgba(255,107,53,0.12); color:var(--accent2); border:1px solid rgba(255,107,53,0.25); }
+    .tag-purple{ background:rgba(192,132,252,0.12); color:var(--purple); border:1px solid rgba(192,132,252,0.25); }
+    .tag-dev { background:rgba(255,215,0,0.12); color:var(--gold); border:1px solid rgba(255,215,0,0.25); font-size:0.48rem; padding:2px 6px; }
     /* Misc */
     .hint-text { font-size:0.78rem; color:var(--text-dim); margin-bottom:10px; line-height:1.5; }
     .section-header { font-family:'Orbitron',monospace; font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); margin-bottom:7px; }
@@ -404,7 +428,12 @@
 
 <div class="app">
   <header class="header">
-    <div class="logo">&#9672; MORSE-PI <span>v2.0</span></div>
+    <div class="header-left">
+      <div class="logo">&#9672; MORSE-PI <span>v2.0</span></div>
+    </div>
+    <div class="header-center">
+      <div class="device-name" id="device-name-display"></div>
+    </div>
     <div class="header-right">
       <div class="status-pill"><div class="dot" id="gpio-dot"></div>GPIO</div>
       <div class="status-pill"><div class="dot" id="conn-dot"></div>SERVER</div>
@@ -419,6 +448,7 @@
     <button class="nav-btn" data-mode="encode"><span class="nav-icon">&#8596;</span>ENCODE</button>
     <button class="nav-btn" data-mode="decode"><span class="nav-icon">&#63;</span>DECODE</button>
     <button class="nav-btn" data-mode="speed"><span class="nav-icon">&#8982;</span>SPEED</button>
+    <button class="nav-btn" data-mode="keyboard"><span class="nav-icon">&#9000;</span>KB</button>
     <button class="nav-btn" data-mode="stats"><span class="nav-icon">&#9632;</span>STATS</button>
     <button class="nav-btn" data-mode="settings"><span class="nav-icon">&#9881;</span>CONFIG</button>
     <button class="nav-btn" data-mode="network"><span class="nav-icon">&#9737;</span>NET</button>
@@ -478,7 +508,20 @@ const CHEAT_GROUPS = {
 function api(url, method='GET', body=null) {
   const opts={method,headers:{}};
   if (body!==null){opts.body=JSON.stringify(body);opts.headers['Content-Type']='application/json';}
-  return fetch(url,opts).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();}).catch(e=>{connLost();throw e;});
+  return fetch(url,opts).then(r=>{
+    connOk(); // Connection worked
+    if(!r.ok){
+      // Server error - try to get error message from JSON
+      return r.json().catch(()=>({error:'Server error '+r.status})).then(d=>{throw new Error(d.error||'Request failed');});
+    }
+    return r.json();
+  }).catch(e=>{
+    // Only mark as disconnected for network failures, not server errors
+    if(e.name==='TypeError'||e.message.includes('fetch')||e.message.includes('network')){
+      connLost();
+    }
+    throw e;
+  });
 }
 function esc(s){if(typeof s!=='string')return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function morseEncode(text){return text.toUpperCase().split('').map(c=>{if(c===' ')return'/';return MORSE_CODE[c]||'';}).filter(Boolean).join(' ');}
@@ -536,6 +579,7 @@ function renderContent(){
     case 'encode':   el.innerHTML=renderEncode();   break;
     case 'decode':   el.innerHTML=renderDecode();   break;
     case 'speed':    el.innerHTML=renderSpeed();    break;
+    case 'keyboard': el.innerHTML=renderKeyboard(); break;
     case 'stats':    el.innerHTML=renderStats();    break;
     case 'settings': el.innerHTML=renderSettings(); break;
     case 'network':  el.innerHTML=renderNetwork();  initNetworkTab(); break;
@@ -1333,6 +1377,198 @@ function sendNetMorse(){
   }).catch(()=>toast('Send failed','error'));
 }
 
+// ── KEYBOARD ─────────────────────────────────────────────────────
+let kbMode = settings.kb_mode || 'letters';
+let kbDotKey = settings.kb_dot_key || 'z';
+let kbDashKey = settings.kb_dash_key || 'x';
+let kbEnabled = settings.kb_enabled || false;
+let kbOutput = '';
+let usbHidAvailable = false;
+
+// Load initial keyboard status from server
+function loadKbStatus(){
+  api('/kb_status').then(res=>{
+    kbEnabled = res.kb_enabled;
+    kbMode = res.kb_mode;
+    kbDotKey = res.kb_dot_key;
+    kbDashKey = res.kb_dash_key;
+    kbOutput = res.kb_output || '';
+    usbHidAvailable = res.usb_hid_available;
+  }).catch(()=>{});
+}
+loadKbStatus();
+
+function renderKeyboard(){
+  const hidStatus = usbHidAvailable ? 'USB HID READY' : 'USB HID NOT AVAILABLE';
+  const hidClass = usbHidAvailable ? 'ok' : 'err';
+  
+  return `
+    <div class="panel">
+      <div class="panel-title">USB KEYBOARD MODE &nbsp;<span class="tag tag-dev">UNDER DEVELOPMENT</span></div>
+      <p class="hint-text">Turn your Morse-Pi into a USB HID keyboard. Key in Morse code and it types on your computer. Requires USB OTG support on your Pi.</p>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">&#9889; Keyboard Connection</div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <div class="segmented" style="flex:1;min-width:180px;">
+            <button class="segmented-btn ${kbEnabled?'':'active'}" onclick="setKbEnabled(false)" ${!usbHidAvailable?'disabled':''}>DISABLED</button>
+            <button class="segmented-btn ${kbEnabled?'active':''}" onclick="setKbEnabled(true)" ${!usbHidAvailable?'disabled':''}>ENABLED</button>
+          </div>
+          <div class="status-pill" style="font-size:0.6rem;">
+            <div class="dot ${kbEnabled && usbHidAvailable?'ok':(usbHidAvailable?'':'err')}" id="kb-status-dot"></div>
+            ${kbEnabled && usbHidAvailable?'ACTIVE':(usbHidAvailable?'STANDBY':'NOT AVAILABLE')}
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:10px;">
+          <div class="status-pill" style="font-size:0.55rem;">
+            <div class="dot ${hidClass}"></div>
+            ${hidStatus}
+          </div>
+        </div>
+        <p class="setting-help" style="margin-top:8px;">When enabled, decoded Morse letters will be sent as keystrokes to your connected computer via USB.</p>
+        ${!usbHidAvailable ? '<p class="setting-help" style="color:var(--danger);">USB HID device (/dev/hidg0) not found. See setup instructions below.</p>' : ''}
+      </div>
+      
+      <hr class="sep">
+      
+      <div class="settings-section">
+        <div class="settings-section-title">&#9000; Output Mode</div>
+        <div class="segmented" style="max-width:320px;">
+          <button class="segmented-btn ${kbMode==='letters'?'active':''}" onclick="setKbMode('letters')">LETTERS</button>
+          <button class="segmented-btn ${kbMode==='custom'?'active':''}" onclick="setKbMode('custom')">CUSTOM KEYS</button>
+        </div>
+      </div>
+      
+      ${kbMode==='letters' ? `
+        <div class="settings-section">
+          <div class="settings-section-title">&#65; Letter Mode</div>
+          <p class="hint-text">Morse code is decoded into letters (A-Z, 0-9) and sent as keyboard input. Perfect for typing text via Morse.</p>
+          <div class="morse-display" style="min-height:60px;display:flex;flex-direction:column;gap:6px;">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:1.2rem;letter-spacing:0.15em;color:var(--accent);">
+              ${kbOutput ? esc(kbOutput) : '<span style="color:var(--text-dim);font-size:0.8rem;">Key Morse code to type letters here...</span>'}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-ghost btn-xs" onclick="clearKbOutput()">Clear Output</button>
+            <button class="btn btn-ghost btn-xs" onclick="loadKbStatus();renderContent();">Refresh</button>
+          </div>
+        </div>
+      ` : `
+        <div class="settings-section">
+          <div class="settings-section-title">&#9881; Custom Key Mapping</div>
+          <p class="hint-text">Configure which keys are sent for each paddle. Useful for Morse code practice websites that use specific keys (e.g., Z/X or spacebar).</p>
+          <div class="settings-grid">
+            <div class="setting-row">
+              <label class="setting-label">Dot Paddle Key</label>
+              <div class="setting-input-row">
+                <input type="text" class="input-field" id="kb-dot-key" value="${esc(kbDotKey === 'space' ? 'SPACE' : kbDotKey.toUpperCase())}" maxlength="5" style="max-width:100px;text-align:center;text-transform:uppercase;" onchange="setKbDotKey(this.value)">
+                <span style="color:var(--text-dim);font-size:0.72rem;">Press dot paddle → sends this key</span>
+              </div>
+            </div>
+            <div class="setting-row">
+              <label class="setting-label">Dash Paddle Key</label>
+              <div class="setting-input-row">
+                <input type="text" class="input-field" id="kb-dash-key" value="${esc(kbDashKey === 'space' ? 'SPACE' : kbDashKey.toUpperCase())}" maxlength="5" style="max-width:100px;text-align:center;text-transform:uppercase;" onchange="setKbDashKey(this.value)">
+                <span style="color:var(--text-dim);font-size:0.72rem;">Press dash paddle → sends this key</span>
+              </div>
+            </div>
+          </div>
+          <p class="setting-help" style="margin-top:10px;"><b>Common mappings:</b> Z/X for iambic sites, Spacebar for single-key sites. Type "space" for spacebar.</p>
+          <div class="btn-group" style="margin-top:12px;">
+            <button class="btn btn-ghost" onclick="setKbPreset('zx')">Z / X</button>
+            <button class="btn btn-ghost" onclick="setKbPreset('space')">Spacebar</button>
+            <button class="btn btn-ghost" onclick="setKbPreset('comma-period')">. / ,</button>
+          </div>
+          <div class="morse-display" style="min-height:40px;margin-top:12px;display:flex;align-items:center;justify-content:center;">
+            <span style="color:var(--text-dim);font-size:0.8rem;">Custom keys sent: ${kbOutput ? esc(kbOutput) : 'none yet'}</span>
+          </div>
+        </div>
+      `}
+      
+      <hr class="sep">
+      
+      <div class="settings-section">
+        <div class="settings-section-title">&#9432; Setup Instructions</div>
+        <div class="help-card" style="background:var(--bg);">
+          <ul>
+            <li><span>1. Enable USB OTG mode on your Pi</span></li>
+            <li><span>2. Connect Pi to computer via USB data port</span></li>
+            <li><span>3. Pi will appear as a USB keyboard</span></li>
+            <li><span>4. Enable keyboard mode above</span></li>
+            <li><span>5. Key Morse code → letters typed on computer</span></li>
+          </ul>
+        </div>
+        <p class="setting-help" style="margin-top:8px;">Requires <code>dtoverlay=dwc2</code> in /boot/config.txt and <code>libcomposite</code> kernel module.</p>
+      </div>
+    </div>`;
+}
+
+function setKbEnabled(val){
+  api('/kb_enable','POST',{enabled:val}).then(res=>{
+    if(res.ok){
+      kbEnabled = res.kb_enabled;
+      usbHidAvailable = res.usb_hid_available;
+      toast(val ? 'Keyboard mode enabled' : 'Keyboard mode disabled', 'info');
+    } else {
+      toast(res.error || 'Failed to enable keyboard', 'error');
+    }
+    renderContent();
+  }).catch(()=>toast('Failed to update keyboard','error'));
+}
+function setKbMode(mode){
+  api('/kb_mode','POST',{mode:mode}).then(res=>{
+    if(res.ok){
+      kbMode = res.kb_mode;
+    }
+    renderContent();
+  }).catch(()=>toast('Failed to update mode','error'));
+}
+function setKbDotKey(key){
+  const newKey = key.toLowerCase() || 'z';
+  api('/kb_set_keys','POST',{dot_key:newKey}).then(res=>{
+    if(res.ok){
+      kbDotKey = res.kb_dot_key;
+    } else {
+      toast(res.error || 'Invalid key', 'error');
+    }
+  }).catch(()=>toast('Failed to update key','error'));
+}
+function setKbDashKey(key){
+  const newKey = key.toLowerCase() || 'x';
+  api('/kb_set_keys','POST',{dash_key:newKey}).then(res=>{
+    if(res.ok){
+      kbDashKey = res.kb_dash_key;
+    } else {
+      toast(res.error || 'Invalid key', 'error');
+    }
+  }).catch(()=>toast('Failed to update key','error'));
+}
+function setKbPreset(preset){
+  let dot, dash;
+  switch(preset){
+    case 'zx': dot='z'; dash='x'; break;
+    case 'space': dot='space'; dash='space'; break;
+    case 'comma-period': dot='.'; dash=','; break;
+    default: return;
+  }
+  api('/kb_set_keys','POST',{dot_key:dot, dash_key:dash}).then(res=>{
+    if(res.ok){
+      kbDotKey = res.kb_dot_key;
+      kbDashKey = res.kb_dash_key;
+      renderContent();
+      toast('Preset applied', 'success');
+    } else {
+      toast(res.error || 'Failed to apply preset', 'error');
+    }
+  }).catch(()=>toast('Failed to apply preset','error'));
+}
+function clearKbOutput(){
+  api('/kb_clear','POST').then(res=>{
+    kbOutput = '';
+    renderContent();
+  }).catch(()=>{});
+}
+
 // ── HELP ───────────────────────────────────────
 function renderHelp(){return `
   <div class="panel">
@@ -1566,6 +1802,9 @@ function saveSettings(){
     toast('Settings saved','success');
     const msg=document.getElementById('settings-msg');
     if(msg){msg.textContent='SAVED';setTimeout(()=>{if(msg)msg.textContent='';},2500);}
+    // Update device name in header
+    const nameEl = document.getElementById('device-name-display');
+    if(nameEl) nameEl.textContent = settings.device_name || 'Morse Pi';
   });
 }
 function previewTone(freq,duration){
@@ -1662,11 +1901,36 @@ setInterval(()=>{
       }
       _pNetBuf = s.net_morse_buffer; _pNetOut = s.net_morse_output;
     }
+    // Update keyboard output if on keyboard tab and output changed
+    else if(state.mode==='keyboard'){
+      const newKbOutput = s.kb_output || '';
+      if(newKbOutput !== kbOutput){
+        kbOutput = newKbOutput;
+        _patchKbDisplay();
+      }
+      // Also update HID availability
+      usbHidAvailable = s.usb_hid_available;
+      kbEnabled = s.kb_enabled;
+    }
     _pBtn=s.button_active;_pSBuf=s.current_morse_buffer;_pSOut=s.send_output;_pSpBuf=s.speed_morse_buffer;_pSpOut=s.speed_morse_output;
   }).catch(()=>connLost());
 },100);
 
 // ── Incremental DOM patchers ───────────────────
+function _patchKbDisplay(){
+  // Update keyboard output display in letter or custom mode
+  const outEl = document.querySelector('.morse-display');
+  if(outEl && state.mode==='keyboard'){
+    if(kbMode==='letters'){
+      outEl.innerHTML = kbOutput 
+        ? '<div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:1.2rem;letter-spacing:0.15em;color:var(--accent);">' + esc(kbOutput) + '</div>'
+        : '<div style="flex:1;display:flex;align-items:center;justify-content:center;"><span style="color:var(--text-dim);font-size:0.8rem;">Key Morse code to type letters here...</span></div>';
+    } else {
+      outEl.innerHTML = '<span style="color:var(--text-dim);font-size:0.8rem;">Custom keys sent: ' + (kbOutput ? esc(kbOutput) : 'none yet') + '</span>';
+    }
+  }
+}
+
 function _patchSendDisplay(){
   const buf = state.current_morse_buffer||'';
   const out = state.send_output||'';
@@ -1728,6 +1992,9 @@ fetch('/status').then(r=>r.json()).then(s=>{
 
 fetch('/get_settings').then(r=>r.json()).then(s=>{
   settings=Object.assign({},SETTINGS_DEFAULTS,s);
+  // Update device name in header
+  const nameEl = document.getElementById('device-name-display');
+  if(nameEl) nameEl.textContent = settings.device_name || 'Morse Pi';
 }).catch(()=>{});
 
 // ── Theme Toggle ────────────────────────────
