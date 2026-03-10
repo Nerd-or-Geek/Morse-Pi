@@ -19,6 +19,16 @@ except Exception as _ge:
     GPIO_AVAILABLE = False
     GPIO_ERROR = str(_ge)
 
+# Try importing pigpio directly for advanced dual-pin speaker drive
+_pigpio = None
+try:
+    import pigpio as _pigpio_mod
+    _pigpio = _pigpio_mod.pi()
+    if not _pigpio.connected:
+        _pigpio = None
+except Exception:
+    _pigpio = None
+
 # --- Morse Code Mapping ---
 MORSE_CODE = {
     'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.',
@@ -39,6 +49,7 @@ MORSE_CODE = {
 SETTINGS_FILE = "settings.json"
 DEFAULT_SETTINGS = {
     "speaker_pin": 18,
+    "speaker_pin2": None,  # second GPIO pin for push-pull speaker drive
     "output_type": "speaker",  # "speaker" or "led"
     "pin_mode": "single",
     "data_pin": 17,
@@ -236,9 +247,11 @@ def _managed_bcm_set():
     """Return the set of BCM pins currently owned by active Button/PWMOutput/OutputDevice."""
     s = set()
     sp = settings.get("speaker_pin")
+    sp2 = settings.get("speaker_pin2")
     gp = settings.get("ground_pin")
     grounded = settings.get("grounded_pins", [])
     if sp is not None: s.add(int(sp))
+    if sp2 is not None: s.add(int(sp2))
     if gp is not None: s.add(int(gp))
     for pin in grounded:
         if pin is not None: s.add(int(pin))
@@ -282,6 +295,7 @@ def get_all_pin_states():
         return {}
     pm = settings.get("pin_mode", "single")
     sp = settings.get("speaker_pin")
+    sp2 = settings.get("speaker_pin2")
     dp = settings.get("data_pin")
     dop = settings.get("dot_pin")
     dap = settings.get("dash_pin")
@@ -291,6 +305,8 @@ def get_all_pin_states():
     for bcm in ALL_BCM_PINS:
         if bcm == sp:
             result[str(bcm)] = {"active": None, "role": "speaker"}
+        elif bcm == sp2:
+            result[str(bcm)] = {"active": None, "role": "speaker2"}
         elif bcm == gp or bcm in grounded:
             result[str(bcm)] = {"active": None, "role": "ground"}
         elif pm == "dual" and bcm == dop:
@@ -330,7 +346,9 @@ if GPIO_AVAILABLE:
     threading.Thread(target=_pin_poll_worker, daemon=True).start()
 
 # --- GPIO Setup ---
-beeper     = None
+beeper     = None       # PWMOutputDevice for single-pin speaker mode
+_wave_id   = None      # pigpio wave ID for dual-pin speaker mode
+_spk_pins  = (None, None)  # (pin1, pin2) tuple for dual-pin mode tracking
 data_btn   = None
 dot_btn    = None
 dash_btn   = None
@@ -686,11 +704,70 @@ def _stop_keyer_thread():
         _keyer_thread_ref.join(timeout=0.5)
 
 
+def _stop_wave():
+    """Stop any active pigpio waveform and release speaker pins."""
+    global _wave_id, _spk_pins
+    if _pigpio and _wave_id is not None:
+        try:
+            _pigpio.wave_tx_stop()
+            _pigpio.wave_delete(_wave_id)
+        except Exception:
+            pass
+        _wave_id = None
+    # Set both pins LOW when stopping
+    if _pigpio and _spk_pins[0] is not None:
+        try: _pigpio.write(_spk_pins[0], 0)
+        except Exception: pass
+    if _pigpio and _spk_pins[1] is not None:
+        try: _pigpio.write(_spk_pins[1], 0)
+        except Exception: pass
+
+
+def _start_wave(freq):
+    """Start an anti-phase square wave on both speaker pins via pigpio waves.
+
+    Pin 1 and Pin 2 alternate: when one is HIGH the other is LOW, producing
+    a push-pull differential drive that doubles the voltage swing across the
+    speaker for louder, cleaner output.
+    """
+    global _wave_id
+    _stop_wave()
+    if not _pigpio or _spk_pins[0] is None or _spk_pins[1] is None:
+        return False
+    freq = max(100, min(4000, int(freq)))
+    half_period_us = max(1, 500000 // freq)  # microseconds per half-cycle
+    p1 = _spk_pins[0]
+    p2 = _spk_pins[1]
+    mask1 = 1 << p1
+    mask2 = 1 << p2
+    try:
+        _pigpio.set_mode(p1, _pigpio_mod.OUTPUT)
+        _pigpio.set_mode(p2, _pigpio_mod.OUTPUT)
+        _pigpio.wave_clear()
+        _pigpio.wave_add_generic([
+            _pigpio_mod.pulse(mask1, mask2, half_period_us),   # pin1 HIGH, pin2 LOW
+            _pigpio_mod.pulse(mask2, mask1, half_period_us),   # pin1 LOW,  pin2 HIGH
+        ])
+        _wave_id = _pigpio.wave_create()
+        if _wave_id >= 0:
+            _pigpio.wave_send_repeat(_wave_id)
+            return True
+        else:
+            _wave_id = None
+            return False
+    except Exception as e:
+        msg = f"_start_wave: {e}"
+        gpio_error_log.append(msg)
+        _wave_id = None
+        return False
+
+
 def init_gpio():
-    global beeper, data_btn, dot_btn, dash_btn, ground_out, grounded_outputs
+    global beeper, data_btn, dot_btn, dash_btn, ground_out, grounded_outputs, _spk_pins
     if not GPIO_AVAILABLE:
         return
     try:
+        _stop_wave()  # stop any active waveform before reconfiguring
         for dev in [beeper, data_btn, dot_btn, dash_btn, ground_out]:
             if dev:
                 try: dev.close()
@@ -701,12 +778,22 @@ def init_gpio():
                 try: dev.close()
                 except: pass
         grounded_outputs = []
-        
-        beeper = PWMOutputDevice(
-            settings["speaker_pin"],
-            frequency=max(1, int(settings["dot_freq"])),
-            initial_value=0
-        )
+
+        sp1 = settings.get("speaker_pin")
+        sp2 = settings.get("speaker_pin2")
+        _spk_pins = (sp1, sp2)
+
+        # Dual-pin speaker: use pigpio wave for push-pull differential drive
+        if sp2 is not None and _pigpio:
+            beeper = None  # no gpiozero PWMOutputDevice needed
+        else:
+            # Single-pin speaker: use gpiozero PWMOutputDevice as before
+            beeper = PWMOutputDevice(
+                sp1,
+                frequency=max(1, int(settings["dot_freq"])),
+                initial_value=0
+            )
+
         # Ground output pin (legacy single pin): drive LOW so paddle common wire works on a GPIO pin
         gp = settings.get("ground_pin")
         if gp is not None:
@@ -752,33 +839,52 @@ def recreate_gpio():
     init_diag_readers()
 
 def play_tone(freq, duration=None, duty=None):
-    if beeper:
-        with lock:
-            try:
-                vol = float(duty) if duty is not None else settings["volume"]
-                output_type = settings.get("output_type", "speaker")
-                
+    """Play a tone. Uses dual-pin pigpio wave when speaker_pin2 is set,
+    otherwise falls back to single-pin gpiozero PWMOutputDevice."""
+    _dual = _spk_pins[1] is not None and _pigpio
+    if not _dual and not beeper:
+        return
+    with lock:
+        try:
+            output_type = settings.get("output_type", "speaker")
+
+            if _dual:
+                # Dual-pin push-pull speaker via pigpio waves
                 if output_type == "led":
-                    # LED mode: just turn on (high) for the duration
-                    beeper.frequency = 1000  # doesn't matter for LED
-                    beeper.value = 1.0  # full on
+                    # LED mode: just drive pin1 HIGH, pin2 LOW (static)
+                    _stop_wave()
+                    _pigpio.write(_spk_pins[0], 1)
+                    _pigpio.write(_spk_pins[1], 0)
                 else:
-                    # Speaker mode: use PWM with frequency for audio
-                    # Clamp volume to usable PWM range; very low duty cycles
-                    # produce no audible tone on Pi hardware, and 1.0 is a flat
-                    # DC level (no oscillation = silence on piezo/speaker).
+                    _start_wave(freq)
+
+                if duration:
+                    time.sleep(duration)
+                    _stop_wave()
+            else:
+                # Single-pin PWM via gpiozero
+                vol = float(duty) if duty is not None else settings["volume"]
+
+                if output_type == "led":
+                    beeper.frequency = 1000
+                    beeper.value = 1.0
+                else:
                     vol = max(0.01, min(0.95, vol))
                     beeper.frequency = max(100, min(4000, int(freq)))
                     beeper.value = vol
-                
+
                 if duration:
                     time.sleep(duration)
                     beeper.value = 0
-            except Exception:
-                pass
+        except Exception:
+            pass
 
 def stop_tone():
-    if beeper:
+    """Stop any active tone output."""
+    _dual = _spk_pins[1] is not None and _pigpio
+    if _dual:
+        _stop_wave()
+    elif beeper:
         try:
             beeper.value = 0
         except Exception:
@@ -1061,6 +1167,7 @@ def gpio_poll():
         "dot_pin":        settings.get("dot_pin"),
         "dash_pin":       settings.get("dash_pin"),
         "speaker_pin":    settings.get("speaker_pin"),
+        "speaker_pin2":   settings.get("speaker_pin2"),
         "ground_pin":     settings.get("ground_pin"),
         "grounded_pins":  settings.get("grounded_pins", []),
         "states":         get_all_pin_states(),
@@ -1132,7 +1239,7 @@ def wpm_test():
 def save_settings_route():
     data = request.json or {}
     COERCE_INT          = {"speaker_pin", "data_pin", "dot_pin", "dash_pin", "dot_freq", "dash_freq", "wpm_target"}
-    COERCE_NULLABLE_INT = {"ground_pin"}
+    COERCE_NULLABLE_INT = {"ground_pin", "speaker_pin2"}
     COERCE_FLOAT = {"volume", "farnsworth_letter_mult", "farnsworth_word_mult"}
     COERCE_BOOL  = {"use_external_switch", "farnsworth_enabled", "kb_enabled"}
     
@@ -1404,6 +1511,7 @@ def assign_gpio():
         "data": "data_pin",
         "speaker": "speaker_pin",
         "led": "speaker_pin",
+        "speaker2": "speaker_pin2",
     }
     role = role_map.get(role, role)
     
@@ -1422,10 +1530,10 @@ def assign_gpio():
         # Cannot ground key pins or speaker pin
         if bcm in key_pins:
             return jsonify({"ok": False, "error": "Cannot ground a key pin"})
-        if bcm == settings.get("speaker_pin"):
+        if bcm == settings.get("speaker_pin") or bcm == settings.get("speaker_pin2"):
             return jsonify({"ok": False, "error": "Cannot ground the speaker pin"})
         # Clear any existing role for this pin
-        for k in ["speaker_pin", "data_pin", "dot_pin", "dash_pin"]:
+        for k in ["speaker_pin", "speaker_pin2", "data_pin", "dot_pin", "dash_pin"]:
             if settings.get(k) == bcm:
                 settings[k] = None
         # Add to grounded_pins if not already there
@@ -1435,7 +1543,7 @@ def assign_gpio():
             settings["grounded_pins"] = grounded
     elif role == "clear":
         # Remove all assignments for this pin
-        for k in ["speaker_pin", "data_pin", "dot_pin", "dash_pin", "ground_pin"]:
+        for k in ["speaker_pin", "speaker_pin2", "data_pin", "dot_pin", "dash_pin", "ground_pin"]:
             if settings.get(k) == bcm:
                 settings[k] = None
         grounded = settings.get("grounded_pins", [])
@@ -1453,6 +1561,19 @@ def assign_gpio():
             settings["grounded_pins"] = grounded
         # Clear any existing speaker assignment
         settings["speaker_pin"] = bcm
+    elif role == "speaker_pin2":
+        # Cannot set a key pin as speaker
+        if bcm in key_pins:
+            return jsonify({"ok": False, "error": "This pin is used as a key"})
+        # Remove from grounded if present
+        grounded = settings.get("grounded_pins", [])
+        if bcm in grounded:
+            grounded.remove(bcm)
+            settings["grounded_pins"] = grounded
+        # Cannot be the same as speaker_pin
+        if bcm == settings.get("speaker_pin"):
+            return jsonify({"ok": False, "error": "Pin 2 cannot be the same as Pin 1"})
+        settings["speaker_pin2"] = bcm
     elif role in ["data_pin", "dot_pin", "dash_pin"]:
         # Cannot set a grounded pin as a key
         grounded = settings.get("grounded_pins", [])
@@ -1466,7 +1587,7 @@ def assign_gpio():
             if bcm == settings.get("dot_pin"):
                 return jsonify({"ok": False, "error": "Dot and dash pins cannot be the same"})
         # Clear other key assignments for this pin
-        for k in ["speaker_pin", "data_pin", "dot_pin", "dash_pin", "ground_pin"]:
+        for k in ["speaker_pin", "speaker_pin2", "data_pin", "dot_pin", "dash_pin", "ground_pin"]:
             if settings.get(k) == bcm:
                 settings[k] = None
         settings[role] = bcm

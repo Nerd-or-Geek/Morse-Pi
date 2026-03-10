@@ -238,6 +238,7 @@ kbd{display:inline-block;padding:2px 7px;font-size:.82em;font-family:inherit;bac
   <tr><td><strong>On-screen keys</strong></td><td>Works without hardware: <kbd>Space</kbd> = straight key, <kbd>Z</kbd>/<kbd>X</kbd> = paddles</td></tr>
   <tr><td><strong>Physical GPIO key</strong></td><td>Connect a real Morse key or iambic paddle via GPIO pins</td></tr>
   <tr><td><strong>Configurable tones</strong></td><td>Separate dot/dash frequencies, volume, and WPM — all from the browser</td></tr>
+  <tr><td><strong>Dual-pin speaker</strong></td><td>Push-pull differential drive across two GPIO pins for louder, cleaner audio</td></tr>
   <tr><td><strong>Dark/light themes</strong></td><td>Switch between dark and light UI from CONFIG</td></tr>
 </table>
 
@@ -257,7 +258,7 @@ kbd{display:inline-block;padding:2px 7px;font-size:.82em;font-family:inherit;bac
 <h3>Full hardware setup (Raspberry Pi)</h3>
 <ul>
   <li><strong>Raspberry Pi</strong> — any model with 40-pin GPIO (Pi 3B+, Pi 4, Pi Zero 2 W, etc.)</li>
-  <li>A <strong>piezo buzzer</strong> or small speaker wired to a GPIO pin</li>
+  <li>A <strong>piezo buzzer</strong> or small speaker wired to one or two GPIO pins</li>
   <li>A <strong>Morse key</strong> (straight key) or <strong>iambic paddle</strong> (two contacts)</li>
 </ul>
 
@@ -322,17 +323,27 @@ python3 app.py</code></pre>
   <tr><th>Component</th><th>GPIO (BCM)</th><th>Physical Pin</th><th>Notes</th></tr>
   <tr><td>Key signal</td><td><strong>17</strong></td><td>Pin 11</td><td>Active-low (key shorts pin to GND)</td></tr>
   <tr><td>Key ground</td><td>GND</td><td>Pin 9 or 14</td><td></td></tr>
-  <tr><td>Buzzer +</td><td><strong>18</strong></td><td>Pin 12</td><td>PWM-capable pin required</td></tr>
-  <tr><td>Buzzer −</td><td>GND</td><td>Pin 14</td><td></td></tr>
+  <tr><td>Speaker +</td><td><strong>18</strong></td><td>Pin 12</td><td>Speaker pin 1</td></tr>
+  <tr><td>Speaker −</td><td><strong>13</strong></td><td>Pin 33</td><td>Speaker pin 2 (push-pull)</td></tr>
 </table>
+
+<div class="callout success">
+  <div class="callout-title">Dual-pin speaker (push-pull drive)</div>
+  Connect the speaker between <strong>two GPIO pins</strong> instead of between a GPIO pin and GND. The Pi drives them in anti-phase (one HIGH while the other is LOW, then they swap), doubling the voltage swing for louder, cleaner audio. Set both <strong>Speaker Pin 1</strong> and <strong>Speaker Pin 2</strong> in the CONFIG panel.
+</div>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Single-pin fallback</div>
+  If you leave Speaker Pin 2 empty, the speaker operates in single-pin PWM mode (speaker between the GPIO pin and GND). This works but produces quieter output.
+</div>
 
 <h3>Iambic paddle (dual-pin mode)</h3>
 <table>
   <tr><th>Component</th><th>GPIO (BCM)</th><th>Physical Pin</th><th>Notes</th></tr>
   <tr><td>Dot paddle</td><td><strong>22</strong></td><td>Pin 15</td><td>Active-low</td></tr>
   <tr><td>Dash paddle</td><td><strong>27</strong></td><td>Pin 13</td><td>Active-low</td></tr>
-  <tr><td>Buzzer +</td><td><strong>18</strong></td><td>Pin 12</td><td></td></tr>
-  <tr><td>Buzzer −</td><td>GND</td><td>Pin 14</td><td></td></tr>
+  <tr><td>Speaker +</td><td><strong>18</strong></td><td>Pin 12</td><td>Speaker pin 1</td></tr>
+  <tr><td>Speaker −</td><td><strong>13</strong></td><td>Pin 33</td><td>Speaker pin 2 (push-pull)</td></tr>
 </table>
 
 <h3>GPIO header pinout (subset)</h3>
@@ -735,7 +746,8 @@ sudo reboot</code></pre>
   <tr><td><code>data_pin</code></td><td>int</td><td><code>17</code></td><td>BCM pin for straight key input</td></tr>
   <tr><td><code>dot_pin</code></td><td>int</td><td><code>22</code></td><td>BCM pin for dot paddle (dual mode)</td></tr>
   <tr><td><code>dash_pin</code></td><td>int</td><td><code>27</code></td><td>BCM pin for dash paddle (dual mode)</td></tr>
-  <tr><td><code>speaker_pin</code></td><td>int</td><td><code>18</code></td><td>BCM pin for buzzer/speaker (PWM)</td></tr>
+  <tr><td><code>speaker_pin</code></td><td>int</td><td><code>18</code></td><td>BCM pin for speaker (pin 1)</td></tr>
+  <tr><td><code>speaker_pin2</code></td><td>int|null</td><td><code>null</code></td><td>Second speaker GPIO pin for push-pull drive. When set (and pigpio is available), the two pins are driven in anti-phase for louder audio.</td></tr>
   <tr><td><code>output_type</code></td><td>string</td><td><code>"speaker"</code></td><td><code>speaker</code> = PWM audio, <code>led</code> = on/off</td></tr>
   <tr><td><code>ground_pin</code></td><td>int|null</td><td><code>null</code></td><td>Legacy single ground output pin</td></tr>
   <tr><td><code>grounded_pins</code></td><td>list</td><td><code>[]</code></td><td>Multiple GPIO pins driven LOW as grounds</td></tr>

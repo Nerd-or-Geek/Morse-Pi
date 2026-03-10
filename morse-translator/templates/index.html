@@ -477,7 +477,7 @@ let cheatTabActive  = 'letters';
 let cheatOpen       = false;
 
 const SETTINGS_DEFAULTS = {
-  speaker_pin:18, output_type:'speaker',
+  speaker_pin:18, speaker_pin2:null, output_type:'speaker',
   pin_mode:'single', data_pin:17, dot_pin:22, dash_pin:27, ground_pin:null, grounded_pins:[],
   use_external_switch:false,
   dot_freq:700, dash_freq:500, volume:0.75,
@@ -862,8 +862,15 @@ function renderSettings(){
         <div class="settings-section-title">&#9656; OUTPUT / SPEAKER</div>
         <div class="settings-grid">
           <div class="setting-row">
-            <div class="setting-label">Output GPIO Pin (BCM)</div>
+            <div class="setting-label">Speaker Pin 1 (BCM)</div>
             <div class="setting-input-row"><input class="input-field" type="number" id="s-speaker_pin" value="${s.speaker_pin}" min="2" max="27"><button class="btn btn-primary" onclick="previewTone()">Test</button></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Speaker Pin 2 (BCM)</div>
+            <div class="setting-input-row"><input class="input-field" type="number" id="s-speaker_pin2" value="${s.speaker_pin2!=null?s.speaker_pin2:''}" min="2" max="27" placeholder="None (single-pin)"></div>
+            <div class="setting-help">${s.speaker_pin2!=null
+              ?'<span class="tag tag-green">Dual-Pin (Push-Pull)</span> &mdash; Anti-phase drive doubles the voltage swing for louder, cleaner audio. Both pins drive the speaker differentially.'
+              :'<span class="tag tag-blue">Single-Pin</span> &mdash; Set a second pin to enable push-pull differential speaker drive for improved sound.'}</div>
           </div>
           <div class="setting-row">
             <div class="setting-label">Output Type</div>
@@ -967,7 +974,10 @@ function renderGpioMap(s) {
   if (s.output_type === 'led') {
     assign[s.speaker_pin] = {role:'LED OUT', col:'spkr'};
   } else {
-    assign[s.speaker_pin] = {role:'SPEAKER', col:'spkr'};
+    assign[s.speaker_pin] = {role:s.speaker_pin2!=null?'SPKR +':'SPEAKER', col:'spkr'};
+  }
+  if (s.speaker_pin2 != null) {
+    assign[s.speaker_pin2] = {role:s.output_type==='led'?'LED OUT 2':'SPKR −', col:'spkr'};
   }
   if (s.ground_pin != null) {
     assign[s.ground_pin] = {role:'GND OUT', col:'gnd-out'};
@@ -1038,7 +1048,7 @@ function renderGpioMap(s) {
         ${gndPins.map(p=>`<span class="pin-badge">Pin&nbsp;${p}</span>`).join('')}
         <span style="margin-left:6px;">&mdash; connect your paddle/key common leg to any of these.</span>
       </div>
-      <div style="margin-top:10px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);">&#9888; Speaker: use a 100&ndash;470&Omega; series resistor between GPIO and speaker to protect the pin.</div>
+      <div style="margin-top:10px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);">&#9888; Speaker: ${s.speaker_pin2!=null?'Dual-pin push-pull mode active &mdash; speaker is driven differentially between both pins for maximum volume.':'Single-pin mode &mdash; use a 100&ndash;470&Omega; series resistor between GPIO and speaker. Set Pin 2 for push-pull drive.'}</div>
     </div>`;
 }
 
@@ -1048,11 +1058,12 @@ function gpioPopover(evt, bcm) {
   const existing = document.getElementById('gpio-pop');
   if (existing) { existing.remove(); return; }
   const roles = [
-    {key:'data_pin',   label:'Data Key (single-pin)',        col:'key'},
-    {key:'dot_pin',    label:'Dot Paddle (dual-pin)',        col:'key'},
-    {key:'dash_pin',   label:'Dash Paddle (dual-pin)',       col:'key'},
-    {key:'speaker_pin',label:'Speaker Output',               col:'spkr'},
-    {key:'ground_pin', label:'Ground Output (drive LOW)',    col:'gnd-out'},
+    {key:'data_pin',    label:'Data Key (single-pin)',        col:'key'},
+    {key:'dot_pin',     label:'Dot Paddle (dual-pin)',        col:'key'},
+    {key:'dash_pin',    label:'Dash Paddle (dual-pin)',       col:'key'},
+    {key:'speaker_pin', label:'Speaker Pin 1',                col:'spkr'},
+    {key:'speaker_pin2',label:'Speaker Pin 2 (push-pull)',    col:'spkr'},
+    {key:'ground_pin',  label:'Ground Output (drive LOW)',    col:'gnd-out'},
   ];
   const btns = roles.map(r=>{
     const active = settings[r.key]===bcm;
@@ -1079,11 +1090,12 @@ function closeGpioPopover(){
 }
 function doAssignPin(bcm, settingKey) {
   closeGpioPopover();
-  ['data_pin','dot_pin','dash_pin','speaker_pin'].forEach(k=>{if(settings[k]===bcm)settings[k]=null;});
+  ['data_pin','dot_pin','dash_pin','speaker_pin','speaker_pin2'].forEach(k=>{if(settings[k]===bcm)settings[k]=null;});
   if(settingKey) settings[settingKey]=bcm;
   const payload={pin_mode:settings.pin_mode,output_type:settings.output_type,
     data_pin:settings.data_pin,dot_pin:settings.dot_pin,
-    dash_pin:settings.dash_pin,speaker_pin:settings.speaker_pin};
+    dash_pin:settings.dash_pin,speaker_pin:settings.speaker_pin,
+    speaker_pin2:settings.speaker_pin2};
   api('/save_settings','POST',payload).then(s=>{
       Object.assign(settings,s); renderContent();
       toast(settingKey?`BCM ${bcm} \u2192 ${settingKey.replace('_pin','').replace('_',' ')}`:`BCM ${bcm} cleared`,'success');
@@ -1785,6 +1797,9 @@ function saveSettings(){
   const keys=['speaker_pin','dot_freq','dash_freq','wpm_target','difficulty','data_pin','dot_pin','dash_pin'];
   const data={pin_mode:settings.pin_mode,output_type:settings.output_type,use_external_switch:settings.use_external_switch||false};
   keys.forEach(k=>{const el=document.getElementById('s-'+k);if(el)data[k]=el.value;});
+  // Speaker pin 2: nullable
+  const sp2El=document.getElementById('s-speaker_pin2');
+  if(sp2El) data.speaker_pin2=sp2El.value?parseInt(sp2El.value):null;
   // Device name
   const dnEl=document.getElementById('s-device_name');
   data.device_name = (dnEl && dnEl.value.trim()) ? dnEl.value.trim() : (settings.device_name||'Morse Pi');
