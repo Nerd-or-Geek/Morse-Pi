@@ -31,6 +31,7 @@ SKIP_PACKAGES=false
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
   banner "Morse-Pi Updater"
   echo -e "  ${GRN}★ Existing installation detected — will update${RST}"
+  echo ""
   echo -e "  Repo   : ${BLD}${REPO_URL}${RST}"
   echo -e "  Branch : ${BLD}${BRANCH}${RST}"
   echo -e "  Target : ${BLD}${INSTALL_DIR}${RST}"
@@ -42,12 +43,25 @@ if [[ -d "${INSTALL_DIR}/.git" ]]; then
   echo -e "  ${CYN}1)${RST} Full update (check packages + update code + restart service)"
   echo -e "  ${CYN}2)${RST} Quick update (skip packages, just update code + restart service)"
   echo ""
-  echo -n "Choose option [1/2, default=1]: "
-  read UPDATE_CHOICE < /dev/tty
+  
+  # Read from /dev/tty to allow input even when script is piped
+  if [[ -t 0 ]]; then
+    # stdin is a terminal, read normally
+    read -r -p "Choose option [1/2, default=1]: " UPDATE_CHOICE
+  else
+    # stdin is piped, read from tty
+    exec 3</dev/tty
+    echo -n "Choose option [1/2, default=1]: "
+    read -r UPDATE_CHOICE <&3
+    exec 3<&-
+  fi
+  
   if [[ "${UPDATE_CHOICE}" == "2" ]]; then
     SKIP_PACKAGES=true
+    echo ""
     info "Skipping package checks — quick update mode"
   else
+    echo ""
     info "Full update mode selected"
   fi
   echo ""
