@@ -245,14 +245,19 @@ fi
 if [[ -n "${SUDO_USER:-}" ]]; then
   RUN_USER="${SUDO_USER}"
 else
-  RUN_USER="$(id -un)"
+  # If running as root with no SUDO_USER, try to find the 'pi' user
+  if id "pi" &>/dev/null; then
+    RUN_USER="pi"
+  else
+    RUN_USER="$(id -un)"
+  fi
 fi
 info "Service will run as user: ${RUN_USER}"
 
-# Ensure the app directory is owned by the service user (so settings.json can be written)
-info "Setting ownership of ${APP_DIR} to ${RUN_USER}…"
-chown -R "${RUN_USER}:${RUN_USER}" "${APP_DIR}"
-chmod -R u+rw "${APP_DIR}"
+# Ensure the WHOLE install directory is owned by the service user
+info "Setting ownership of ${INSTALL_DIR} to ${RUN_USER}…"
+chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}"
+chmod -R u+rw "${INSTALL_DIR}"
 ok "Directory permissions set"
 
 # Create initial settings.json if it doesn't exist (prevents permission issues on first run)
@@ -300,64 +305,68 @@ if getent group gpio &>/dev/null; then
   fi
 fi
 
+# Stop existing service before writing new file (avoids stale pids)
+if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
+  info "Stopping existing ${SERVICE_NAME} service…"
+  systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
+  ok "Stopped existing service"
+fi
+
 # Create the systemd service file
-info "Creating systemd service file at ${SERVICE_FILE}…"
-cat > "${SERVICE_FILE}" <<EOF
+info "Writing service file to ${SERVICE_FILE}…"
+cat > "${SERVICE_FILE}" <<SVCEOF
 [Unit]
 Description=Morse-Pi — Morse code trainer web app
-After=network-online.target
-Wants=network-online.target
+After=network-online.target pigpiod.service morse-pi-hid.service
+Wants=network-online.target pigpiod.service
 
 [Service]
 Type=simple
 User=${RUN_USER}
+Group=${RUN_USER}
 WorkingDirectory=${APP_DIR}
-ExecStart=/usr/bin/python3 app.py
+ExecStart=/usr/bin/python3 ${APP_DIR}/app.py
 Restart=always
-RestartSec=5
+RestartSec=3
 StandardOutput=journal
 StandardError=journal
-# Tell gpiozero to use pigpio — works on all Pi models including Zero W
 Environment=GPIOZERO_PIN_FACTORY=pigpio
-# Give gpiozero time to initialise on boot
 TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SVCEOF
 
 # Verify the service file was created
-if [[ -f "${SERVICE_FILE}" ]]; then
-  ok "Service file written to ${SERVICE_FILE}"
-else
+if [[ ! -f "${SERVICE_FILE}" ]]; then
   die "Failed to create service file at ${SERVICE_FILE}"
 fi
+ok "Service file written to ${SERVICE_FILE}"
+
+# Show service file contents for debugging
+info "Service file contents:"
+cat "${SERVICE_FILE}" | while IFS= read -r line; do echo "  $line"; done
 
 info "Reloading systemd daemon…"
 systemctl daemon-reload
 ok "systemd reloaded"
 
-# Always ensure service is enabled (will start on boot)
+# Enable the service (idempotent — safe to re-run)
 info "Enabling ${SERVICE_NAME} to start on boot…"
-systemctl enable "${SERVICE_NAME}"
-ok "${SERVICE_NAME} enabled"
+systemctl enable "${SERVICE_NAME}" 2>&1
+ok "${SERVICE_NAME} enabled for auto-start on boot"
 
-# Always ensure service is running (stop first if active to pick up changes)
-if systemctl is-active --quiet "${SERVICE_NAME}"; then
-  info "Restarting ${SERVICE_NAME} to apply changes…"
-  systemctl restart "${SERVICE_NAME}"
-  ok "${SERVICE_NAME} restarted"
-else
-  info "Starting ${SERVICE_NAME}…"
-  systemctl start "${SERVICE_NAME}"
-  ok "${SERVICE_NAME} started"
-fi
+# Start the service
+info "Starting ${SERVICE_NAME}…"
+systemctl start "${SERVICE_NAME}"
 
 # Verify the service is actually running
-sleep 1
+sleep 2
 if systemctl is-active --quiet "${SERVICE_NAME}"; then
   ok "${SERVICE_NAME} is running"
 else
+  warn "${SERVICE_NAME} may have failed to start — showing recent log:"
+  journalctl -u "${SERVICE_NAME}" --no-pager -n 15 2>/dev/null || true
   warn "${SERVICE_NAME} may have failed to start. Check: sudo journalctl -u ${SERVICE_NAME} -n 50"
 fi
 
@@ -484,14 +493,26 @@ HID_SCRIPT_EOF
   chmod +x "${HID_SCRIPT}"
   ok "USB HID setup script created at ${HID_SCRIPT}"
   
+  # Create udev rule so /dev/hidg0 permissions persist across reboots
+  UDEV_RULE="/etc/udev/rules.d/99-morse-pi-hid.rules"
+  info "Creating udev rule for /dev/hidg0 permissions…"
+  cat > "${UDEV_RULE}" <<'UDEV_EOF'
+# Morse-Pi: Allow non-root write access to USB HID gadget device
+KERNEL=="hidg[0-9]*", MODE="0666"
+UDEV_EOF
+  ok "udev rule created at ${UDEV_RULE}"
+  udevadm control --reload-rules 2>/dev/null || true
+  udevadm trigger 2>/dev/null || true
+
   # Create systemd service for USB HID gadget
   HID_SERVICE="/etc/systemd/system/morse-pi-hid.service"
   info "Creating USB HID systemd service…"
   cat > "${HID_SERVICE}" <<HID_SERVICE_EOF
 [Unit]
 Description=Morse-Pi USB HID Keyboard Gadget
-After=sysinit.target
 DefaultDependencies=no
+After=sys-kernel-config.mount
+Requires=sys-kernel-config.mount
 
 [Service]
 Type=oneshot

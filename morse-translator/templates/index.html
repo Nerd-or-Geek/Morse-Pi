@@ -535,15 +535,21 @@ function toast(msg,type='info',duration=2800){
 }
 
 // ── Connection ─────────────────────────────────
-let _connOk=null;
+let _connOk=null, _connLostToastTime=0;
 function connOk(){
   if(_connOk===true)return; _connOk=true;
   document.getElementById('conn-dot').className='dot ok';
+  if(_connLostToastTime>0){ toast('Reconnected to Pi','success',2000); }
 }
 function connLost(){
   if(_connOk===false)return; _connOk=false;
   document.getElementById('conn-dot').className='dot err';
-  toast('Connection to Pi lost','error',4000);
+  // Only show toast at most once per 8 seconds to avoid spamming
+  const now=Date.now();
+  if(now-_connLostToastTime>8000){
+    toast('Connection to Pi lost','error',4000);
+    _connLostToastTime=now;
+  }
 }
 
 // ── Navigation ─────────────────────────────────
@@ -1078,8 +1084,7 @@ function doAssignPin(bcm, settingKey) {
   const payload={pin_mode:settings.pin_mode,output_type:settings.output_type,
     data_pin:settings.data_pin,dot_pin:settings.dot_pin,
     dash_pin:settings.dash_pin,speaker_pin:settings.speaker_pin};
-  fetch('/save_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-    .then(r=>r.json()).then(s=>{
+  api('/save_settings','POST',payload).then(s=>{
       Object.assign(settings,s); renderContent();
       toast(settingKey?`BCM ${bcm} \u2192 ${settingKey.replace('_pin','').replace('_',' ')}`:`BCM ${bcm} cleared`,'success');
     }).catch(()=>toast('Save failed','error'));
@@ -1856,8 +1861,11 @@ document.addEventListener('keyup',e=>{
 
 // ── Polling — incremental DOM updates ──────────
 let _pBtn=null,_pSBuf=null,_pSOut=null,_pSpBuf=null,_pSpOut=null,_pNetBuf=null,_pNetOut=null;
+let _pollInFlight=false;
 setInterval(()=>{
-  fetch('/status').then(r=>{connOk();return r.json();}).then(s=>{
+  if(_pollInFlight)return; // skip if previous poll still in progress
+  _pollInFlight=true;
+  fetch('/status',{signal:AbortSignal.timeout(3000)}).then(r=>{connOk();return r.json();}).then(s=>{
     const bd=document.getElementById('btn-dot');
     if(bd)bd.className=s.button_active?'dot active':'dot';
     updateGpioPinStates(s.pin_states);
@@ -1913,8 +1921,9 @@ setInterval(()=>{
       kbEnabled = s.kb_enabled;
     }
     _pBtn=s.button_active;_pSBuf=s.current_morse_buffer;_pSOut=s.send_output;_pSpBuf=s.speed_morse_buffer;_pSpOut=s.speed_morse_output;
-  }).catch(()=>connLost());
-},100);
+    _pollInFlight=false;
+  }).catch(()=>{connLost();_pollInFlight=false;});
+},250);
 
 // ── Incremental DOM patchers ───────────────────
 function _patchKbDisplay(){
@@ -1984,13 +1993,12 @@ function _patchNetKeyDisplay(){
 document.getElementById('cheat-toggle-btn').addEventListener('click',toggleCheatSheet);
 renderNav(); renderContent(); setupTouchKeys();
 
-fetch('/status').then(r=>r.json()).then(s=>{
-  connOk();
+api('/status').then(s=>{
   const gd=document.getElementById('gpio-dot');
   if(gd)gd.className=s.gpio_available?'dot ok':'dot err';
-}).catch(()=>connLost());
+}).catch(()=>{});
 
-fetch('/get_settings').then(r=>r.json()).then(s=>{
+api('/get_settings').then(s=>{
   settings=Object.assign({},SETTINGS_DEFAULTS,s);
   // Update device name in header
   const nameEl = document.getElementById('device-name-display');
