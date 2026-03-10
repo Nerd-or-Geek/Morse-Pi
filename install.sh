@@ -26,7 +26,14 @@ SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 PORT=5000
 
 # ── Sanity checks ──────────────────────────────────────────────────────────────
-banner "Morse-Pi Installer"
+# Detect if this is an update or fresh install
+if [[ -d "${INSTALL_DIR}/.git" ]]; then
+  banner "Morse-Pi Updater"
+  echo -e "  ${GRN}★ Existing installation detected — will update${RST}"
+else
+  banner "Morse-Pi Installer"
+  echo -e "  ${CYN}★ Fresh installation${RST}"
+fi
 echo -e "  Repo   : ${BLD}${REPO_URL}${RST}"
 echo -e "  Branch : ${BLD}${BRANCH}${RST}"
 echo -e "  Target : ${BLD}${INSTALL_DIR}${RST}"
@@ -89,11 +96,30 @@ fi
 # ── Clone / update repo ────────────────────────────────────────────────────────
 banner "Step 2 / 5 — Repository"
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
-  info "Repo already exists at ${INSTALL_DIR}. Pulling latest changes…"
+  IS_UPDATE=true
+  info "Existing installation found at ${INSTALL_DIR}. Updating…"
+  
+  # Backup settings.json before git reset (preserves user configuration)
+  SETTINGS_BACKUP=""
+  if [[ -f "${APP_DIR}/settings.json" ]]; then
+    SETTINGS_BACKUP=$(mktemp)
+    cp "${APP_DIR}/settings.json" "${SETTINGS_BACKUP}"
+    info "Backed up settings.json"
+  fi
+  
   git -C "${INSTALL_DIR}" fetch --quiet origin "${BRANCH}"
   git -C "${INSTALL_DIR}" reset --hard "origin/${BRANCH}" --quiet
+  
+  # Restore settings.json after git reset
+  if [[ -n "${SETTINGS_BACKUP}" && -f "${SETTINGS_BACKUP}" ]]; then
+    cp "${SETTINGS_BACKUP}" "${APP_DIR}/settings.json"
+    rm -f "${SETTINGS_BACKUP}"
+    ok "Restored user settings.json"
+  fi
+  
   ok "Repository updated to latest ${BRANCH}"
 else
+  IS_UPDATE=false
   info "Cloning ${REPO_URL} → ${INSTALL_DIR}…"
   git clone --branch "${BRANCH}" --depth 1 "${REPO_URL}" "${INSTALL_DIR}"
   ok "Repository cloned"
@@ -279,12 +305,17 @@ else
 fi
 
 # ── Done ───────────────────────────────────────────────────────────────────────
-banner "Installation complete!"
+if [[ "${IS_UPDATE:-false}" == "true" ]]; then
+  banner "Update complete!"
+  echo -e "${GRN}${BLD}Morse-Pi has been updated and restarted!${RST}"
+else
+  banner "Installation complete!"
+  echo -e "${GRN}${BLD}Morse-Pi is running!${RST}"
+fi
 
 # Determine the Pi's LAN IP(s) for display
 IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' | grep -v '^127\.' | head -5)
 
-echo -e "${GRN}${BLD}Morse-Pi is running!${RST}"
 echo ""
 echo -e "  Open your browser and navigate to one of:"
 while IFS= read -r ip; do
@@ -297,6 +328,6 @@ echo -e "    ${BLD}sudo systemctl restart ${SERVICE_NAME}${RST}   — restart"
 echo -e "    ${BLD}sudo journalctl -u ${SERVICE_NAME} -f${RST}    — live logs"
 echo -e "    ${BLD}sudo systemctl stop    ${SERVICE_NAME}${RST}   — stop"
 echo ""
-echo -e "  To update later, re-run this script or:"
-echo -e "    ${BLD}sudo git -C ${INSTALL_DIR} pull && sudo systemctl restart ${SERVICE_NAME}${RST}"
+echo -e "  To update later, re-run this script:"
+echo -e "    ${BLD}curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash${RST}"
 echo ""

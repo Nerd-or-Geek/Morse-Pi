@@ -96,7 +96,7 @@
       font-weight: 700;
       font-size: 1.3rem;
       letter-spacing: 0.08em;
-      background: linear-gradient(135deg, var(--accent), var(--accent3));
+      background: linear-gradient(135deg, var(--accent2), var(--gold));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -552,7 +552,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{btn.addEventListener('click'
 let _currentMode = null; // track to avoid redundant full renders
 
 function setMode(mode){
-  if(mode==='help'||mode==='network'){state.mode=mode;renderNav();transitionContent();return;}
+  if(mode==='help'||mode==='network'||mode==='keyboard'){state.mode=mode;renderNav();transitionContent();return;}
   api('/set_mode','POST',{mode}).then(s=>{state=s;renderNav();transitionContent();});
 }
 function renderNav(){
