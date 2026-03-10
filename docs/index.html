@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morse-Pi — Documentation</title>
+<meta name="description" content="Complete documentation for Morse-Pi, a Morse code trainer for Raspberry Pi with GPIO, USB HID keyboard, and multi-device networking.">
+<style>
+/* ── Reset & Base ─────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0e1117;--bg2:#161b22;--bg3:#1c2129;--border:#30363d;
+  --text:#e6edf3;--text-dim:#8b949e;--accent:#f0a040;--accent2:#e8963a;
+  --code-bg:#1a1f28;--link:#58a6ff;--link-hover:#79c0ff;
+  --success:#3fb950;--warn:#d29922;--error:#f85149;
+  --radius:8px;--shadow:0 2px 12px rgba(0,0,0,.35);
+  --header-h:60px;--sidebar-w:280px;--content-max:860px;
+}
+html{scroll-behavior:smooth;scroll-padding-top:calc(var(--header-h) + 20px);}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;}
+a{color:var(--link);text-decoration:none;}a:hover{color:var(--link-hover);text-decoration:underline;}
+
+/* ── Header ───────────────────────────────────────────── */
+.site-header{position:fixed;top:0;left:0;right:0;height:var(--header-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;z-index:100;gap:16px;}
+.site-header .logo{font-size:1.3rem;font-weight:700;background:linear-gradient(135deg,#f0a040,#e87030);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;white-space:nowrap;}
+.site-header .tagline{color:var(--text-dim);font-size:.82rem;display:none;}
+@media(min-width:640px){.site-header .tagline{display:inline;}}
+.header-links{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:.85rem;}
+.header-links a{color:var(--text-dim);}
+.header-links a:hover{color:var(--accent);}
+.menu-toggle{display:none;background:none;border:none;color:var(--text);font-size:1.5rem;cursor:pointer;padding:4px 8px;}
+
+/* ── Layout ───────────────────────────────────────────── */
+.layout{display:flex;margin-top:var(--header-h);min-height:calc(100vh - var(--header-h));}
+
+/* ── Sidebar ──────────────────────────────────────────── */
+.sidebar{position:fixed;top:var(--header-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:20px 0;z-index:90;transition:transform .25s;}
+.sidebar::-webkit-scrollbar{width:5px;}.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+.sidebar .nav-group{margin-bottom:6px;}
+.sidebar .nav-group-title{padding:8px 20px 4px;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);font-weight:600;}
+.sidebar .nav-link{display:block;padding:5px 20px 5px 28px;font-size:.85rem;color:var(--text-dim);border-left:3px solid transparent;transition:all .15s;}
+.sidebar .nav-link:hover{color:var(--text);background:var(--bg3);text-decoration:none;}
+.sidebar .nav-link.active{color:var(--accent);border-left-color:var(--accent);background:rgba(240,160,64,.06);}
+
+/* ── Content ──────────────────────────────────────────── */
+.content{margin-left:var(--sidebar-w);flex:1;padding:36px 40px 80px;max-width:calc(var(--content-max) + 80px);}
+
+/* ── Typography ───────────────────────────────────────── */
+h1{font-size:2rem;font-weight:700;margin-bottom:8px;background:linear-gradient(135deg,#f0a040,#e87030);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+h2{font-size:1.5rem;font-weight:600;margin:48px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+h3{font-size:1.15rem;font-weight:600;margin:28px 0 10px;color:var(--accent2);}
+h4{font-size:1rem;font-weight:600;margin:20px 0 8px;}
+p{margin-bottom:14px;}
+.subtitle{color:var(--text-dim);font-size:1rem;margin-bottom:28px;}
+ul,ol{margin:0 0 14px 20px;}li{margin-bottom:4px;}
+strong{color:#fff;}
+hr{border:none;border-top:1px solid var(--border);margin:32px 0;}
+
+/* ── Code ─────────────────────────────────────────────── */
+code{font-family:'Fira Code','JetBrains Mono','Cascadia Code',Consolas,monospace;font-size:.88em;background:var(--code-bg);padding:2px 6px;border-radius:4px;border:1px solid var(--border);}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;overflow-x:auto;margin:0 0 16px;line-height:1.5;}
+pre code{background:none;border:none;padding:0;font-size:.85rem;}
+
+/* ── Tables ───────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;margin:0 0 18px;font-size:.9rem;}
+th{text-align:left;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);font-weight:600;color:var(--accent);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;}
+td{padding:8px 14px;border:1px solid var(--border);}
+tr:nth-child(even) td{background:rgba(255,255,255,.015);}
+
+/* ── Callouts ─────────────────────────────────────────── */
+.callout{border-radius:var(--radius);padding:14px 18px;margin:14px 0 18px;border-left:4px solid;font-size:.9rem;}
+.callout.info{background:rgba(88,166,255,.08);border-color:var(--link);}
+.callout.warn{background:rgba(210,153,34,.08);border-color:var(--warn);}
+.callout.success{background:rgba(63,185,80,.08);border-color:var(--success);}
+.callout.error{background:rgba(248,81,73,.08);border-color:var(--error);}
+.callout .callout-title{font-weight:600;margin-bottom:4px;}
+
+/* ── Badges ───────────────────────────────────────────── */
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.72rem;font-weight:600;letter-spacing:.03em;}
+.badge.green{background:rgba(63,185,80,.15);color:var(--success);}
+.badge.orange{background:rgba(240,160,64,.15);color:var(--accent);}
+.badge.blue{background:rgba(88,166,255,.15);color:var(--link);}
+.badge.red{background:rgba(248,81,73,.15);color:var(--error);}
+
+/* ── Key / kbd ────────────────────────────────────────── */
+kbd{display:inline-block;padding:2px 7px;font-size:.82em;font-family:inherit;background:var(--bg3);border:1px solid var(--border);border-radius:4px;box-shadow:0 1px 0 var(--border);color:var(--text);}
+
+/* ── Wiring diagram ───────────────────────────────────── */
+.wiring-diagram{font-family:'Fira Code',Consolas,monospace;font-size:.82rem;line-height:1.4;white-space:pre;background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;overflow-x:auto;margin:0 0 16px;}
+
+/* ── Feature grid ─────────────────────────────────────── */
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin:16px 0 24px;}
+.feature-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:border-color .2s;}
+.feature-card:hover{border-color:var(--accent);}
+.feature-card .fc-title{font-weight:600;margin-bottom:4px;color:#fff;}
+.feature-card .fc-desc{font-size:.85rem;color:var(--text-dim);line-height:1.5;}
+
+/* ── Morse table grid ─────────────────────────────────── */
+.morse-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin:10px 0 18px;}
+.morse-cell{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;font-family:'Fira Code',Consolas,monospace;font-size:.85rem;}
+.morse-cell .mc-char{font-size:1.1rem;font-weight:700;color:var(--accent);}
+.morse-cell .mc-code{color:var(--text-dim);font-size:.82rem;margin-top:2px;}
+
+/* ── Back to top ──────────────────────────────────────── */
+.back-top{position:fixed;bottom:24px;right:24px;width:40px;height:40px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center;font-size:1.2rem;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;box-shadow:var(--shadow);z-index:80;text-decoration:none;}
+.back-top.visible{opacity:1;pointer-events:auto;}
+
+/* ── Responsive ───────────────────────────────────────── */
+@media(max-width:860px){
+  .sidebar{transform:translateX(-100%);}
+  .sidebar.open{transform:translateX(0);}
+  .content{margin-left:0;padding:24px 18px 60px;}
+  .menu-toggle{display:block;}
+  .feature-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     HEADER
+     ═══════════════════════════════════════════════════════ -->
+<header class="site-header">
+  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+  <span class="logo">Morse-Pi</span>
+  <span class="tagline">Morse Code Trainer &amp; Practice Tool for Raspberry Pi</span>
+  <nav class="header-links">
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi" target="_blank">GitHub</a>
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues" target="_blank">Issues</a>
+  </nav>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════
+     SIDEBAR NAVIGATION
+     ═══════════════════════════════════════════════════════ -->
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="nav-group">
+    <div class="nav-group-title">Getting Started</div>
+    <a class="nav-link" href="#overview">Overview</a>
+    <a class="nav-link" href="#features">Features</a>
+    <a class="nav-link" href="#requirements">Requirements</a>
+    <a class="nav-link" href="#installation">Installation</a>
+    <a class="nav-link" href="#wiring">GPIO Wiring</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-title">Using Morse-Pi</div>
+    <a class="nav-link" href="#modes">Modes &amp; Tabs</a>
+    <a class="nav-link" href="#send-mode">SEND Mode</a>
+    <a class="nav-link" href="#encode-mode">ENCODE Mode</a>
+    <a class="nav-link" href="#decode-mode">DECODE Mode</a>
+    <a class="nav-link" href="#speed-mode">SPEED Trainer</a>
+    <a class="nav-link" href="#keyboard-mode">USB Keyboard (KB)</a>
+    <a class="nav-link" href="#network-mode">Networking (NET)</a>
+    <a class="nav-link" href="#stats-mode">Statistics</a>
+    <a class="nav-link" href="#config-mode">Configuration</a>
+    <a class="nav-link" href="#shortcuts">Keyboard Shortcuts</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-title">Maintenance</div>
+    <a class="nav-link" href="#updating">Updating</a>
+    <a class="nav-link" href="#packages">Package Management</a>
+    <a class="nav-link" href="#services">Service Management</a>
+    <a class="nav-link" href="#autostart">Auto-Start on Boot</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-title">USB HID Keyboard</div>
+    <a class="nav-link" href="#hid-setup">HID Setup</a>
+    <a class="nav-link" href="#hid-usage">Using HID Mode</a>
+    <a class="nav-link" href="#hid-troubleshoot">HID Troubleshooting</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-title">Reference</div>
+    <a class="nav-link" href="#morse-table">Morse Code Table</a>
+    <a class="nav-link" href="#timing">Timing &amp; WPM</a>
+    <a class="nav-link" href="#settings-ref">Settings Reference</a>
+    <a class="nav-link" href="#api-routes">API Routes</a>
+    <a class="nav-link" href="#project-structure">Project Structure</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-title">Troubleshooting</div>
+    <a class="nav-link" href="#troubleshooting">Common Issues</a>
+    <a class="nav-link" href="#gpio-errors">GPIO Errors</a>
+    <a class="nav-link" href="#connection-errors">Connection Errors</a>
+    <a class="nav-link" href="#hid-errors">USB HID Errors</a>
+    <a class="nav-link" href="#network-errors">Network Errors</a>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════
+     MAIN CONTENT
+     ═══════════════════════════════════════════════════════ -->
+<main class="content">
+
+<!-- ── OVERVIEW ────────────────────────────────────────── -->
+<h1 id="overview">Morse-Pi</h1>
+<p class="subtitle">A full-featured Morse code trainer and practice tool built with Flask, designed for Raspberry Pi with a physical key or paddle. Access everything from any browser on your local network.</p>
+
+<div class="feature-grid">
+  <div class="feature-card">
+    <div class="fc-title">🔑 Real Hardware Input</div>
+    <div class="fc-desc">Connect a straight key or iambic paddle via GPIO pins. Full hardware keyer with configurable timing.</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-title">⌨️ USB Keyboard</div>
+    <div class="fc-desc">Plug the Pi into any computer — decoded Morse letters are typed as keystrokes. No drivers needed.</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-title">🌐 Multi-Pi Mesh</div>
+    <div class="fc-desc">Multiple Pis on the same network auto-discover each other. Send Morse messages between devices.</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-title">🎯 Training Modes</div>
+    <div class="fc-desc">Encode, decode, and speed drills. Farnsworth timing, accuracy tracking, WPM measurement.</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-title">📱 Browser UI</div>
+    <div class="fc-desc">No app to install. Works from any phone, tablet, or computer on the same network.</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-title">🔧 Zero Config</div>
+    <div class="fc-desc">One-line installer handles everything. Auto-starts on boot. All settings configurable from the browser.</div>
+  </div>
+</div>
+
+<!-- ── FEATURES ────────────────────────────────────────── -->
+<h2 id="features">Features</h2>
+<table>
+  <tr><th>Feature</th><th>Description</th></tr>
+  <tr><td><strong>SEND mode</strong></td><td>Key Morse in real time and watch character-by-character decoding</td></tr>
+  <tr><td><strong>ENCODE</strong></td><td>Type any text and see the Morse equivalent instantly</td></tr>
+  <tr><td><strong>DECODE</strong></td><td>Enter dots and dashes, get the decoded text — quiz-style training</td></tr>
+  <tr><td><strong>SPEED trainer</strong></td><td>Practice sending at a target WPM and get scored on accuracy</td></tr>
+  <tr><td><strong>STATS</strong></td><td>Track accuracy, longest streak, and session history</td></tr>
+  <tr><td><strong>Farnsworth timing</strong></td><td>Stretch gaps between letters and words — great for beginners</td></tr>
+  <tr><td><strong>Multi-Pi networking</strong></td><td>Discover other Morse-Pi devices on your LAN and exchange messages</td></tr>
+  <tr><td><strong>USB HID Keyboard</strong></td><td>Pi acts as a USB keyboard — decoded Morse becomes real keystrokes</td></tr>
+  <tr><td><strong>On-screen keys</strong></td><td>Works without hardware: <kbd>Space</kbd> = straight key, <kbd>Z</kbd>/<kbd>X</kbd> = paddles</td></tr>
+  <tr><td><strong>Physical GPIO key</strong></td><td>Connect a real Morse key or iambic paddle via GPIO pins</td></tr>
+  <tr><td><strong>Configurable tones</strong></td><td>Separate dot/dash frequencies, volume, and WPM — all from the browser</td></tr>
+  <tr><td><strong>Dark/light themes</strong></td><td>Switch between dark and light UI from CONFIG</td></tr>
+</table>
+
+<!-- ── REQUIREMENTS ────────────────────────────────────── -->
+<h2 id="requirements">Requirements</h2>
+
+<h3>Minimum (software only)</h3>
+<ul>
+  <li>Any computer with <strong>Python 3.9+</strong></li>
+  <li>A modern browser on the same machine or network</li>
+</ul>
+<div class="callout info">
+  <div class="callout-title">ℹ No Raspberry Pi needed</div>
+  The web UI works on any machine — you just won't have GPIO or USB HID features. On-screen keys and keyboard shortcuts still work.
+</div>
+
+<h3>Full hardware setup (Raspberry Pi)</h3>
+<ul>
+  <li><strong>Raspberry Pi</strong> — any model with 40-pin GPIO (Pi 3B+, Pi 4, Pi Zero 2 W, etc.)</li>
+  <li>A <strong>piezo buzzer</strong> or small speaker wired to a GPIO pin</li>
+  <li>A <strong>Morse key</strong> (straight key) or <strong>iambic paddle</strong> (two contacts)</li>
+</ul>
+
+<h3>For USB HID Keyboard mode</h3>
+<ul>
+  <li><strong>Pi Zero, Zero W, Zero 2 W, or Pi 4</strong> (must support USB OTG)</li>
+  <li>A USB data cable (not power-only)</li>
+  <li>Connect via the <strong>USB data port</strong> (on Pi Zero, the port labeled "USB" — not "PWR")</li>
+</ul>
+
+<!-- ── INSTALLATION ───────────────────────────────────── -->
+<h2 id="installation">Installation</h2>
+
+<h3>One-line install</h3>
+<p>SSH into your Raspberry Pi and run:</p>
+<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash</code></pre>
+
+<p>The installer performs four steps in order:</p>
+<ol>
+  <li><strong>USB HID Keyboard Gadget</strong> — configures the Pi to appear as a USB keyboard when plugged into a computer</li>
+  <li><strong>Packages</strong> — installs <code>python3</code>, <code>pip</code>, <code>git</code>, <code>flask</code>, <code>gpiozero</code>, <code>pigpio</code></li>
+  <li><strong>Repository</strong> — clones the code to <code>/opt/morse-pi</code></li>
+  <li><strong>Auto-start</strong> — creates a systemd service so Morse-Pi runs on every boot</li>
+</ol>
+
+<div class="callout warn">
+  <div class="callout-title">⚠ Reboot required after first install</div>
+  USB HID keyboard mode requires a reboot to activate the kernel modules. Run <code>sudo reboot</code> after the installer finishes.
+</div>
+
+<p>Once running, open your browser to the IP address shown on screen:</p>
+<pre><code>http://192.168.1.42:5000</code></pre>
+
+<h3>Manual installation</h3>
+<pre><code># 1. Clone
+git clone https://github.com/Nerd-or-Geek/Morse-Pi.git
+cd Morse-Pi
+
+# 2. Install dependencies
+sudo pip3 install flask --break-system-packages
+
+# On Raspberry Pi, also:
+sudo apt install python3-gpiozero pigpio python3-pigpio -y
+sudo systemctl enable pigpiod --now
+sudo usermod -aG gpio $USER
+
+# 3. Run
+cd morse-translator
+python3 app.py</code></pre>
+<p>Then open <code>http://localhost:5000</code> (or the Pi's IP from another device).</p>
+
+<!-- ── WIRING ─────────────────────────────────────────── -->
+<h2 id="wiring">GPIO Wiring</h2>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Pin numbers</div>
+  All pin numbers below are <strong>BCM</strong> (Broadcom) numbers, not physical pin header numbers. All assignments are reconfigurable from the CONFIG panel.
+</div>
+
+<h3>Straight key (single-pin mode)</h3>
+<table>
+  <tr><th>Component</th><th>GPIO (BCM)</th><th>Physical Pin</th><th>Notes</th></tr>
+  <tr><td>Key signal</td><td><strong>17</strong></td><td>Pin 11</td><td>Active-low (key shorts pin to GND)</td></tr>
+  <tr><td>Key ground</td><td>GND</td><td>Pin 9 or 14</td><td></td></tr>
+  <tr><td>Buzzer +</td><td><strong>18</strong></td><td>Pin 12</td><td>PWM-capable pin required</td></tr>
+  <tr><td>Buzzer −</td><td>GND</td><td>Pin 14</td><td></td></tr>
+</table>
+
+<h3>Iambic paddle (dual-pin mode)</h3>
+<table>
+  <tr><th>Component</th><th>GPIO (BCM)</th><th>Physical Pin</th><th>Notes</th></tr>
+  <tr><td>Dot paddle</td><td><strong>22</strong></td><td>Pin 15</td><td>Active-low</td></tr>
+  <tr><td>Dash paddle</td><td><strong>27</strong></td><td>Pin 13</td><td>Active-low</td></tr>
+  <tr><td>Buzzer +</td><td><strong>18</strong></td><td>Pin 12</td><td></td></tr>
+  <tr><td>Buzzer −</td><td>GND</td><td>Pin 14</td><td></td></tr>
+</table>
+
+<h3>GPIO header pinout (subset)</h3>
+<div class="wiring-diagram"> ┌──────────────────────────────────┐
+ │  1  3V3   │  2  5V              │
+ │  3  BCM2  │  4  5V              │
+ │  5  BCM3  │  6  GND  ← buzzer − │
+ │  7  BCM4  │  8  BCM14           │
+ │  9  GND   │ 10  BCM15           │
+ │ 11  BCM17 │ 12  BCM18 ← buzzer +│  ← key (single)
+ │ 13  BCM27 │ 14  GND             │  ← dash (dual)
+ │ 15  BCM22 │ 16  BCM23           │  ← dot  (dual)
+ └──────────────────────────────────┘</div>
+
+<h3>Ground output pins</h3>
+<p>If your paddle's common wire is soldered to a GPIO pin instead of a physical GND pin, you can assign that GPIO as a <strong>Ground Output</strong> in the CONFIG or diagnostic panels. The Pi will drive that pin permanently LOW so it acts as a ground reference.</p>
+
+<!-- ══════════════════════════════════════════════════════
+     USING MORSE-PI
+     ══════════════════════════════════════════════════════ -->
+<h2 id="modes">Modes &amp; Tabs</h2>
+<p>The Morse-Pi web UI is a single-page application with nine tabs along the top navigation bar:</p>
+<table>
+  <tr><th>Tab</th><th>Purpose</th></tr>
+  <tr><td><strong>SEND</strong></td><td>Key Morse code in real time → live decoded text</td></tr>
+  <tr><td><strong>ENCODE</strong></td><td>Type plaintext → see Morse translation</td></tr>
+  <tr><td><strong>DECODE</strong></td><td>Quiz: see Morse → type the decoded answer</td></tr>
+  <tr><td><strong>SPEED</strong></td><td>Speed drill: key a phrase, measure WPM and accuracy</td></tr>
+  <tr><td><strong>KB</strong></td><td>USB HID keyboard settings and output</td></tr>
+  <tr><td><strong>STATS</strong></td><td>Accuracy and streak statistics</td></tr>
+  <tr><td><strong>CONFIG</strong></td><td>All settings (pins, tones, WPM, theme, Farnsworth, etc.)</td></tr>
+  <tr><td><strong>NET</strong></td><td>Multi-Pi networking: discover peers, send/receive messages</td></tr>
+  <tr><td><strong>HELP</strong></td><td>Built-in reference for shortcuts, wiring, and mode descriptions</td></tr>
+</table>
+
+<!-- ── SEND MODE ──────────────────────────────────────── -->
+<h2 id="send-mode">SEND Mode</h2>
+<p>SEND is the primary Morse code practice mode. Key Morse using your hardware key, on-screen buttons, or keyboard shortcuts, and watch your input decoded in real time.</p>
+
+<h3>How it works</h3>
+<ol>
+  <li>Press and hold your key (or <kbd>Space</kbd>) to generate dots and dashes</li>
+  <li>The <strong>symbol buffer</strong> shows your current dots/dashes as you key them</li>
+  <li>After a letter gap (3 dot units of silence), the character is decoded and appended to the output</li>
+  <li>After a word gap (7 dot units), a space is inserted</li>
+</ol>
+
+<h3>Input methods</h3>
+<table>
+  <tr><th>Method</th><th>How</th></tr>
+  <tr><td>Straight key (single pin)</td><td>Physical key on GPIO or <kbd>Space</kbd> bar — duration determines dot vs dash</td></tr>
+  <tr><td>Iambic paddle (dual pin)</td><td>Physical paddles on GPIO or <kbd>Z</kbd> (dot) / <kbd>X</kbd> (dash) keys</td></tr>
+  <tr><td>On-screen buttons</td><td>Click/tap the DOT and DASH buttons in the UI</td></tr>
+</table>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Straight key timing</div>
+  In straight key mode, the key-down duration is compared to 2× the dot unit. If shorter → dot; if longer → dash. The dot unit is calculated from your WPM setting: <code>dot_unit = 1200ms / WPM</code>.
+</div>
+
+<!-- ── ENCODE MODE ────────────────────────────────────── -->
+<h2 id="encode-mode">ENCODE Mode</h2>
+<p>Type or paste any text into the input field and instantly see the Morse code translation. Each character is broken down showing the letter and its Morse equivalent.</p>
+<ul>
+  <li>Click <strong>Play</strong> to hear the Morse code through the buzzer/speaker</li>
+  <li>Supports letters A–Z, numbers 0–9, and common punctuation</li>
+  <li>Spaces between words are shown as <code>/</code></li>
+</ul>
+
+<!-- ── DECODE MODE ────────────────────────────────────── -->
+<h2 id="decode-mode">DECODE Mode</h2>
+<p>A quiz-style trainer: the app shows a random word or phrase in Morse code. You type your decoded answer and submit.</p>
+<ul>
+  <li>Difficulty levels: <strong>Easy</strong> (short words), <strong>Medium</strong>, <strong>Hard</strong> (longer phrases)</li>
+  <li>Click <strong>Play</strong> to hear the Morse phrase as an audio hint</li>
+  <li>Tracks correct answers, wrong answers, current streak, and best streak</li>
+  <li>New phrase generated on each submission or when switching to DECODE mode</li>
+</ul>
+
+<!-- ── SPEED MODE ─────────────────────────────────────── -->
+<h2 id="speed-mode">SPEED Trainer</h2>
+<p>A speed drill that measures how fast and accurately you can key a displayed phrase.</p>
+<ol>
+  <li>A phrase is displayed on screen</li>
+  <li>Key the phrase using your paddle or keyboard</li>
+  <li>A timer starts automatically when you begin keying</li>
+  <li>Submit when done — the app compares your keyed Morse with the expected phrase</li>
+</ol>
+<p>Results include:</p>
+<ul>
+  <li><strong>WPM</strong> — your measured words-per-minute</li>
+  <li><strong>Accuracy</strong> — character-by-character comparison</li>
+  <li><strong>Elapsed time</strong></li>
+</ul>
+
+<!-- ── KEYBOARD MODE ──────────────────────────────────── -->
+<h2 id="keyboard-mode">USB Keyboard (KB)</h2>
+<p>The KB tab controls USB HID keyboard mode. When enabled, decoded Morse characters are sent as <em>real keystrokes</em> to whatever computer the Pi is plugged into via USB.</p>
+
+<h3>Two modes</h3>
+<table>
+  <tr><th>Mode</th><th>Behavior</th></tr>
+  <tr><td><strong>Letters</strong></td><td>Each decoded Morse character (A–Z, 0–9, punctuation, space) is sent as the corresponding keystroke.</td></tr>
+  <tr><td><strong>Custom</strong></td><td>Each dot/dash paddle press immediately sends a configured key (default Z/X). No decoding — raw key mapping for use with Morse practice websites.</td></tr>
+</table>
+<p>See <a href="#hid-setup">HID Setup</a> for hardware requirements and configuration.</p>
+
+<!-- ── NETWORK MODE ───────────────────────────────────── -->
+<h2 id="network-mode">Networking (NET)</h2>
+<p>Multiple Morse-Pi devices on the same LAN automatically discover each other — no configuration needed.</p>
+
+<h3>How discovery works</h3>
+<ul>
+  <li>Each Pi broadcasts a <strong>UDP beacon</strong> on port 5001 every 3 seconds</li>
+  <li>The beacon contains the device name, IP address, and port</li>
+  <li>Other Pis listen for these beacons and maintain a peer list</li>
+  <li>Peers that haven't been seen for 15 seconds are automatically removed</li>
+</ul>
+
+<h3>Sending messages</h3>
+<ol>
+  <li>Open the <strong>NET</strong> tab</li>
+  <li>Select a discovered peer from the list</li>
+  <li>Type a message and click <strong>SEND</strong>, or key Morse using your paddle and send the decoded text</li>
+  <li>The message is sent via HTTP to the peer's <code>/receive_morse</code> endpoint</li>
+  <li>The receiving Pi plays the message through its speaker and shows it in the inbox</li>
+</ol>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Device name</div>
+  Set your device name in <strong>CONFIG → Device Name</strong> or directly in the NET tab. This is how other Pis identify your device.
+</div>
+
+<!-- ── STATS MODE ─────────────────────────────────────── -->
+<h2 id="stats-mode">Statistics</h2>
+<p>The STATS tab shows your practice history:</p>
+<ul>
+  <li><strong>Total attempts</strong> — decode and speed drills combined</li>
+  <li><strong>Correct answers</strong></li>
+  <li><strong>Current streak</strong> — consecutive correct answers</li>
+  <li><strong>Best streak</strong></li>
+</ul>
+<p>Stats are saved to <code>stats.json</code> and persist across restarts and updates. Click <strong>Reset</strong> to start fresh.</p>
+
+<!-- ── CONFIG MODE ────────────────────────────────────── -->
+<h2 id="config-mode">Configuration</h2>
+<p>All settings are configurable live from the <strong>CONFIG</strong> tab — no files to edit, no restarts needed.</p>
+<p>See <a href="#settings-ref">Settings Reference</a> for a full table of every setting.</p>
+
+<h3>Key sections</h3>
+<ul>
+  <li><strong>Input Mode</strong> — switch between straight key (single pin) and iambic paddle (dual pin)</li>
+  <li><strong>Pin Assignment</strong> — choose which BCM pins are used for data, dot, dash, speaker, and ground</li>
+  <li><strong>Audio</strong> — dot frequency, dash frequency, volume, output type (speaker PWM or LED on/off)</li>
+  <li><strong>Speed</strong> — WPM target with a "Test WPM" button that plays "PARIS" at the configured speed</li>
+  <li><strong>Farnsworth Timing</strong> — enable stretched gaps with configurable letter and word gap multipliers</li>
+  <li><strong>Quiz</strong> — difficulty level and word categories</li>
+  <li><strong>Theme</strong> — dark or light UI theme</li>
+  <li><strong>Device Name</strong> — the name shown to other Pis on the network</li>
+</ul>
+
+<!-- ── SHORTCUTS ──────────────────────────────────────── -->
+<h2 id="shortcuts">Keyboard Shortcuts</h2>
+<table>
+  <tr><th>Key</th><th>Action</th></tr>
+  <tr><td><kbd>Space</kbd></td><td>Straight key — hold to dash, tap to dot</td></tr>
+  <tr><td><kbd>Z</kbd></td><td>Dot paddle (iambic / dual-pin mode)</td></tr>
+  <tr><td><kbd>X</kbd></td><td>Dash paddle (iambic / dual-pin mode)</td></tr>
+</table>
+<div class="callout info">
+  <div class="callout-title">ℹ Squeeze keying</div>
+  In dual-pin mode, holding both <kbd>Z</kbd> and <kbd>X</kbd> simultaneously activates squeeze/iambic keying — the keyer alternates between dots and dashes automatically.
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MAINTENANCE
+     ══════════════════════════════════════════════════════ -->
+<h2 id="updating">Updating</h2>
+<p>Use the dedicated update script to pull the latest code while preserving your settings:</p>
+<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update.sh | sudo bash</code></pre>
+
+<p>The update script:</p>
+<ol>
+  <li>Verifies USB HID is configured correctly</li>
+  <li>Pulls the latest code (HTML, Python, word lists, etc.)</li>
+  <li>Preserves <code>settings.json</code> and <code>stats.json</code></li>
+  <li>Recreates the systemd service and restarts</li>
+</ol>
+
+<h3>Manual update</h3>
+<pre><code>sudo git -C /opt/morse-pi pull
+sudo systemctl restart morse-pi</code></pre>
+
+<h2 id="packages">Package Management</h2>
+<p>To upgrade system and Python packages without changing application code:</p>
+<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/packages.sh | sudo bash</code></pre>
+<p>This upgrades <code>flask</code>, <code>gpiozero</code>, <code>pigpio</code>, and other dependencies to their latest versions, then restarts the service. It reports installed versions when complete.</p>
+
+<h2 id="services">Service Management</h2>
+
+<h3>Main web app service</h3>
+<pre><code>sudo systemctl status  morse-pi    # check if running
+sudo systemctl restart morse-pi    # restart
+sudo systemctl stop    morse-pi    # stop
+sudo journalctl -u morse-pi -f     # live logs
+sudo journalctl -u morse-pi -n 50  # last 50 log lines</code></pre>
+
+<h3>USB HID service</h3>
+<pre><code>sudo systemctl status  morse-pi-hid    # check HID gadget status
+sudo systemctl restart morse-pi-hid    # reconfigure USB gadget</code></pre>
+
+<h3>pigpio daemon</h3>
+<pre><code>sudo systemctl status  pigpiod    # check GPIO daemon
+sudo systemctl restart pigpiod    # restart GPIO daemon</code></pre>
+
+<h2 id="autostart">Auto-Start on Boot</h2>
+<p>If you used the installer or updater, Morse-Pi <strong>automatically starts when the Pi boots</strong>. The systemd service:</p>
+<ul>
+  <li>Starts the web server after the network is online</li>
+  <li>Waits for <code>pigpiod</code> and <code>morse-pi-hid</code> services first</li>
+  <li>Restarts automatically if it crashes (3-second delay)</li>
+  <li>Runs as your normal user (not root)</li>
+</ul>
+
+<h3>Verify auto-start</h3>
+<pre><code># Should output "enabled"
+sudo systemctl is-enabled morse-pi
+
+# Check if running
+sudo systemctl status morse-pi</code></pre>
+
+<h3>Fix auto-start manually</h3>
+<pre><code>sudo systemctl daemon-reload
+sudo systemctl enable morse-pi
+sudo systemctl start morse-pi</code></pre>
+
+<!-- ══════════════════════════════════════════════════════
+     USB HID
+     ══════════════════════════════════════════════════════ -->
+<h2 id="hid-setup">USB HID Keyboard Setup</h2>
+<p>Morse-Pi can turn your Raspberry Pi into a <strong>USB keyboard</strong>. When connected to any computer via USB, the Pi appears as a standard HID keyboard device and sends real keystrokes.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li><strong>Pi Zero, Zero W, Zero 2 W, or Pi 4</strong> (must have USB OTG support)</li>
+  <li>Connect via the <strong>USB data port</strong>:
+    <ul>
+      <li>Pi Zero: the port labeled "USB" (not "PWR")</li>
+      <li>Pi 4: USB-C port</li>
+    </ul>
+  </li>
+  <li>A USB <strong>data cable</strong> — some cheap cables are power-only and won't work</li>
+</ul>
+
+<h3>What the installer configures</h3>
+<ol>
+  <li>Adds <code>dtoverlay=dwc2</code> to <code>/boot/config.txt</code> (or <code>/boot/firmware/config.txt</code>)</li>
+  <li>Loads <code>dwc2</code> and <code>libcomposite</code> kernel modules via <code>/etc/modules</code></li>
+  <li>Creates a gadget setup script at <code>/usr/local/bin/morse-pi-hid-setup.sh</code></li>
+  <li>Creates <code>morse-pi-hid.service</code> to run the gadget setup on boot</li>
+  <li>Creates a udev rule (<code>/etc/udev/rules.d/99-morse-pi-hid.rules</code>) so <code>/dev/hidg0</code> is writable by all users</li>
+</ol>
+
+<h2 id="hid-usage">Using USB HID Mode</h2>
+<ol>
+  <li>Connect the Pi to a computer via USB (data port)</li>
+  <li>The computer recognizes it as "Morse Code Keyboard"</li>
+  <li>Open the Morse-Pi web UI → <strong>KB</strong> tab</li>
+  <li>Click <strong>Enable</strong></li>
+  <li>Open a text editor on the computer</li>
+  <li>Key Morse code — decoded characters appear in the text editor</li>
+</ol>
+
+<h2 id="hid-troubleshoot">USB HID Troubleshooting</h2>
+
+<h3><code>/dev/hidg0</code> doesn't exist</h3>
+<ul>
+  <li>Reboot after installation: <code>sudo reboot</code></li>
+  <li>Check if modules are loaded: <code>lsmod | grep dwc2</code></li>
+  <li>Check kernel messages: <code>dmesg | grep -i usb</code></li>
+  <li>Verify the HID service: <code>sudo systemctl status morse-pi-hid</code></li>
+</ul>
+
+<h3>Computer doesn't recognize the keyboard</h3>
+<ul>
+  <li>Use the <strong>data port</strong>, not the power-only port</li>
+  <li>Try a different USB cable (some are power-only)</li>
+  <li>Check Pi USB messages: <code>dmesg | grep -i gadget</code></li>
+</ul>
+
+<h3>Manual HID setup</h3>
+<pre><code># Enable dwc2 overlay
+echo "dtoverlay=dwc2" | sudo tee -a /boot/config.txt
+
+# Add kernel modules
+echo "dwc2" | sudo tee -a /etc/modules
+echo "libcomposite" | sudo tee -a /etc/modules
+
+# Reboot
+sudo reboot</code></pre>
+
+<!-- ══════════════════════════════════════════════════════
+     REFERENCE
+     ══════════════════════════════════════════════════════ -->
+<h2 id="morse-table">Morse Code Table</h2>
+
+<h3>Letters</h3>
+<div class="morse-grid">
+  <div class="morse-cell"><div class="mc-char">A</div><div class="mc-code">·−</div></div>
+  <div class="morse-cell"><div class="mc-char">B</div><div class="mc-code">−···</div></div>
+  <div class="morse-cell"><div class="mc-char">C</div><div class="mc-code">−·−·</div></div>
+  <div class="morse-cell"><div class="mc-char">D</div><div class="mc-code">−··</div></div>
+  <div class="morse-cell"><div class="mc-char">E</div><div class="mc-code">·</div></div>
+  <div class="morse-cell"><div class="mc-char">F</div><div class="mc-code">··−·</div></div>
+  <div class="morse-cell"><div class="mc-char">G</div><div class="mc-code">−−·</div></div>
+  <div class="morse-cell"><div class="mc-char">H</div><div class="mc-code">····</div></div>
+  <div class="morse-cell"><div class="mc-char">I</div><div class="mc-code">··</div></div>
+  <div class="morse-cell"><div class="mc-char">J</div><div class="mc-code">·−−−</div></div>
+  <div class="morse-cell"><div class="mc-char">K</div><div class="mc-code">−·−</div></div>
+  <div class="morse-cell"><div class="mc-char">L</div><div class="mc-code">·−··</div></div>
+  <div class="morse-cell"><div class="mc-char">M</div><div class="mc-code">−−</div></div>
+  <div class="morse-cell"><div class="mc-char">N</div><div class="mc-code">−·</div></div>
+  <div class="morse-cell"><div class="mc-char">O</div><div class="mc-code">−−−</div></div>
+  <div class="morse-cell"><div class="mc-char">P</div><div class="mc-code">·−−·</div></div>
+  <div class="morse-cell"><div class="mc-char">Q</div><div class="mc-code">−−·−</div></div>
+  <div class="morse-cell"><div class="mc-char">R</div><div class="mc-code">·−·</div></div>
+  <div class="morse-cell"><div class="mc-char">S</div><div class="mc-code">···</div></div>
+  <div class="morse-cell"><div class="mc-char">T</div><div class="mc-code">−</div></div>
+  <div class="morse-cell"><div class="mc-char">U</div><div class="mc-code">··−</div></div>
+  <div class="morse-cell"><div class="mc-char">V</div><div class="mc-code">···−</div></div>
+  <div class="morse-cell"><div class="mc-char">W</div><div class="mc-code">·−−</div></div>
+  <div class="morse-cell"><div class="mc-char">X</div><div class="mc-code">−··−</div></div>
+  <div class="morse-cell"><div class="mc-char">Y</div><div class="mc-code">−·−−</div></div>
+  <div class="morse-cell"><div class="mc-char">Z</div><div class="mc-code">−−··</div></div>
+</div>
+
+<h3>Numbers</h3>
+<div class="morse-grid">
+  <div class="morse-cell"><div class="mc-char">0</div><div class="mc-code">−−−−−</div></div>
+  <div class="morse-cell"><div class="mc-char">1</div><div class="mc-code">·−−−−</div></div>
+  <div class="morse-cell"><div class="mc-char">2</div><div class="mc-code">··−−−</div></div>
+  <div class="morse-cell"><div class="mc-char">3</div><div class="mc-code">···−−</div></div>
+  <div class="morse-cell"><div class="mc-char">4</div><div class="mc-code">····−</div></div>
+  <div class="morse-cell"><div class="mc-char">5</div><div class="mc-code">·····</div></div>
+  <div class="morse-cell"><div class="mc-char">6</div><div class="mc-code">−····</div></div>
+  <div class="morse-cell"><div class="mc-char">7</div><div class="mc-code">−−···</div></div>
+  <div class="morse-cell"><div class="mc-char">8</div><div class="mc-code">−−−··</div></div>
+  <div class="morse-cell"><div class="mc-char">9</div><div class="mc-code">−−−−·</div></div>
+</div>
+
+<h3>Punctuation</h3>
+<div class="morse-grid">
+  <div class="morse-cell"><div class="mc-char">.</div><div class="mc-code">·−·−·−</div></div>
+  <div class="morse-cell"><div class="mc-char">,</div><div class="mc-code">−−··−−</div></div>
+  <div class="morse-cell"><div class="mc-char">?</div><div class="mc-code">··−−··</div></div>
+  <div class="morse-cell"><div class="mc-char">'</div><div class="mc-code">·−−−−·</div></div>
+  <div class="morse-cell"><div class="mc-char">!</div><div class="mc-code">−·−·−−</div></div>
+  <div class="morse-cell"><div class="mc-char">/</div><div class="mc-code">−··−·</div></div>
+  <div class="morse-cell"><div class="mc-char">(</div><div class="mc-code">−·−−·</div></div>
+  <div class="morse-cell"><div class="mc-char">)</div><div class="mc-code">−·−−·−</div></div>
+  <div class="morse-cell"><div class="mc-char">&amp;</div><div class="mc-code">·−···</div></div>
+  <div class="morse-cell"><div class="mc-char">:</div><div class="mc-code">−−−···</div></div>
+  <div class="morse-cell"><div class="mc-char">=</div><div class="mc-code">−···−</div></div>
+  <div class="morse-cell"><div class="mc-char">+</div><div class="mc-code">·−·−·</div></div>
+  <div class="morse-cell"><div class="mc-char">-</div><div class="mc-code">−····−</div></div>
+  <div class="morse-cell"><div class="mc-char">@</div><div class="mc-code">·−−·−·</div></div>
+  <div class="morse-cell"><div class="mc-char">_</div><div class="mc-code">··−−·−</div></div>
+  <div class="morse-cell"><div class="mc-char">"</div><div class="mc-code">·−··−·</div></div>
+</div>
+
+<!-- ── TIMING ─────────────────────────────────────────── -->
+<h2 id="timing">Timing &amp; WPM</h2>
+<p>All timing in Morse-Pi is derived from the <strong>dot unit</strong>, which is calculated from your WPM setting:</p>
+<pre><code>dot_unit = 1200ms / WPM</code></pre>
+
+<table>
+  <tr><th>Element</th><th>Duration</th><th>At 20 WPM</th></tr>
+  <tr><td>Dot</td><td>1 unit</td><td>60 ms</td></tr>
+  <tr><td>Dash</td><td>3 units</td><td>180 ms</td></tr>
+  <tr><td>Inter-element gap</td><td>1 unit</td><td>60 ms</td></tr>
+  <tr><td>Letter gap</td><td>3 units</td><td>180 ms</td></tr>
+  <tr><td>Word gap</td><td>7 units</td><td>420 ms</td></tr>
+</table>
+
+<h3>Farnsworth timing</h3>
+<p>Farnsworth timing keeps the characters at full speed but stretches the gaps between them, making it easier for beginners to follow.</p>
+<ul>
+  <li><strong>Letter gap</strong> = 3 × dot_unit × <code>farnsworth_letter_mult</code> (default 2×)</li>
+  <li><strong>Word gap</strong> = 7 × dot_unit × <code>farnsworth_word_mult</code> (default 2×)</li>
+</ul>
+<p>Enable Farnsworth timing in <strong>CONFIG → Farnsworth Mode</strong>.</p>
+
+<!-- ── SETTINGS REFERENCE ─────────────────────────────── -->
+<h2 id="settings-ref">Settings Reference</h2>
+<table>
+  <tr><th>Setting</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>device_name</code></td><td>string</td><td><code>"Morse Pi"</code></td><td>Name shown to other devices on the network</td></tr>
+  <tr><td><code>wpm_target</code></td><td>int</td><td><code>20</code></td><td>Words per minute — all timing derives from this</td></tr>
+  <tr><td><code>pin_mode</code></td><td>string</td><td><code>"single"</code></td><td><code>single</code> = straight key, <code>dual</code> = iambic paddle</td></tr>
+  <tr><td><code>data_pin</code></td><td>int</td><td><code>17</code></td><td>BCM pin for straight key input</td></tr>
+  <tr><td><code>dot_pin</code></td><td>int</td><td><code>22</code></td><td>BCM pin for dot paddle (dual mode)</td></tr>
+  <tr><td><code>dash_pin</code></td><td>int</td><td><code>27</code></td><td>BCM pin for dash paddle (dual mode)</td></tr>
+  <tr><td><code>speaker_pin</code></td><td>int</td><td><code>18</code></td><td>BCM pin for buzzer/speaker (PWM)</td></tr>
+  <tr><td><code>output_type</code></td><td>string</td><td><code>"speaker"</code></td><td><code>speaker</code> = PWM audio, <code>led</code> = on/off</td></tr>
+  <tr><td><code>ground_pin</code></td><td>int|null</td><td><code>null</code></td><td>Legacy single ground output pin</td></tr>
+  <tr><td><code>grounded_pins</code></td><td>list</td><td><code>[]</code></td><td>Multiple GPIO pins driven LOW as grounds</td></tr>
+  <tr><td><code>dot_freq</code></td><td>int</td><td><code>700</code></td><td>Dot tone frequency in Hz (100–4000)</td></tr>
+  <tr><td><code>dash_freq</code></td><td>int</td><td><code>500</code></td><td>Dash tone frequency in Hz (100–4000)</td></tr>
+  <tr><td><code>volume</code></td><td>float</td><td><code>0.75</code></td><td>PWM duty cycle (0.01–0.95)</td></tr>
+  <tr><td><code>theme</code></td><td>string</td><td><code>"dark"</code></td><td>UI theme: <code>dark</code> or <code>light</code></td></tr>
+  <tr><td><code>difficulty</code></td><td>string</td><td><code>"easy"</code></td><td>Quiz difficulty: <code>easy</code>, <code>medium</code>, <code>hard</code></td></tr>
+  <tr><td><code>farnsworth_enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable Farnsworth timing</td></tr>
+  <tr><td><code>farnsworth_letter_mult</code></td><td>float</td><td><code>2.0</code></td><td>Letter gap multiplier</td></tr>
+  <tr><td><code>farnsworth_word_mult</code></td><td>float</td><td><code>2.0</code></td><td>Word gap multiplier</td></tr>
+  <tr><td><code>kb_enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable USB HID keyboard output</td></tr>
+  <tr><td><code>kb_mode</code></td><td>string</td><td><code>"letters"</code></td><td><code>letters</code> = decoded chars, <code>custom</code> = mapped keys</td></tr>
+  <tr><td><code>kb_dot_key</code></td><td>string</td><td><code>"z"</code></td><td>Key sent for dot in custom mode</td></tr>
+  <tr><td><code>kb_dash_key</code></td><td>string</td><td><code>"x"</code></td><td>Key sent for dash in custom mode</td></tr>
+</table>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Settings persistence</div>
+  All settings are stored in <code>/opt/morse-pi/morse-translator/settings.json</code>. New settings added in updates are automatically merged with your existing file — you never lose your configuration.
+</div>
+
+<!-- ── API ROUTES ─────────────────────────────────────── -->
+<h2 id="api-routes">API Routes</h2>
+<p>Morse-Pi exposes a REST-like API. The web UI uses these internally, but they can be called from scripts or other tools.</p>
+
+<h3>Core</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Description</th></tr>
+  <tr><td><code>/</code></td><td>GET</td><td>Main web UI</td></tr>
+  <tr><td><code>/status</code></td><td>GET</td><td>Full app state (polled by UI every 250ms)</td></tr>
+  <tr><td><code>/get_settings</code></td><td>GET</td><td>Current settings</td></tr>
+  <tr><td><code>/save_settings</code></td><td>POST</td><td>Update and persist settings</td></tr>
+  <tr><td><code>/set_mode</code></td><td>POST</td><td>Switch active mode</td></tr>
+  <tr><td><code>/clear</code></td><td>POST</td><td>Clear all output buffers</td></tr>
+</table>
+
+<h3>Morse operations</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Description</th></tr>
+  <tr><td><code>/encode</code></td><td>POST</td><td>Text → Morse code</td></tr>
+  <tr><td><code>/play</code></td><td>POST</td><td>Play last encoded text as audio</td></tr>
+  <tr><td><code>/decode_submit</code></td><td>POST</td><td>Submit decode quiz answer</td></tr>
+  <tr><td><code>/submit_test</code></td><td>POST</td><td>Submit speed test for scoring</td></tr>
+  <tr><td><code>/key_press</code></td><td>POST</td><td>Simulate straight key press/release</td></tr>
+  <tr><td><code>/key_press_dual</code></td><td>POST</td><td>Simulate dot/dash paddle press/release</td></tr>
+</table>
+
+<h3>Networking</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Description</th></tr>
+  <tr><td><code>/peers</code></td><td>GET</td><td>Device identity + discovered peers</td></tr>
+  <tr><td><code>/send_to_peer</code></td><td>POST</td><td>Send message to another Pi</td></tr>
+  <tr><td><code>/receive_morse</code></td><td>POST</td><td>Receive incoming Morse from peer</td></tr>
+  <tr><td><code>/net_status</code></td><td>GET</td><td>Peers + inbox</td></tr>
+</table>
+
+<h3>USB HID keyboard</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Description</th></tr>
+  <tr><td><code>/kb_status</code></td><td>GET</td><td>HID keyboard status</td></tr>
+  <tr><td><code>/kb_enable</code></td><td>POST</td><td>Enable/disable keyboard mode</td></tr>
+  <tr><td><code>/kb_mode</code></td><td>POST</td><td>Set letters or custom mode</td></tr>
+  <tr><td><code>/kb_set_keys</code></td><td>POST</td><td>Set custom dot/dash key mappings</td></tr>
+</table>
+
+<!-- ── PROJECT STRUCTURE ──────────────────────────────── -->
+<h2 id="project-structure">Project Structure</h2>
+<pre><code>Morse-Pi/
+├── install.sh                  ← fresh installer (HID + packages + clone + systemd)
+├── update.sh                   ← updater (verify HID + pull code + restart)
+├── packages.sh                 ← package updater (upgrade apt + pip packages)
+├── docs/                       ← this documentation site (GitHub Pages)
+│   └── index.html
+└── morse-translator/
+    ├── app.py                  ← Flask app, GPIO, Morse timing, networking, HID
+    ├── settings.json           ← user settings (auto-created, preserved on update)
+    ├── stats.json              ← user statistics (auto-created, preserved on update)
+    ├── words.json              ← word list for quiz/speed modes
+    └── templates/
+        ├── index.html          ← single-page web UI
+        └── diag.html           ← GPIO live diagnostic popup
+
+# Created by installer on Raspberry Pi:
+/etc/systemd/system/morse-pi.service       ← auto-start on boot
+/etc/systemd/system/morse-pi-hid.service   ← USB HID gadget service
+/usr/local/bin/morse-pi-hid-setup.sh       ← USB HID configuration script
+/etc/udev/rules.d/99-morse-pi-hid.rules    ← udev rule for /dev/hidg0</code></pre>
+
+<!-- ══════════════════════════════════════════════════════
+     TROUBLESHOOTING
+     ══════════════════════════════════════════════════════ -->
+<h2 id="troubleshooting">Common Issues</h2>
+
+<h3>The web UI won't load</h3>
+<ol>
+  <li>Check the service is running: <code>sudo systemctl status morse-pi</code></li>
+  <li>Check the logs: <code>sudo journalctl -u morse-pi -n 50</code></li>
+  <li>Make sure you're using the right IP and port (default 5000)</li>
+  <li>If ufw is active, verify port 5000 is open: <code>sudo ufw status</code></li>
+</ol>
+
+<h3>Service won't start</h3>
+<ol>
+  <li>Check logs: <code>sudo journalctl -u morse-pi -n 50</code></li>
+  <li>Try running manually: <code>cd /opt/morse-pi/morse-translator && python3 app.py</code></li>
+  <li>Check file permissions: <code>ls -la /opt/morse-pi/morse-translator/</code></li>
+  <li>Re-run the updater: <code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update.sh | sudo bash</code></li>
+</ol>
+
+<h3>Settings aren't saving</h3>
+<ul>
+  <li>Check file permissions: <code>ls -la /opt/morse-pi/morse-translator/settings.json</code></li>
+  <li>The file should be owned by your user (not root): <code>sudo chown $USER:$USER /opt/morse-pi/morse-translator/settings.json</code></li>
+</ul>
+
+<!-- ── GPIO ERRORS ────────────────────────────────────── -->
+<h2 id="gpio-errors">GPIO Errors</h2>
+
+<h3>GPIO indicator shows red / "GPIO unavailable"</h3>
+<ul>
+  <li>You may not be on a Raspberry Pi — GPIO only works on Pi hardware</li>
+  <li>Check that <code>pigpiod</code> is running: <code>sudo systemctl status pigpiod</code></li>
+  <li>Start it: <code>sudo systemctl start pigpiod</code></li>
+  <li>Make sure your user is in the <code>gpio</code> group: <code>groups</code></li>
+  <li>Add yourself: <code>sudo usermod -aG gpio $USER</code> then log out/in</li>
+</ul>
+
+<h3>No sound from buzzer</h3>
+<ul>
+  <li>Check wiring — buzzer positive to the speaker pin (default BCM 18), negative to GND</li>
+  <li>Verify pin assignment in CONFIG matches your wiring</li>
+  <li>Check that output type is set to "speaker" (not "led")</li>
+  <li>Try the <strong>GPIO Diagnostic</strong> page (click the GPIO indicator dot) to see live pin states</li>
+  <li>Increase volume in CONFIG</li>
+</ul>
+
+<h3>Key presses not detected</h3>
+<ul>
+  <li>Check wiring — key should short the data pin to GND when pressed</li>
+  <li>Verify pin assignment in CONFIG</li>
+  <li>Make sure pin mode matches your hardware (single = straight key, dual = iambic)</li>
+  <li>Use the GPIO Diagnostic page to see if the pin toggles when you press the key</li>
+  <li>Internal pull-ups are enabled — no external resistors needed</li>
+</ul>
+
+<!-- ── CONNECTION ERRORS ──────────────────────────────── -->
+<h2 id="connection-errors">Connection Errors</h2>
+
+<h3>"Connection to Pi lost" message</h3>
+<p>This appears when the browser can't reach the Pi's web server. Common causes:</p>
+<ul>
+  <li><strong>Pi rebooting</strong> — wait 30–60 seconds for boot to complete</li>
+  <li><strong>Service crashed</strong> — check with <code>sudo systemctl status morse-pi</code></li>
+  <li><strong>Network change</strong> — Pi may have gotten a new IP address. Check: <code>hostname -I</code></li>
+  <li><strong>WiFi interference</strong> — move closer to the router or use Ethernet</li>
+</ul>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Auto-reconnect</div>
+  The UI will automatically reconnect when the Pi becomes reachable again. The connection indicator dot in the header turns green when connected and red when disconnected.
+</div>
+
+<h3>Slow or laggy UI</h3>
+<ul>
+  <li>The UI polls the Pi every 250ms — on a Pi Zero this is near its limit</li>
+  <li>Make sure no other heavy processes are running on the Pi</li>
+  <li>Use a wired Ethernet connection if possible for lower latency</li>
+</ul>
+
+<!-- ── HID ERRORS ─────────────────────────────────────── -->
+<h2 id="hid-errors">USB HID Errors</h2>
+
+<h3>"USB HID not available" in KB tab</h3>
+<ul>
+  <li><code>/dev/hidg0</code> doesn't exist — reboot after installation</li>
+  <li>Check modules: <code>lsmod | grep dwc2</code> — should show <code>dwc2</code> and <code>libcomposite</code></li>
+  <li>Check service: <code>sudo systemctl status morse-pi-hid</code></li>
+  <li>Check kernel config: <code>grep dtoverlay=dwc2 /boot/config.txt</code></li>
+</ul>
+
+<h3>"Permission denied" writing to /dev/hidg0</h3>
+<ul>
+  <li>Fix permissions: <code>sudo chmod 666 /dev/hidg0</code></li>
+  <li>The udev rule should handle this automatically — run <code>sudo udevadm trigger</code></li>
+  <li>Verify rule exists: <code>cat /etc/udev/rules.d/99-morse-pi-hid.rules</code></li>
+</ul>
+
+<h3>Wrong characters being typed</h3>
+<ul>
+  <li>HID scan codes assume a US keyboard layout</li>
+  <li>If your computer has a different keyboard layout, some characters may map differently</li>
+</ul>
+
+<!-- ── NETWORK ERRORS ─────────────────────────────────── -->
+<h2 id="network-errors">Network Errors</h2>
+
+<h3>No peers discovered</h3>
+<ul>
+  <li>Both Pis must be on the <strong>same subnet</strong> (same WiFi network)</li>
+  <li>UDP broadcast (port 5001) must not be blocked by the router</li>
+  <li>Wait at least 5 seconds — beacons are sent every 3 seconds</li>
+  <li>Some enterprise/hotel WiFi networks block broadcast traffic — use a home network</li>
+</ul>
+
+<h3>Messages not arriving</h3>
+<ul>
+  <li>Verify the peer shows as online in the NET tab (peers disappear after 15 seconds without a beacon)</li>
+  <li>Check that port 5000 is reachable on the target Pi: <code>curl http://&lt;peer-ip&gt;:5000/status</code></li>
+  <li>Check for firewall rules: <code>sudo ufw status</code></li>
+</ul>
+
+<!-- ── Footer ─────────────────────────────────────────── -->
+<hr>
+<p style="text-align:center;color:var(--text-dim);font-size:.85rem;margin-top:32px;">
+  Morse-Pi &mdash; MIT License &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi">GitHub</a> &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues">Report an Issue</a>
+</p>
+
+</main>
+</div>
+
+<!-- ── Back to top button ─────────────────────────────── -->
+<a class="back-top" id="back-top" href="#overview" title="Back to top">↑</a>
+
+<script>
+// ── Sidebar active link highlighting ──
+const navLinks=document.querySelectorAll('.sidebar .nav-link');
+const sections=[];
+navLinks.forEach(link=>{
+  const id=link.getAttribute('href')?.slice(1);
+  if(id){const el=document.getElementById(id);if(el)sections.push({id,el,link});}
+});
+function updateActive(){
+  let current='';
+  for(const s of sections){
+    if(s.el.getBoundingClientRect().top<=100)current=s.id;
+  }
+  navLinks.forEach(l=>l.classList.remove('active'));
+  const active=sections.find(s=>s.id===current);
+  if(active)active.link.classList.add('active');
+}
+window.addEventListener('scroll',updateActive,{passive:true});
+updateActive();
+
+// ── Back to top ──
+const btn=document.getElementById('back-top');
+window.addEventListener('scroll',()=>{btn.classList.toggle('visible',window.scrollY>400);},{passive:true});
+
+// ── Mobile sidebar close on link click ──
+navLinks.forEach(link=>{
+  link.addEventListener('click',()=>{document.querySelector('.sidebar').classList.remove('open');});
+});
+</script>
+</body>
+</html>

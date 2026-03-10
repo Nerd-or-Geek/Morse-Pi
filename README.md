@@ -1,5 +1,7 @@
 # Morse-Pi
 
+📖 **[Full Documentation](https://nerd-or-geek.github.io/Morse-Pi/)** — setup guides, usage, troubleshooting, and reference
+
 A full-featured Morse code trainer and practice tool built with Flask, designed to run on a Raspberry Pi with a physical key or paddle. Access everything from any browser on your local network — no app to install on your phone or computer.
 
 ![Morse-Pi UI](https://img.shields.io/badge/platform-Raspberry%20Pi-red) ![Python](https://img.shields.io/badge/python-3.9%2B-blue) ![Flask](https://img.shields.io/badge/flask-3.x-lightgrey) ![License](https://img.shields.io/badge/license-MIT-green)
