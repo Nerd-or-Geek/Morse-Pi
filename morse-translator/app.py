@@ -351,6 +351,7 @@ if GPIO_AVAILABLE:
 beeper     = None       # PWMOutputDevice for single-pin speaker mode
 _wave_id   = None      # pigpio wave ID for dual-pin speaker mode
 _spk_pins  = (None, None)  # (pin1, pin2) tuple for dual-pin mode tracking
+led_out2   = None       # OutputDevice for speaker_pin2 in LED mode (no-pigpio fallback)
 data_btn   = None
 dot_btn    = None
 dash_btn   = None
@@ -765,15 +766,16 @@ def _start_wave(freq):
 
 
 def init_gpio():
-    global beeper, data_btn, dot_btn, dash_btn, ground_out, grounded_outputs, _spk_pins
+    global beeper, data_btn, dot_btn, dash_btn, ground_out, grounded_outputs, _spk_pins, led_out2
     if not GPIO_AVAILABLE:
         return
     try:
         _stop_wave()  # stop any active waveform before reconfiguring
-        for dev in [beeper, data_btn, dot_btn, dash_btn, ground_out]:
+        for dev in [beeper, data_btn, dot_btn, dash_btn, ground_out, led_out2]:
             if dev:
                 try: dev.close()
                 except: pass
+        led_out2 = None
         # Close any existing grounded outputs
         for dev in grounded_outputs:
             if dev:
@@ -784,10 +786,19 @@ def init_gpio():
         sp1 = settings.get("speaker_pin")
         sp2 = settings.get("speaker_pin2")
         _spk_pins = (sp1, sp2)
+        output_type = settings.get("output_type", "speaker")
 
         # Dual-pin speaker: use pigpio wave for push-pull differential drive
         if sp2 is not None and _pigpio:
             beeper = None  # no gpiozero PWMOutputDevice needed
+        elif sp2 is not None and output_type == "led" and not _pigpio:
+            # Dual-pin LED without pigpio: use OutputDevice for each pin
+            beeper = PWMOutputDevice(
+                sp1,
+                frequency=max(1, int(settings["dot_freq"])),
+                initial_value=0
+            )
+            led_out2 = OutputDevice(sp2, initial_value=False)
         else:
             # Single-pin speaker: use gpiozero PWMOutputDevice
             # When other terminal is at 3.3V, idle state must be HIGH (3.3V) to avoid DC through speaker
@@ -880,6 +891,9 @@ def play_tone(freq, duration=None, duty=None):
                     # LED on: drive pin fully on (1.0 = HIGH = LED lights)
                     beeper.frequency = 1000
                     beeper.value = 1.0
+                    # Also drive pin2 HIGH if configured (no-pigpio dual-LED fallback)
+                    if led_out2:
+                        led_out2.on()
                 else:
                     vol = max(0.01, min(0.95, vol))
                     beeper.frequency = max(100, min(4000, int(freq)))
@@ -889,6 +903,8 @@ def play_tone(freq, duration=None, duty=None):
                     time.sleep(duration)
                     if output_type == "led":
                         beeper.value = 0
+                        if led_out2:
+                            led_out2.off()
                     else:
                         beeper.value = off_val
         except Exception:
@@ -912,6 +928,8 @@ def stop_tone():
             if output_type == "led":
                 # LED off
                 beeper.value = 0
+                if led_out2:
+                    led_out2.off()
             else:
                 # When reference is 3.3V, idle = HIGH (no voltage diff); when GND, idle = LOW
                 gnd_mode = settings.get("speaker_gnd_mode", "3v3")
