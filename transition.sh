@@ -85,7 +85,12 @@ fi
 # ── Disk space check ──────────────────────────────────────────────────────────
 # NOTE: /tmp on many Pis is tmpfs (RAM) — we use /var/tmp which is on the real disk.
 WORK_DIR="/var/tmp/morse-pi-build"
+
+# Always clean up leftovers from previous failed runs
+rm -rf /tmp/zig.tar.xz /tmp/zig-extract 2>/dev/null || true
+rm -rf "${WORK_DIR}" 2>/dev/null || true
 mkdir -p "${WORK_DIR}" 2>/dev/null || true
+
 AVAIL_ROOT_MB=$(df -BM / 2>/dev/null | awk 'NR==2{gsub(/M/,""); print $4}' || echo 0)
 
 if [[ "${DEPLOY_ONLY}" != "true" ]]; then
