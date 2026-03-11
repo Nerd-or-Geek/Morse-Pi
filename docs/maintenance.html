@@ -29,7 +29,16 @@
 </nav>
 
 <!-- ═══ MAIN CONTENT ═══ -->
-<div class="page-wrap">
+<div class="page-wrap has-sidebar">
+<aside class="sidebar">
+  <div class="sidebar-title">On this page</div>
+  <ul class="sidebar-links">
+    <li><a href="#updating">Updating</a></li>
+    <li><a href="#packages">Package Management</a></li>
+    <li><a href="#services">Service Management</a></li>
+    <li><a href="#autostart">Auto-Start on Boot</a></li>
+  </ul>
+</aside>
 <main class="content">
 
 <h1>Maintenance</h1>
@@ -111,6 +120,20 @@ sudo systemctl start morse-pi</code></pre>
 <script>
 const btn=document.getElementById('back-top');
 window.addEventListener('scroll',()=>{btn.classList.toggle('visible',window.scrollY>400);},{passive:true});
+(function(){
+  const links=document.querySelectorAll('.sidebar-links a');
+  const ids=Array.from(links).map(a=>a.getAttribute('href').slice(1));
+  function update(){
+    let active='';
+    for(let i=ids.length-1;i>=0;i--){
+      const el=document.getElementById(ids[i]);
+      if(el&&el.getBoundingClientRect().top<=140){active=ids[i];break;}
+    }
+    links.forEach(a=>{a.classList.toggle('active',a.getAttribute('href')==='#'+active);});
+  }
+  window.addEventListener('scroll',update,{passive:true});
+  update();
+})();
 </script>
 </body>
 </html>

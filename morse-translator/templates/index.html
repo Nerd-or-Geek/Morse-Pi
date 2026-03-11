@@ -863,11 +863,11 @@ function renderSettings(){
         <div class="settings-grid">
           <div class="setting-row">
             <div class="setting-label">Speaker Pin 1 (BCM)</div>
-            <div class="setting-input-row"><input class="input-field" type="number" id="s-speaker_pin" value="${s.speaker_pin}" min="2" max="27"><button class="btn btn-primary" onclick="previewTone()">Test</button></div>
+            <div class="setting-input-row"><select class="input-field" id="s-speaker_pin">${(()=>{let o='';for(let p=2;p<=27;p++)o+='<option value="'+p+'"'+(p===s.speaker_pin?' selected':'')+'>BCM '+p+'</option>';return o;})()}</select><button class="btn btn-primary" onclick="previewTone()">Test</button></div>
           </div>
           <div class="setting-row">
             <div class="setting-label">Speaker Pin 2 (BCM)</div>
-            <div class="setting-input-row"><input class="input-field" type="number" id="s-speaker_pin2" value="${s.speaker_pin2!=null?s.speaker_pin2:''}" min="2" max="27" placeholder="None (single-pin)"></div>
+            <div class="setting-input-row"><select class="input-field" id="s-speaker_pin2"><option value=""${s.speaker_pin2==null?' selected':''}>None (single-pin)</option>${(()=>{let o='';for(let p=2;p<=27;p++)o+='<option value="'+p+'"'+(p===s.speaker_pin2?' selected':'')+'>BCM '+p+'</option>';return o;})()}</select></div>
             <div class="setting-help">${s.speaker_pin2!=null
               ?'<span class="tag tag-green">Dual-Pin (Push-Pull)</span> &mdash; Anti-phase drive doubles the voltage swing for louder, cleaner audio. Both pins drive the speaker differentially.'
               :'<span class="tag tag-blue">Single-Pin</span> &mdash; Set a second pin to enable push-pull differential speaker drive for improved sound.'}</div>
@@ -1863,9 +1863,12 @@ function setPinMode(mode){settings.pin_mode=mode;renderContent();}
 function setOutputType(type){settings.output_type=type;renderContent();}
 function setSpeakerGndMode(mode){settings.speaker_gnd_mode=mode;renderContent();}
 function saveSettings(){
-  const keys=['speaker_pin','dot_freq','dash_freq','wpm_target','difficulty','data_pin','dot_pin','dash_pin'];
+  const keys=['dot_freq','dash_freq','wpm_target','difficulty','data_pin','dot_pin','dash_pin'];
   const data={pin_mode:settings.pin_mode,output_type:settings.output_type,speaker_gnd_mode:settings.speaker_gnd_mode||'3v3',use_external_switch:settings.use_external_switch||false};
   keys.forEach(k=>{const el=document.getElementById('s-'+k);if(el)data[k]=el.value;});
+  // Speaker pin 1: from select
+  const sp1El=document.getElementById('s-speaker_pin');
+  if(sp1El) data.speaker_pin=parseInt(sp1El.value);
   // Speaker pin 2: nullable
   const sp2El=document.getElementById('s-speaker_pin2');
   if(sp2El) data.speaker_pin2=sp2El.value?parseInt(sp2El.value):null;

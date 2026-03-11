@@ -29,7 +29,26 @@
 </nav>
 
 <!-- ═══ MAIN CONTENT ═══ -->
-<div class="page-wrap">
+<div class="page-wrap has-sidebar">
+<aside class="sidebar">
+  <div class="sidebar-title">On this page</div>
+  <ul class="sidebar-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#requirements">Requirements</a></li>
+    <li><a href="#installation">Installation</a></li>
+    <li><a href="#wiring">GPIO Wiring</a></li>
+    <li><a href="#modes">Modes &amp; Tabs</a></li>
+    <li><a href="#send-mode">SEND Mode</a></li>
+    <li><a href="#encode-mode">ENCODE Mode</a></li>
+    <li><a href="#decode-mode">DECODE Mode</a></li>
+    <li><a href="#speed-mode">SPEED Trainer</a></li>
+    <li><a href="#keyboard-mode">USB Keyboard</a></li>
+    <li><a href="#network-mode">Networking</a></li>
+    <li><a href="#stats-mode">Statistics</a></li>
+    <li><a href="#config-mode">Configuration</a></li>
+    <li><a href="#shortcuts">Keyboard Shortcuts</a></li>
+  </ul>
+</aside>
 <main class="content">
 
 <!-- ── FEATURES ────────────────────────────────────────── -->
@@ -344,6 +363,21 @@ python3 app.py</code></pre>
 <script>
 const btn=document.getElementById('back-top');
 window.addEventListener('scroll',()=>{btn.classList.toggle('visible',window.scrollY>400);},{passive:true});
+// Scroll-spy: highlight active sidebar link
+(function(){
+  const links=document.querySelectorAll('.sidebar-links a');
+  const ids=Array.from(links).map(a=>a.getAttribute('href').slice(1));
+  function update(){
+    let active='';
+    for(let i=ids.length-1;i>=0;i--){
+      const el=document.getElementById(ids[i]);
+      if(el&&el.getBoundingClientRect().top<=140){active=ids[i];break;}
+    }
+    links.forEach(a=>{a.classList.toggle('active',a.getAttribute('href')==='#'+active);});
+  }
+  window.addEventListener('scroll',update,{passive:true});
+  update();
+})();
 </script>
 </body>
 </html>

@@ -29,7 +29,17 @@
 </nav>
 
 <!-- ═══ MAIN CONTENT ═══ -->
-<div class="page-wrap">
+<div class="page-wrap has-sidebar">
+<aside class="sidebar">
+  <div class="sidebar-title">On this page</div>
+  <ul class="sidebar-links">
+    <li><a href="#morse-table">Morse Code Table</a></li>
+    <li><a href="#timing">Timing &amp; WPM</a></li>
+    <li><a href="#settings-ref">Settings Reference</a></li>
+    <li><a href="#api-routes">API Routes</a></li>
+    <li><a href="#project-structure">Project Structure</a></li>
+  </ul>
+</aside>
 <main class="content">
 
 <h1>Reference</h1>
@@ -244,6 +254,20 @@
 <script>
 const btn=document.getElementById('back-top');
 window.addEventListener('scroll',()=>{btn.classList.toggle('visible',window.scrollY>400);},{passive:true});
+(function(){
+  const links=document.querySelectorAll('.sidebar-links a');
+  const ids=Array.from(links).map(a=>a.getAttribute('href').slice(1));
+  function update(){
+    let active='';
+    for(let i=ids.length-1;i>=0;i--){
+      const el=document.getElementById(ids[i]);
+      if(el&&el.getBoundingClientRect().top<=140){active=ids[i];break;}
+    }
+    links.forEach(a=>{a.classList.toggle('active',a.getAttribute('href')==='#'+active);});
+  }
+  window.addEventListener('scroll',update,{passive:true});
+  update();
+})();
 </script>
 </body>
 </html>
