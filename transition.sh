@@ -68,8 +68,19 @@ if [[ ! -d "${APP_DIR}" ]]; then
   die "Python installation not found at ${APP_DIR}. Run install.sh first."
 fi
 
+# ── Update repo to get Zig source ─────────────────────────────────────────────
 if [[ ! -d "${ZIG_SRC}" ]]; then
-  die "Zig source not found at ${ZIG_SRC}. Make sure morse-translator-zig/ exists."
+  if [[ -d "${INSTALL_DIR}/.git" ]]; then
+    info "Zig source not found — pulling latest from Git…"
+    cd "${INSTALL_DIR}"
+    git fetch --all --prune 2>/dev/null || true
+    git reset --hard origin/main 2>/dev/null || git pull --ff-only || die "Git pull failed"
+    ok "Repository updated"
+  fi
+fi
+
+if [[ ! -d "${ZIG_SRC}" ]]; then
+  die "Zig source not found at ${ZIG_SRC}. Make sure morse-translator-zig/ exists in the repo."
 fi
 
 # ── Resolve run user ──────────────────────────────────────────────────────────
