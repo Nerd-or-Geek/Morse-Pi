@@ -66,42 +66,49 @@ if [[ $EUID -ne 0 ]]; then
   die "Run this script with sudo:  sudo bash transition.sh"
 fi
 
+# ── Pull the full repo (ensure morse-translator-zig/ is present) ──────────────
+banner "Updating Repository"
+
+if [[ -d "${INSTALL_DIR}/.git" ]]; then
+  info "Git repo found at ${INSTALL_DIR} — pulling latest…"
+  cd "${INSTALL_DIR}"
+  git fetch --all --prune || true
+  git checkout "${BRANCH}" 2>/dev/null || true
+  git reset --hard "origin/${BRANCH}" || die "Git reset failed"
+  ok "Repository updated via git pull"
+elif [[ -d "${INSTALL_DIR}" ]]; then
+  # Install dir exists but no .git — back up data, re-clone, restore
+  info "No git repo at ${INSTALL_DIR} — re-cloning full repo…"
+  TMPBACKUP="$(mktemp -d)"
+  # Preserve user data
+  for f in settings.json stats.json words.json; do
+    [[ -f "${APP_DIR}/${f}" ]] && cp "${APP_DIR}/${f}" "${TMPBACKUP}/"
+  done
+  [[ -d "${APP_DIR}/templates" ]] && cp -r "${APP_DIR}/templates" "${TMPBACKUP}/templates"
+  # Re-clone
+  rm -rf "${INSTALL_DIR}"
+  git clone --branch "${BRANCH}" "${REPO_URL}" "${INSTALL_DIR}" || die "Git clone failed"
+  # Restore user data
+  for f in settings.json stats.json words.json; do
+    [[ -f "${TMPBACKUP}/${f}" ]] && cp "${TMPBACKUP}/${f}" "${APP_DIR}/${f}"
+  done
+  [[ -d "${TMPBACKUP}/templates" ]] && cp -r "${TMPBACKUP}/templates/"* "${APP_DIR}/templates/" 2>/dev/null || true
+  rm -rf "${TMPBACKUP}"
+  ok "Full repo cloned and user data preserved"
+else
+  info "No installation found — cloning fresh…"
+  git clone --branch "${BRANCH}" "${REPO_URL}" "${INSTALL_DIR}" || die "Git clone failed"
+  ok "Repository cloned"
+fi
+
 if [[ ! -d "${APP_DIR}" ]]; then
-  die "Python installation not found at ${APP_DIR}. Run install.sh first."
-fi
-
-# ── Update repo to get Zig source ─────────────────────────────────────────────
-if [[ ! -d "${ZIG_SRC}" ]]; then
-  info "Zig source not found — updating repository…"
-  if [[ -d "${INSTALL_DIR}/.git" ]]; then
-    # Existing git repo — pull latest
-    cd "${INSTALL_DIR}"
-    git fetch --all --prune || true
-    git checkout "${BRANCH}" 2>/dev/null || true
-    git reset --hard "origin/${BRANCH}" || die "Git reset failed"
-    ok "Repository updated via git pull"
-  else
-    # No git repo — clone fresh into a temp dir and copy zig source in
-    info "No git repo found at ${INSTALL_DIR} — cloning from ${REPO_URL}…"
-    TMPCLONE="$(mktemp -d)"
-    git clone --depth 1 --branch "${BRANCH}" "${REPO_URL}" "${TMPCLONE}" || die "Git clone failed"
-    # Copy the zig source directory into the install dir
-    if [[ -d "${TMPCLONE}/morse-translator-zig" ]]; then
-      cp -r "${TMPCLONE}/morse-translator-zig" "${INSTALL_DIR}/morse-translator-zig"
-      ok "Zig source copied from fresh clone"
-    else
-      rm -rf "${TMPCLONE}"
-      die "morse-translator-zig/ not found in the repository. Is it pushed to ${BRANCH}?"
-    fi
-    # Also copy transition.sh itself and any other new files
-    cp -f "${TMPCLONE}/transition.sh" "${INSTALL_DIR}/transition.sh" 2>/dev/null || true
-    rm -rf "${TMPCLONE}"
-  fi
+  die "morse-translator/ not found at ${APP_DIR}. Is the repo structured correctly?"
 fi
 
 if [[ ! -d "${ZIG_SRC}" ]]; then
-  die "Zig source still not found at ${ZIG_SRC} after update. Is morse-translator-zig/ pushed to the ${BRANCH} branch?"
+  die "morse-translator-zig/ not found at ${ZIG_SRC}. Is it pushed to the ${BRANCH} branch?"
 fi
+ok "Zig source found at ${ZIG_SRC}"
 
 # ── Resolve run user ──────────────────────────────────────────────────────────
 if [[ -n "${SUDO_USER:-}" ]]; then
