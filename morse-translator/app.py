@@ -858,7 +858,7 @@ def play_tone(freq, duration=None, duty=None):
             if _dual:
                 # Dual-pin push-pull speaker via pigpio waves
                 if output_type == "led":
-                    # LED mode: just drive pin1 HIGH, pin2 LOW (static)
+                    # LED mode: just drive pin1 HIGH, pin2 LOW (static on)
                     _stop_wave()
                     _pigpio.write(_spk_pins[0], 1)
                     _pigpio.write(_spk_pins[1], 0)
@@ -867,15 +867,19 @@ def play_tone(freq, duration=None, duty=None):
 
                 if duration:
                     time.sleep(duration)
-                    _stop_wave()
+                    if output_type == "led":
+                        _pigpio.write(_spk_pins[0], 0)
+                        _pigpio.write(_spk_pins[1], 0)
+                    else:
+                        _stop_wave()
             else:
                 # Single-pin PWM via gpiozero
                 vol = float(duty) if duty is not None else settings["volume"]
 
                 if output_type == "led":
-                    # LED on: for 3.3V ref LOW drives current; for GND ref HIGH drives current
+                    # LED on: drive pin fully on (1.0 = HIGH = LED lights)
                     beeper.frequency = 1000
-                    beeper.value = 0 if gnd_mode == "3v3" else 1.0
+                    beeper.value = 1.0
                 else:
                     vol = max(0.01, min(0.95, vol))
                     beeper.frequency = max(100, min(4000, int(freq)))
@@ -883,20 +887,35 @@ def play_tone(freq, duration=None, duty=None):
 
                 if duration:
                     time.sleep(duration)
-                    beeper.value = off_val
+                    if output_type == "led":
+                        beeper.value = 0
+                    else:
+                        beeper.value = off_val
         except Exception:
             pass
 
 def stop_tone():
     """Stop any active tone output."""
     _dual = _spk_pins[1] is not None and _pigpio
+    output_type = settings.get("output_type", "speaker")
     if _dual:
-        _stop_wave()
+        if output_type == "led":
+            try:
+                _pigpio.write(_spk_pins[0], 0)
+                _pigpio.write(_spk_pins[1], 0)
+            except Exception:
+                pass
+        else:
+            _stop_wave()
     elif beeper:
         try:
-            # When reference is 3.3V, idle = HIGH (no voltage diff); when GND, idle = LOW
-            gnd_mode = settings.get("speaker_gnd_mode", "3v3")
-            beeper.value = 1 if gnd_mode == "3v3" else 0
+            if output_type == "led":
+                # LED off
+                beeper.value = 0
+            else:
+                # When reference is 3.3V, idle = HIGH (no voltage diff); when GND, idle = LOW
+                gnd_mode = settings.get("speaker_gnd_mode", "3v3")
+                beeper.value = 1 if gnd_mode == "3v3" else 0
         except Exception:
             pass
 
