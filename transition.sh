@@ -83,13 +83,15 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # ── Disk space check ──────────────────────────────────────────────────────────
-AVAIL_MB=$(df -BM /tmp 2>/dev/null | awk 'NR==2{gsub(/M/,""); print $4}' || echo 0)
+# NOTE: /tmp on many Pis is tmpfs (RAM) — we use /var/tmp which is on the real disk.
+WORK_DIR="/var/tmp/morse-pi-build"
+mkdir -p "${WORK_DIR}" 2>/dev/null || true
 AVAIL_ROOT_MB=$(df -BM / 2>/dev/null | awk 'NR==2{gsub(/M/,""); print $4}' || echo 0)
 
 if [[ "${DEPLOY_ONLY}" != "true" ]]; then
   # Full build needs ~500 MB (Zig toolchain ~350 MB + build cache ~100 MB + headroom)
   NEEDED_MB=500
-  info "Available disk space: /tmp = ${AVAIL_MB} MB, / = ${AVAIL_ROOT_MB} MB (need ~${NEEDED_MB} MB)"
+  info "Available disk space: / = ${AVAIL_ROOT_MB} MB (need ~${NEEDED_MB} MB)"
 
   if [[ "${AVAIL_ROOT_MB}" -lt "${NEEDED_MB}" ]]; then
     # Try to free space first
@@ -97,6 +99,7 @@ if [[ "${DEPLOY_ONLY}" != "true" ]]; then
     apt-get clean 2>/dev/null || true
     apt-get autoremove -y -qq 2>/dev/null || true
     rm -rf /tmp/zig.tar.xz /tmp/zig-extract 2>/dev/null || true
+    rm -rf /var/tmp/morse-pi-build 2>/dev/null || true
     rm -rf /usr/local/lib/zig 2>/dev/null || true
     rm -rf "${APP_DIR}/__pycache__" 2>/dev/null || true
     journalctl --vacuum-size=10M 2>/dev/null || true
@@ -226,7 +229,10 @@ fi
 
 if [[ "${NEED_ZIG}" == "true" ]]; then
   info "Downloading Zig ${ZIG_VERSION} for ${ZIG_ARCH}…"
-  cd /tmp
+
+  # Use /var/tmp (real disk) — NOT /tmp (often tmpfs / RAM on Pi)
+  mkdir -p "${WORK_DIR}"
+  cd "${WORK_DIR}"
 
   # Download
   if command -v wget &>/dev/null; then
@@ -240,15 +246,15 @@ if [[ "${NEED_ZIG}" == "true" ]]; then
 
   # Extract (exclude tsan/doc to save ~100 MB)
   info "Extracting Zig…"
-  rm -rf /tmp/zig-extract
-  mkdir -p /tmp/zig-extract
-  tar -xf "zig.tar.xz" -C /tmp/zig-extract \
+  rm -rf "${WORK_DIR}/zig-extract"
+  mkdir -p "${WORK_DIR}/zig-extract"
+  tar -xf "zig.tar.xz" -C "${WORK_DIR}/zig-extract" \
     --exclude='*/lib/tsan/*' \
     --exclude='*/doc/*' || die "Extraction failed (disk full?)"
   ok "Extracted"
 
   # Install
-  ZIG_EXTRACTED_DIR="$(ls -d /tmp/zig-extract/zig-* 2>/dev/null | head -1)"
+  ZIG_EXTRACTED_DIR="$(ls -d "${WORK_DIR}"/zig-extract/zig-* 2>/dev/null | head -1)"
   if [[ -z "${ZIG_EXTRACTED_DIR}" ]]; then
     die "Could not find extracted Zig directory"
   fi
@@ -265,8 +271,7 @@ if [[ "${NEED_ZIG}" == "true" ]]; then
   ok "Zig $(zig version) is ready"
 
   # Clean up
-  rm -f /tmp/zig.tar.xz
-  rm -rf /tmp/zig-extract
+  rm -rf "${WORK_DIR}"
 fi
 
 # ===========================================================================
