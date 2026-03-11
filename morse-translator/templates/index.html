@@ -859,29 +859,29 @@ function renderSettings(){
       </div>
 
       <div class="settings-section">
-        <div class="settings-section-title">&#9656; OUTPUT / SPEAKER</div>
+        <div class="settings-section-title">&#9656; OUTPUT / SP/LED</div>
         <div class="settings-grid">
           <div class="setting-row">
-            <div class="setting-label">Speaker Pin 1 (BCM)</div>
+            <div class="setting-label">SP/LED+ Pin (BCM)</div>
             <div class="setting-input-row"><select class="input-field" id="s-speaker_pin">${(()=>{let o='';for(let p=2;p<=27;p++)o+='<option value="'+p+'"'+(p===s.speaker_pin?' selected':'')+'>BCM '+p+'</option>';return o;})()}</select><button class="btn btn-primary" onclick="previewTone()">Test</button></div>
           </div>
           <div class="setting-row">
-            <div class="setting-label">Speaker Pin 2 (BCM)</div>
+            <div class="setting-label">SP/LED&minus; Pin (BCM)</div>
             <div class="setting-input-row"><select class="input-field" id="s-speaker_pin2"><option value=""${s.speaker_pin2==null?' selected':''}>None (single-pin)</option>${(()=>{let o='';for(let p=2;p<=27;p++)o+='<option value="'+p+'"'+(p===s.speaker_pin2?' selected':'')+'>BCM '+p+'</option>';return o;})()}</select></div>
             <div class="setting-help">${s.speaker_pin2!=null
-              ?'<span class="tag tag-green">Dual-Pin (Push-Pull)</span> &mdash; Anti-phase drive doubles the voltage swing for louder, cleaner audio. Both pins drive the speaker differentially.'
-              :'<span class="tag tag-blue">Single-Pin</span> &mdash; Set a second pin to enable push-pull differential speaker drive for improved sound.'}</div>
+              ?'<span class="tag tag-green">Dual-Pin (Push-Pull)</span> &mdash; Anti-phase drive doubles the voltage swing for louder, cleaner audio. Both pins drive the speaker/LED differentially.'
+              :'<span class="tag tag-blue">Single-Pin</span> &mdash; Set SP/LED&minus; to enable push-pull differential drive for improved sound / dual-LED output.'}</div>
           </div>
           ${s.speaker_pin2==null ? `
           <div class="setting-row">
-            <div class="setting-label">Speaker Wiring</div>
+            <div class="setting-label">SP/LED Wiring</div>
             <div class="segmented" style="max-width:380px;">
               <button class="segmented-btn ${s.speaker_gnd_mode==='3v3'?'active':''}" onclick="setSpeakerGndMode('3v3')">&#9889; GPIO + 3.3V</button>
               <button class="segmented-btn ${s.speaker_gnd_mode==='gnd'?'active':''}" onclick="setSpeakerGndMode('gnd')">&#9178; GPIO + GND</button>
             </div>
             <div class="setting-help">${s.speaker_gnd_mode==='3v3'
-              ?'<span class="tag tag-orange">3.3V Reference</span> &mdash; Speaker is wired between GPIO pin and the 3.3V rail. Pin idles HIGH when silent.'
-              :'<span class="tag tag-blue">GND Reference</span> &mdash; Speaker is wired between GPIO pin and GND. Pin idles LOW when silent.'}</div>
+              ?'<span class="tag tag-orange">3.3V Reference</span> &mdash; SP/LED wired between GPIO pin and the 3.3V rail. Pin idles HIGH when silent.'
+              :'<span class="tag tag-blue">GND Reference</span> &mdash; SP/LED wired between GPIO pin and GND. Pin idles LOW when silent.'}</div>
           </div>
           ` : ''}
           <div class="setting-row">
@@ -891,7 +891,7 @@ function renderSettings(){
               <button class="segmented-btn ${s.output_type==='led'?'active':''}" onclick="setOutputType('led')">&#9788; LED</button>
             </div>
             <div class="setting-help">${s.output_type==='led'
-              ?'<span class="tag tag-orange">LED Mode</span> &mdash; Output turns ON/OFF to flash an LED. Connect LED+ to GPIO via 220-470\u03A9 resistor, LED- to GND.'
+              ?'<span class="tag tag-orange">LED Mode</span> &mdash; Output turns ON/OFF to flash an LED. Connect LED+ to GPIO via 220-470\u03A9 resistor, LED\u2212 to GND.'
               :'<span class="tag tag-blue">Speaker Mode</span> &mdash; PWM audio output for piezo/speaker. Connect via 100-470\u03A9 series resistor for protection.'}</div>
           </div>
           <div class="setting-row">
@@ -984,16 +984,16 @@ function renderGpioMap(s) {
     assign[s.dash_pin] = {role:'DASH KEY', col:'key'};
   }
   if (s.output_type === 'led') {
-    assign[s.speaker_pin] = {role:'LED OUT', col:'spkr'};
+    assign[s.speaker_pin] = {role:s.speaker_pin2!=null?'LED +':'LED OUT', col:'spkr'};
   } else {
     if (s.speaker_pin2!=null) {
-      assign[s.speaker_pin] = {role:'SPKR +', col:'spkr'};
+      assign[s.speaker_pin] = {role:'SP/LED +', col:'spkr'};
     } else {
-      assign[s.speaker_pin] = {role:s.speaker_gnd_mode==='3v3'?'SPKR (3.3V)':'SPEAKER', col:'spkr'};
+      assign[s.speaker_pin] = {role:s.speaker_gnd_mode==='3v3'?'SP/LED (3.3V)':'SP/LED', col:'spkr'};
     }
   }
   if (s.speaker_pin2 != null) {
-    assign[s.speaker_pin2] = {role:s.output_type==='led'?'LED OUT 2':'SPKR −', col:'spkr'};
+    assign[s.speaker_pin2] = {role:s.output_type==='led'?'LED \u2212':'SP/LED \u2212', col:'spkr'};
   }
   if (s.ground_pin != null) {
     assign[s.ground_pin] = {role:'GND OUT', col:'gnd-out'};
@@ -1053,7 +1053,7 @@ function renderGpioMap(s) {
         <span class="gpio-legend-item"><span class="gpio-dot" style="background:#4b5563"></span>GND</span>
         <span class="gpio-legend-item"><span class="gpio-dot" style="background:var(--text-dim)"></span>GPIO (unused)</span>
         <span class="gpio-legend-item"><span class="gpio-dot" style="background:var(--accent3);box-shadow:0 0 6px rgba(57,255,20,0.6)"></span>Key / Paddle</span>
-        <span class="gpio-legend-item"><span class="gpio-dot" style="background:var(--accent);box-shadow:0 0 6px rgba(0,212,255,0.6)"></span>Speaker</span>
+        <span class="gpio-legend-item"><span class="gpio-dot" style="background:var(--accent);box-shadow:0 0 6px rgba(0,212,255,0.6)"></span>SP/LED</span>
         <span class="gpio-legend-item"><span class="gpio-dot" style="background:#9ca3af;box-shadow:0 0 6px rgba(156,163,175,0.6)"></span>GND Output</span>
       </div>
       <div style="font-size:0.62rem;color:var(--text-dim);font-family:'Share Tech Mono',monospace;margin-bottom:4px;">PIN #&nbsp;&nbsp; BCM / TYPE &nbsp;&lArr;&nbsp; physical header &nbsp;&rArr;&nbsp; BCM / TYPE &nbsp;&nbsp;PIN #</div>
@@ -1064,11 +1064,11 @@ function renderGpioMap(s) {
         ${gndPins.map(p=>`<span class="pin-badge">Pin&nbsp;${p}</span>`).join('')}
         <span style="margin-left:6px;">&mdash; connect your paddle/key common leg to any of these.</span>
       </div>
-      <div style="margin-top:10px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);">&#9888; Speaker: ${s.speaker_pin2!=null
-        ?'Dual-pin push-pull mode active &mdash; speaker is driven differentially between both pins for maximum volume.'
+      <div style="margin-top:10px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);">&#9888; SP/LED: ${s.speaker_pin2!=null
+        ?'Dual-pin push-pull mode active &mdash; output is driven differentially between both pins for maximum volume / brightness.'
         :(s.speaker_gnd_mode==='3v3'
-          ?'Single-pin + 3.3V mode &mdash; speaker wired between GPIO and 3.3V rail. Use a 100&ndash;470&Omega; series resistor.'
-          :'Single-pin + GND mode &mdash; speaker wired between GPIO and GND. Use a 100&ndash;470&Omega; series resistor. Set Pin 2 for push-pull drive.')}</div>
+          ?'Single-pin + 3.3V mode &mdash; wired between GPIO and 3.3V rail. Use a 100&ndash;470&Omega; series resistor.'
+          :'Single-pin + GND mode &mdash; wired between GPIO and GND. Use a 100&ndash;470&Omega; series resistor. Set SP/LED&minus; for push-pull drive.')}</div>
     </div>`;
 }
 
@@ -1081,8 +1081,8 @@ function gpioPopover(evt, bcm) {
     {key:'data_pin',    label:'Data Key (single-pin)',        col:'key'},
     {key:'dot_pin',     label:'Dot Paddle (dual-pin)',        col:'key'},
     {key:'dash_pin',    label:'Dash Paddle (dual-pin)',       col:'key'},
-    {key:'speaker_pin', label:'Speaker Pin 1',                col:'spkr'},
-    {key:'speaker_pin2',label:'Speaker Pin 2 (push-pull)',    col:'spkr'},
+    {key:'speaker_pin', label:'SP/LED+ Pin',                    col:'spkr'},
+    {key:'speaker_pin2',label:'SP/LED\u2212 Pin (push-pull)',    col:'spkr'},
     {key:'ground_pin',  label:'Ground Output (drive LOW)',    col:'gnd-out'},
   ];
   const btns = roles.map(r=>{
@@ -1143,6 +1143,7 @@ function renderNetwork(){
   return `
     <div class="panel">
       <div class="panel-title">NETWORK &mdash; MULTI-PI MESH</div>
+      <div style="text-align:right;margin:-2px 0 8px;"><a href="https://nerd-or-geek.github.io/Morse-Pi/networking.html" target="_blank" style="font-size:0.65rem;color:var(--accent);text-decoration:none;letter-spacing:0.06em;">Networking docs &raquo;</a></div>
 
       <div class="settings-section">
         <div class="settings-section-title">&#9656; MY DEVICE</div>
@@ -1538,7 +1539,7 @@ function renderKeyboard(){
             <li><span>5. Enable keyboard mode above → key Morse → letters typed on computer</span></li>
           </ul>
         </div>
-        <p class="setting-help" style="margin-top:8px;">Requires <code>dtoverlay=dwc2</code> in /boot/config.txt, <code>dwc2</code> and <code>libcomposite</code> in /etc/modules, and the <code>morse-pi-hid</code> systemd service.</p>
+        <p class="setting-help" style="margin-top:8px;">Requires <code>dtoverlay=dwc2</code> in /boot/config.txt, <code>dwc2</code> and <code>libcomposite</code> in /etc/modules, and the <code>morse-pi-hid</code> systemd service. <a href="https://nerd-or-geek.github.io/Morse-Pi/usb-hid.html" target="_blank" style="color:var(--accent);">Full USB HID docs &raquo;</a></p>
         ${!usbHidAvailable ? `
         <div class="help-card" style="background:var(--bg);margin-top:10px;border-left:3px solid var(--danger);">
           <div style="font-size:0.7rem;font-weight:700;color:var(--danger);margin-bottom:6px;">TROUBLESHOOTING</div>
@@ -1655,7 +1656,9 @@ function clearKbOutput(){
 }
 
 // ── HELP ───────────────────────────────────────
-function renderHelp(){return `
+function renderHelp(){
+  const DOCS='https://nerd-or-geek.github.io/Morse-Pi';
+  return `
   <div class="panel">
     <div class="panel-title">HELP &amp; KEYBOARD SHORTCUTS</div>
     <div class="help-grid">
@@ -1708,6 +1711,24 @@ function renderHelp(){return `
           <li><span>Adjust WPM to match your keying speed</span></li>
           <li><span>Use Test WPM button to hear timing</span></li>
           <li><span>Use Reference Sheet below to study</span></li>
+        </ul>
+      </div>
+    </div>
+    <hr class="sep">
+    <div class="settings-section-title">&#9656; DOCUMENTATION</div>
+    <div class="help-grid">
+      <div class="help-card">
+        <ul>
+          <li><a href="${DOCS}/" target="_blank" style="color:var(--accent);">Home &mdash; Overview &amp; Quick Start</a></li>
+          <li><a href="${DOCS}/wiring.html" target="_blank" style="color:var(--accent);">Wiring Guide</a></li>
+          <li><a href="${DOCS}/configuration.html" target="_blank" style="color:var(--accent);">Configuration Reference</a></li>
+        </ul>
+      </div>
+      <div class="help-card">
+        <ul>
+          <li><a href="${DOCS}/usb-hid.html" target="_blank" style="color:var(--accent);">USB HID Keyboard Setup</a></li>
+          <li><a href="${DOCS}/networking.html" target="_blank" style="color:var(--accent);">Peer-to-Peer Networking</a></li>
+          <li><a href="${DOCS}/troubleshooting.html" target="_blank" style="color:var(--accent);">Troubleshooting</a></li>
         </ul>
       </div>
     </div>
@@ -1866,10 +1887,10 @@ function saveSettings(){
   const keys=['dot_freq','dash_freq','wpm_target','difficulty','data_pin','dot_pin','dash_pin'];
   const data={pin_mode:settings.pin_mode,output_type:settings.output_type,speaker_gnd_mode:settings.speaker_gnd_mode||'3v3',use_external_switch:settings.use_external_switch||false};
   keys.forEach(k=>{const el=document.getElementById('s-'+k);if(el)data[k]=el.value;});
-  // Speaker pin 1: from select
+  // SP/LED+ pin: from select
   const sp1El=document.getElementById('s-speaker_pin');
   if(sp1El) data.speaker_pin=parseInt(sp1El.value);
-  // Speaker pin 2: nullable
+  // SP/LED- pin: nullable
   const sp2El=document.getElementById('s-speaker_pin2');
   if(sp2El) data.speaker_pin2=sp2El.value?parseInt(sp2El.value):null;
   // Device name

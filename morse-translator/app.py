@@ -47,6 +47,9 @@ MORSE_CODE = {
     '$': '...-..-', '@': '.--.-.', ' ': '/'
 }
 
+# Pre-computed reverse lookup: morse code -> character
+REVERSE_MORSE = {v: k for k, v in MORSE_CODE.items()}
+
 SETTINGS_FILE = "settings.json"
 DEFAULT_SETTINGS = {
     "speaker_pin": 18,
@@ -132,16 +135,26 @@ DEVICE_UUID  = str(_uuid_mod.uuid4())  # unique ID for this process run
 peers        = {}    # {uuid: {name, ip, port, last_seen}}
 peers_lock   = threading.Lock()
 
+_cached_local_ip = None
+_cached_local_ip_time = 0
+
 def _get_local_ip():
-    """Return the machine's primary LAN IP (best-effort)."""
+    """Return the machine's primary LAN IP (best-effort). Cached for 10 s."""
+    global _cached_local_ip, _cached_local_ip_time
+    now = time.time()
+    if _cached_local_ip and now - _cached_local_ip_time < 10:
+        return _cached_local_ip
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(2)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
         s.close()
+        _cached_local_ip = ip
+        _cached_local_ip_time = now
         return ip
     except Exception:
-        return "127.0.0.1"
+        return _cached_local_ip or "127.0.0.1"
 
 def _beacon_sender():
     """Broadcast a JSON presence packet every 3 s so peers can discover us."""
@@ -162,46 +175,58 @@ def _beacon_sender():
         time.sleep(3)
 
 def _beacon_listener():
-    """Listen for broadcast beacons and maintain the peers table."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    try:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-    except AttributeError:
-        pass  # Windows lacks SO_REUSEPORT — not needed
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    try:
-        sock.bind(("", BEACON_PORT))
-    except Exception as e:
-        print(f"[net] beacon bind failed: {e}")
-        return
-    sock.settimeout(2.0)
+    """Listen for broadcast beacons and maintain the peers table.
+    Recreates the socket on bind failures with exponential backoff."""
     while True:
+        sock = None
         try:
-            data, addr = sock.recvfrom(2048)
-            pkt = json.loads(data.decode())
-            if pkt.get("type") != "morse_pi_beacon":
-                continue
-            uid = pkt.get("uuid")
-            if not uid or uid == DEVICE_UUID:
-                continue  # ignore our own beacon
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            except AttributeError:
+                pass  # Windows lacks SO_REUSEPORT
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.bind(("", BEACON_PORT))
+            sock.settimeout(2.0)
+        except Exception as e:
+            print(f"[net] beacon bind failed: {e}, retrying in 5 s")
+            if sock:
+                try: sock.close()
+                except: pass
+            time.sleep(5)
+            continue
+        # Main listen loop — stays here until socket error
+        while True:
+            try:
+                data, addr = sock.recvfrom(2048)
+                pkt = json.loads(data.decode())
+                if pkt.get("type") != "morse_pi_beacon":
+                    continue
+                uid = pkt.get("uuid")
+                if not uid or uid == DEVICE_UUID:
+                    continue
+                with peers_lock:
+                    peers[uid] = {
+                        "name":      pkt.get("name", "Unknown"),
+                        "ip":        pkt.get("ip",   addr[0]),
+                        "port":      int(pkt.get("port", 5000)),
+                        "last_seen": time.time(),
+                    }
+            except socket.timeout:
+                pass
+            except OSError:
+                break  # socket error — recreate
+            except Exception:
+                pass
+            # Expire peers not seen for 15 s
+            now = time.time()
             with peers_lock:
-                peers[uid] = {
-                    "name":      pkt.get("name", "Unknown"),
-                    "ip":        pkt.get("ip",   addr[0]),
-                    "port":      int(pkt.get("port", 5000)),
-                    "last_seen": time.time(),
-                }
-        except socket.timeout:
-            pass
-        except Exception:
-            pass
-        # Expire peers not seen for 15 s
-        now = time.time()
-        with peers_lock:
-            expired = [u for u, p in list(peers.items()) if now - p["last_seen"] > 15]
-            for u in expired:
-                del peers[u]
+                expired = [u for u, p in list(peers.items()) if now - p["last_seen"] > 15]
+                for u in expired:
+                    del peers[u]
+        try: sock.close()
+        except: pass
 
 # --- App ---
 app = Flask(__name__)
@@ -306,9 +331,9 @@ def get_all_pin_states():
     result = {}
     for bcm in ALL_BCM_PINS:
         if bcm == sp:
-            result[str(bcm)] = {"active": None, "role": "speaker"}
+            result[str(bcm)] = {"active": None, "role": "sp_led_pos"}
         elif bcm == sp2:
-            result[str(bcm)] = {"active": None, "role": "speaker2"}
+            result[str(bcm)] = {"active": None, "role": "sp_led_neg"}
         elif bcm == gp or bcm in grounded:
             result[str(bcm)] = {"active": None, "role": "ground"}
         elif pm == "dual" and bcm == dop:
@@ -377,10 +402,16 @@ HID_KEYCODES = {
     "'": 0x34, '"': 0x34,  # quotes
 }
 
-# Check if USB HID device exists
+# Check if USB HID device exists (cached for 5 s)
+_hid_check_time = 0
+
 def _check_usb_hid():
-    global USB_HID_AVAILABLE
+    global USB_HID_AVAILABLE, _hid_check_time
+    now = time.time()
+    if now - _hid_check_time < 5:
+        return USB_HID_AVAILABLE
     USB_HID_AVAILABLE = os.path.exists(USB_HID_DEVICE)
+    _hid_check_time = now
     return USB_HID_AVAILABLE
 
 def _hid_send_key(char):
@@ -515,8 +546,7 @@ def _keyer_do_finalize_letter():
     else:
         if send_buffer:
             code = ''.join(send_buffer)
-            rev  = {v: k for k, v in MORSE_CODE.items()}
-            char = rev.get(code, '?')
+            char = REVERSE_MORSE.get(code, '?')
             state['send_output']          += char
             state['current_morse_buffer']  = ''
             send_buffer.clear()
@@ -1024,8 +1054,7 @@ def finalize_letter():
     global send_buffer, send_gap_timer, send_force_timer
     if not send_active and send_buffer:
         code = ''.join(send_buffer)
-        rev = {v: k for k, v in MORSE_CODE.items()}
-        char = rev.get(code, '?')
+        char = REVERSE_MORSE.get(code, '?')
         state["send_output"] += char
         state["current_morse_buffer"] = ""
         send_buffer.clear()
@@ -1055,11 +1084,9 @@ def finalize_word():
                 _hid_send_key(' ')
                 state['kb_output'] = (state.get('kb_output', '') + ' ')[-100:]
 
-def force_finalize_letter():
-    finalize_letter()
-
-def force_finalize_word():
-    finalize_word()
+# force_finalize_letter / force_finalize_word are aliases kept for timer callbacks
+force_finalize_letter = finalize_letter
+force_finalize_word   = finalize_word
 
 # --- Speed Mode Logic ---
 speed_buffer = []
@@ -1121,21 +1148,8 @@ def speed_finalize_word():
         if state["speed_morse_output"] and not state["speed_morse_output"].endswith('/'):
             state["speed_morse_output"] += '/ '
 
-def speed_force_finalize_letter():
-    speed_finalize_letter()
-
-def speed_force_finalize_word():
-    speed_finalize_word()
-
-# --- Dual-Pin Paddle Callbacks ---
-# NOTE: In iambic (dual) mode the _iambic_keyer_worker thread handles all
-# element generation by polling Button.is_pressed directly.  These stubs are
-# kept only so that any legacy references do not raise NameError; they are
-# never attached as gpiozero callbacks.
-def dual_dot_pressed():  pass
-def dual_dot_released(): pass
-def dual_dash_pressed(): pass
-def dual_dash_released(): pass
+speed_force_finalize_letter = speed_finalize_letter
+speed_force_finalize_word   = speed_finalize_word
 
 # --- Load Words ---
 def load_words():
@@ -1177,8 +1191,7 @@ def morse_encode(text):
     return ' '.join(MORSE_CODE.get(c.upper(), '') for c in text if c.upper() in MORSE_CODE or c == ' ')
 
 def morse_decode(morse):
-    rev = {v: k for k, v in MORSE_CODE.items()}
-    return ''.join(rev.get(code, '?') for code in morse.split())
+    return ''.join(REVERSE_MORSE.get(code, '?') for code in morse.split())
 
 # --- Routes ---
 @app.route("/")
@@ -1502,7 +1515,8 @@ def receive_morse():
 
 @app.route("/send_to_peer", methods=["POST"])
 def send_to_peer():
-    """Send plaintext Morse to another Pi's /receive_morse endpoint over HTTP."""
+    """Send plaintext Morse to another Pi's /receive_morse endpoint over HTTP.
+    Retries up to 2 times on transient failures."""
     data = request.json or {}
     ip   = data.get("ip", "")
     port = int(data.get("port", 5000))
@@ -1514,18 +1528,23 @@ def send_to_peer():
         "text":        text,
         "morse":       morse_encode(text),
     }).encode()
-    try:
-        url = f"http://{ip}:{port}/receive_morse"
-        req = _urllib_request.Request(
-            url, data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-        with _urllib_request.urlopen(req, timeout=5) as resp:
-            result = json.loads(resp.read())
-        return jsonify({"ok": True, "result": result})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+    url = f"http://{ip}:{port}/receive_morse"
+    last_err = None
+    for attempt in range(3):
+        try:
+            req = _urllib_request.Request(
+                url, data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with _urllib_request.urlopen(req, timeout=5) as resp:
+                result = json.loads(resp.read())
+            return jsonify({"ok": True, "result": result})
+        except Exception as e:
+            last_err = str(e)
+            if attempt < 2:
+                time.sleep(0.3 * (attempt + 1))
+    return jsonify({"ok": False, "error": last_err})
 
 @app.route("/clear_inbox", methods=["POST"])
 def clear_inbox():
@@ -1679,8 +1698,7 @@ def net_finalize_letter():
     global net_morse_buffer, net_morse_gap_timer
     if not net_morse_active and net_morse_buffer:
         code = ''.join(net_morse_buffer)
-        rev = {v: k for k, v in MORSE_CODE.items()}
-        char = rev.get(code, '?')
+        char = REVERSE_MORSE.get(code, '?')
         state["net_morse_output"] += char
         state["net_morse_buffer"] = ""
         net_morse_buffer.clear()
@@ -1725,7 +1743,7 @@ def net_clear_morse():
 
 @app.route("/net_send_morse", methods=["POST"])
 def net_send_morse():
-    """Send the composed morse message to a peer."""
+    """Send the composed morse message to a peer. Retries up to 2 times."""
     data = request.json or {}
     ip = data.get("ip", "")
     port = int(data.get("port", 5000))
@@ -1741,22 +1759,27 @@ def net_send_morse():
         "morse": morse,
     }).encode()
     
-    try:
-        url = f"http://{ip}:{port}/receive_morse"
-        req = _urllib_request.Request(
-            url, data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-        with _urllib_request.urlopen(req, timeout=5) as resp:
-            result = json.loads(resp.read())
-        # Clear buffer after successful send
-        state["net_morse_buffer"] = ""
-        state["net_morse_output"] = ""
-        net_morse_buffer.clear()
-        return jsonify({"ok": True, "result": result, "sent_text": text})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+    url = f"http://{ip}:{port}/receive_morse"
+    last_err = None
+    for attempt in range(3):
+        try:
+            req = _urllib_request.Request(
+                url, data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with _urllib_request.urlopen(req, timeout=5) as resp:
+                result = json.loads(resp.read())
+            # Clear buffer after successful send
+            state["net_morse_buffer"] = ""
+            state["net_morse_output"] = ""
+            net_morse_buffer.clear()
+            return jsonify({"ok": True, "result": result, "sent_text": text})
+        except Exception as e:
+            last_err = str(e)
+            if attempt < 2:
+                time.sleep(0.3 * (attempt + 1))
+    return jsonify({"ok": False, "error": last_err})
 
 # ── USB HID Keyboard routes ────────────────────────────────────────────────────
 

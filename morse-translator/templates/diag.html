@@ -259,7 +259,7 @@
 <div class="instr">
   <b>Assigning GPIO Pins:</b><br>
   &nbsp;&#x2022; <b>Click any GPIO pin</b> in the grid above to open the assignment menu.<br>
-  &nbsp;&#x2022; Choose from: <b>Ground</b> (driven LOW), <b>Speaker Pin 1/2</b>, <b>Dot Key</b>, <b>Dash Key</b>, or <b>Straight/Data Key</b>.<br>
+  &nbsp;&#x2022; Choose from: <b>Ground</b> (driven LOW), <b>SP/LED+</b>, <b>SP/LED&minus;</b>, <b>Dot Key</b>, <b>Dash Key</b>, or <b>Straight/Data Key</b>.<br>
   &nbsp;&#x2022; Key pins (dot, dash, straight) <b>cannot be grounded</b> &mdash; they use internal pull-up resistors.<br>
   <br>
   <b>Paddle / Straight Key (pull-up wiring):</b><br>
@@ -288,10 +288,10 @@
       <span class="icon">&#9632;</span>SET AS GROUND
     </button>
     <button class="gpio-menu-item speaker" onclick="assignPin('speaker')">
-      <span class="icon">&#9836;</span>SET AS SPEAKER PIN 1
+      <span class="icon">&#9836;</span>SET AS SP/LED+
     </button>
     <button class="gpio-menu-item speaker" onclick="assignPin('speaker2')">
-      <span class="icon">&#9836;</span>SET AS SPEAKER PIN 2
+      <span class="icon">&#9836;</span>SET AS SP/LED&minus;
     </button>
     <button class="gpio-menu-item" id="btn-dot" onclick="assignPin('dot')">
       <span class="icon">&#183;</span>SET AS DOT KEY
@@ -434,10 +434,15 @@ function roleLabel(bcm, data) {
   const grounded = data.grounded_pins || [];
   const gndMode = data.speaker_gnd_mode || '3v3';
   if (bcm === sp) {
-    if (sp2 != null) return 'SPKR +';
-    return gndMode === '3v3' ? 'SPKR (3.3V)' : 'SPEAKER';
+    if (data.output_type === 'led') {
+      return sp2 != null ? 'LED +' : 'LED OUT';
+    }
+    if (sp2 != null) return 'SP/LED +';
+    return gndMode === '3v3' ? 'SP/LED (3.3V)' : 'SP/LED';
   }
-  if (bcm === sp2) return 'SPKR \u2212';
+  if (bcm === sp2) {
+    return data.output_type === 'led' ? 'LED \u2212' : 'SP/LED \u2212';
+  }
   if (bcm === gp)  return 'GND OUT';
   if (grounded.includes(bcm)) return 'GROUNDED';
   if (pm === 'dual') {
@@ -452,8 +457,8 @@ function roleLabel(bcm, data) {
 function pinClass(bcm, data) {
   const info = data.states ? data.states[String(bcm)] : null;
   if (!info) return 'error';
-  if (info.role === 'speaker')  return 'output';
-  if (info.role === 'speaker2') return 'output';
+  if (info.role === 'sp_led_pos')  return 'output';
+  if (info.role === 'sp_led_neg') return 'output';
   if (info.role === 'ground')  return 'gnd-out';
   // Check grounded_pins array
   const grounded = data.grounded_pins || [];
@@ -466,8 +471,8 @@ function pinClass(bcm, data) {
 function pinStateLabel(bcm, data) {
   const info = data.states ? data.states[String(bcm)] : null;
   if (!info) return 'ERR';
-  if (info.role === 'speaker')  return 'OUTPUT';
-  if (info.role === 'speaker2') return 'OUTPUT';
+  if (info.role === 'sp_led_pos')  return 'OUTPUT';
+  if (info.role === 'sp_led_neg') return 'OUTPUT';
   if (info.role === 'ground')  return 'GND (driven LOW)';
   if (info.active === true)  return 'GROUNDED \u25CF';
   if (info.active === false) return 'IDLE';
@@ -490,10 +495,14 @@ function renderHero(data) {
     if (dp  != null) keyPins.push({bcm: dp,  role: 'DATA KEY'});
   }
   if (sp  != null) {
-    const spRole = sp2 != null ? 'SPKR +' : (data.speaker_gnd_mode === '3v3' ? 'SPKR (3.3V)' : 'SPEAKER');
+    const spRole = data.output_type === 'led'
+      ? (sp2 != null ? 'LED +' : 'LED OUT')
+      : (sp2 != null ? 'SP/LED +' : (data.speaker_gnd_mode === '3v3' ? 'SP/LED (3.3V)' : 'SP/LED'));
     keyPins.push({bcm: sp,  role: spRole});
   }
-  if (sp2 != null) keyPins.push({bcm: sp2, role: 'SPKR \u2212'});
+  if (sp2 != null) {
+    keyPins.push({bcm: sp2, role: data.output_type === 'led' ? 'LED \u2212' : 'SP/LED \u2212'});
+  }
 
   const hero = document.getElementById('hero-section');
   if (!keyPins.length) {
