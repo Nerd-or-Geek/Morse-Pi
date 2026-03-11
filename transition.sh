@@ -31,6 +31,8 @@ die()     { echo -e "${RED}[FAIL]${RST}  $*" >&2; exit 1; }
 banner()  { echo -e "\n${BLD}${CYN}━━━  $*  ━━━${RST}\n"; }
 
 # ── Configuration ──────────────────────────────────────────────────────────────
+REPO_URL="https://github.com/Nerd-or-Geek/Morse-Pi.git"
+BRANCH="main"
 INSTALL_DIR="/opt/morse-pi"
 APP_DIR="${INSTALL_DIR}/morse-translator"
 ZIG_SRC="${INSTALL_DIR}/morse-translator-zig"
@@ -70,17 +72,35 @@ fi
 
 # ── Update repo to get Zig source ─────────────────────────────────────────────
 if [[ ! -d "${ZIG_SRC}" ]]; then
+  info "Zig source not found — updating repository…"
   if [[ -d "${INSTALL_DIR}/.git" ]]; then
-    info "Zig source not found — pulling latest from Git…"
+    # Existing git repo — pull latest
     cd "${INSTALL_DIR}"
-    git fetch --all --prune 2>/dev/null || true
-    git reset --hard origin/main 2>/dev/null || git pull --ff-only || die "Git pull failed"
-    ok "Repository updated"
+    git fetch --all --prune || true
+    git checkout "${BRANCH}" 2>/dev/null || true
+    git reset --hard "origin/${BRANCH}" || die "Git reset failed"
+    ok "Repository updated via git pull"
+  else
+    # No git repo — clone fresh into a temp dir and copy zig source in
+    info "No git repo found at ${INSTALL_DIR} — cloning from ${REPO_URL}…"
+    TMPCLONE="$(mktemp -d)"
+    git clone --depth 1 --branch "${BRANCH}" "${REPO_URL}" "${TMPCLONE}" || die "Git clone failed"
+    # Copy the zig source directory into the install dir
+    if [[ -d "${TMPCLONE}/morse-translator-zig" ]]; then
+      cp -r "${TMPCLONE}/morse-translator-zig" "${INSTALL_DIR}/morse-translator-zig"
+      ok "Zig source copied from fresh clone"
+    else
+      rm -rf "${TMPCLONE}"
+      die "morse-translator-zig/ not found in the repository. Is it pushed to ${BRANCH}?"
+    fi
+    # Also copy transition.sh itself and any other new files
+    cp -f "${TMPCLONE}/transition.sh" "${INSTALL_DIR}/transition.sh" 2>/dev/null || true
+    rm -rf "${TMPCLONE}"
   fi
 fi
 
 if [[ ! -d "${ZIG_SRC}" ]]; then
-  die "Zig source not found at ${ZIG_SRC}. Make sure morse-translator-zig/ exists in the repo."
+  die "Zig source still not found at ${ZIG_SRC} after update. Is morse-translator-zig/ pushed to the ${BRANCH} branch?"
 fi
 
 # ── Resolve run user ──────────────────────────────────────────────────────────
