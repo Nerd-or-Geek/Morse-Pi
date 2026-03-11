@@ -11,69 +11,25 @@
 
 <!-- ═══ HEADER ═══ -->
 <header class="site-header">
-  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
   <span class="logo"><a href="index.html">Morse-Pi</a></span>
-  <span class="tagline">Morse Code Trainer &amp; Practice Tool for Raspberry Pi</span>
-  <nav class="header-links">
+  <div class="header-right">
     <a href="https://github.com/Nerd-or-Geek/Morse-Pi" target="_blank">GitHub</a>
     <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues" target="_blank">Issues</a>
-  </nav>
+  </div>
 </header>
 
-<!-- ═══ LAYOUT ═══ -->
-<div class="layout">
-<aside class="sidebar" id="sidebar">
-  <div class="nav-group">
-    <a class="nav-page-link" href="index.html">Home</a>
-  </div>
-  <div class="nav-group">
-    <a class="nav-page-link" href="getting-started.html">Getting Started</a>
-    <a class="nav-link" href="getting-started.html#features">Features</a>
-    <a class="nav-link" href="getting-started.html#requirements">Requirements</a>
-    <a class="nav-link" href="getting-started.html#installation">Installation</a>
-    <a class="nav-link" href="getting-started.html#wiring">GPIO Wiring</a>
-    <a class="nav-link" href="getting-started.html#modes">Modes &amp; Tabs</a>
-    <a class="nav-link" href="getting-started.html#send-mode">SEND Mode</a>
-    <a class="nav-link" href="getting-started.html#encode-mode">ENCODE Mode</a>
-    <a class="nav-link" href="getting-started.html#decode-mode">DECODE Mode</a>
-    <a class="nav-link" href="getting-started.html#speed-mode">SPEED Trainer</a>
-    <a class="nav-link" href="getting-started.html#network-mode">Networking</a>
-    <a class="nav-link" href="getting-started.html#stats-mode">Statistics</a>
-    <a class="nav-link" href="getting-started.html#config-mode">Configuration</a>
-    <a class="nav-link" href="getting-started.html#shortcuts">Keyboard Shortcuts</a>
-  </div>
-  <div class="nav-group">
-    <a class="nav-page-link current" href="maintenance.html">Maintenance</a>
-    <a class="nav-link" href="#updating">Updating</a>
-    <a class="nav-link" href="#packages">Package Management</a>
-    <a class="nav-link" href="#services">Service Management</a>
-    <a class="nav-link" href="#autostart">Auto-Start on Boot</a>
-  </div>
-  <div class="nav-group">
-    <a class="nav-page-link" href="usb-hid.html">USB HID Keyboard</a>
-    <a class="nav-link" href="usb-hid.html#hid-setup">HID Setup</a>
-    <a class="nav-link" href="usb-hid.html#hid-usage">Using HID Mode</a>
-    <a class="nav-link" href="usb-hid.html#hid-troubleshoot">HID Troubleshooting</a>
-  </div>
-  <div class="nav-group">
-    <a class="nav-page-link" href="reference.html">Reference</a>
-    <a class="nav-link" href="reference.html#morse-table">Morse Code Table</a>
-    <a class="nav-link" href="reference.html#timing">Timing &amp; WPM</a>
-    <a class="nav-link" href="reference.html#settings-ref">Settings Reference</a>
-    <a class="nav-link" href="reference.html#api-routes">API Routes</a>
-    <a class="nav-link" href="reference.html#project-structure">Project Structure</a>
-  </div>
-  <div class="nav-group">
-    <a class="nav-page-link" href="troubleshooting.html">Troubleshooting</a>
-    <a class="nav-link" href="troubleshooting.html#common-issues">Common Issues</a>
-    <a class="nav-link" href="troubleshooting.html#gpio-errors">GPIO Errors</a>
-    <a class="nav-link" href="troubleshooting.html#connection-errors">Connection Errors</a>
-    <a class="nav-link" href="troubleshooting.html#hid-errors">USB HID Errors</a>
-    <a class="nav-link" href="troubleshooting.html#network-errors">Network Errors</a>
-  </div>
-</aside>
+<!-- ═══ TAB NAVIGATION ═══ -->
+<nav class="tab-nav">
+  <a href="index.html"><span class="tab-icon">🏠</span> Home</a>
+  <a href="getting-started.html"><span class="tab-icon">🚀</span> Getting Started</a>
+  <a class="active" href="maintenance.html"><span class="tab-icon">🔧</span> Maintenance</a>
+  <a href="usb-hid.html"><span class="tab-icon">⌨️</span> USB HID</a>
+  <a href="reference.html"><span class="tab-icon">📖</span> Reference</a>
+  <a href="troubleshooting.html"><span class="tab-icon">🔍</span> Troubleshooting</a>
+</nav>
 
 <!-- ═══ MAIN CONTENT ═══ -->
+<div class="page-wrap">
 <main class="content">
 
 <h1>Maintenance</h1>
@@ -153,27 +109,8 @@ sudo systemctl start morse-pi</code></pre>
 
 <a class="back-top" id="back-top" href="#" title="Back to top">↑</a>
 <script>
-const navLinks=document.querySelectorAll('.sidebar .nav-link[href^="#"]');
-const sections=[];
-navLinks.forEach(link=>{
-  const id=link.getAttribute('href')?.slice(1);
-  if(id){const el=document.getElementById(id);if(el)sections.push({id,el,link});}
-});
-function updateActive(){
-  let current='';
-  for(const s of sections){if(s.el.getBoundingClientRect().top<=100)current=s.id;}
-  navLinks.forEach(l=>{if(l.getAttribute('href')?.startsWith('#'))l.classList.remove('active');});
-  const active=sections.find(s=>s.id===current);
-  if(active)active.link.classList.add('active');
-}
-window.addEventListener('scroll',updateActive,{passive:true});
-updateActive();
-
 const btn=document.getElementById('back-top');
 window.addEventListener('scroll',()=>{btn.classList.toggle('visible',window.scrollY>400);},{passive:true});
-document.querySelectorAll('.sidebar .nav-link, .sidebar .nav-page-link').forEach(l=>{
-  l.addEventListener('click',()=>{document.querySelector('.sidebar').classList.remove('open');});
-});
 </script>
 </body>
 </html>
