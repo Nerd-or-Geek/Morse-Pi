@@ -45,14 +45,16 @@ BINARY_NAME="morse-pi"
 # Detect architecture
 ARCH="$(uname -m)"
 case "${ARCH}" in
-  aarch64)      ZIG_ARCH="aarch64-linux"  ;;
-  armv7l|armv6l) ZIG_ARCH="armv7a-linux"  ;;
-  x86_64)       ZIG_ARCH="x86_64-linux"   ;;
-  *)            die "Unsupported architecture: ${ARCH}" ;;
+  aarch64)       ZIG_ARCH="aarch64"  ;;
+  armv7l)        ZIG_ARCH="armv7a"   ;;
+  armv6l)        ZIG_ARCH="armv7a"
+                 warn "Pi Zero (armv6l) detected — Zig has no armv6 build."
+                 warn "Will try armv7a binary (works on some armv6l kernels)." ;;
+  x86_64)        ZIG_ARCH="x86_64"   ;;
+  *)             die "Unsupported architecture: ${ARCH}" ;;
 esac
 
-ZIG_TARBALL="zig-linux-${ZIG_ARCH%%-linux}-${ZIG_VERSION}.tar.xz"
-ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz"
+ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz"
 
 # ── Sanity checks ─────────────────────────────────────────────────────────────
 banner "Morse-Pi  —  Python → Zig Transition"
