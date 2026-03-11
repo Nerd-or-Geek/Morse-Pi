@@ -2,13 +2,18 @@
 # =============================================================================
 #  Morse-Pi  —  Transition Script: Python → Zig backend
 #
-#  Run on your Raspberry Pi with:
+#  FULL BUILD (requires ~500 MB free — works on Pi 3/4/5):
 #    curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/transition.sh | sudo bash
 #
+#  DEPLOY-ONLY (for Pi Zero / low-disk devices — ~50 MB free):
+#    1. Cross-compile on your PC:  ./cross-compile.sh
+#    2. The binary is copied to the Pi, then run:
+#       sudo bash /opt/morse-pi/transition.sh --deploy
+#
 #  This script:
-#    1. Installs the Zig compiler (from ziglang.org)
-#    2. Installs C build dependencies (pigpio headers)
-#    3. Builds the Zig backend binary
+#    1. Installs the Zig compiler (from ziglang.org)   [skipped in --deploy mode]
+#    2. Installs C build dependencies (pigpio headers)  [skipped in --deploy mode]
+#    3. Builds the Zig backend binary                   [skipped in --deploy mode]
 #    4. Stops the current Python-based service
 #    5. Backs up settings, stats, word lists
 #    6. Removes the Python source files
@@ -31,6 +36,11 @@ die()     { echo -e "${RED}[FAIL]${RST}  $*" >&2; exit 1; }
 banner()  { echo -e "\n${BLD}${CYN}━━━  $*  ━━━${RST}\n"; }
 
 # ── Configuration ──────────────────────────────────────────────────────────────
+DEPLOY_ONLY=false
+if [[ "${1:-}" == "--deploy" ]]; then
+  DEPLOY_ONLY=true
+fi
+
 REPO_URL="https://github.com/Nerd-or-Geek/Morse-Pi.git"
 BRANCH="main"
 INSTALL_DIR="/opt/morse-pi"
@@ -58,7 +68,11 @@ ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG
 
 # ── Sanity checks ─────────────────────────────────────────────────────────────
 banner "Morse-Pi  —  Python → Zig Transition"
-echo -e "  ${CYN}★ Transition to native Zig backend${RST}"
+if [[ "${DEPLOY_ONLY}" == "true" ]]; then
+  echo -e "  ${CYN}★ DEPLOY-ONLY mode (binary pre-built via cross-compile)${RST}"
+else
+  echo -e "  ${CYN}★ Transition to native Zig backend${RST}"
+fi
 echo -e "  Install dir : ${BLD}${INSTALL_DIR}${RST}"
 echo -e "  Architecture: ${BLD}${ARCH} → ${ZIG_ARCH}${RST}"
 echo -e "  Zig version : ${BLD}${ZIG_VERSION}${RST}"
@@ -66,6 +80,45 @@ echo ""
 
 if [[ $EUID -ne 0 ]]; then
   die "Run this script with sudo:  sudo bash transition.sh"
+fi
+
+# ── Disk space check ──────────────────────────────────────────────────────────
+AVAIL_MB=$(df -BM /tmp 2>/dev/null | awk 'NR==2{gsub(/M/,""); print $4}' || echo 0)
+AVAIL_ROOT_MB=$(df -BM / 2>/dev/null | awk 'NR==2{gsub(/M/,""); print $4}' || echo 0)
+
+if [[ "${DEPLOY_ONLY}" != "true" ]]; then
+  # Full build needs ~500 MB (Zig toolchain ~350 MB + build cache ~100 MB + headroom)
+  NEEDED_MB=500
+  info "Available disk space: /tmp = ${AVAIL_MB} MB, / = ${AVAIL_ROOT_MB} MB (need ~${NEEDED_MB} MB)"
+
+  if [[ "${AVAIL_ROOT_MB}" -lt "${NEEDED_MB}" ]]; then
+    # Try to free space first
+    warn "Low disk space — attempting cleanup…"
+    apt-get clean 2>/dev/null || true
+    apt-get autoremove -y -qq 2>/dev/null || true
+    rm -rf /tmp/zig.tar.xz /tmp/zig-extract 2>/dev/null || true
+    rm -rf /usr/local/lib/zig 2>/dev/null || true
+    rm -rf "${APP_DIR}/__pycache__" 2>/dev/null || true
+    journalctl --vacuum-size=10M 2>/dev/null || true
+
+    # Re-check
+    AVAIL_ROOT_MB=$(df -BM / 2>/dev/null | awk 'NR==2{gsub(/M/,""); print $4}' || echo 0)
+    info "After cleanup: ${AVAIL_ROOT_MB} MB available"
+
+    if [[ "${AVAIL_ROOT_MB}" -lt "${NEEDED_MB}" ]]; then
+      echo ""
+      die "Not enough disk space (${AVAIL_ROOT_MB} MB free, need ~${NEEDED_MB} MB).
+    The Zig toolchain is ~350 MB — too large for this device.
+
+    ${YEL}Use cross-compilation instead:${RST}
+      1. On your PC (Windows/Mac/Linux):
+           ${CYN}cd morse-translator-zig${RST}
+           ${CYN}./cross-compile.sh${RST}     (or cross-compile.ps1 on Windows)
+      2. This builds the binary and copies it to your Pi.
+      3. Then on the Pi:
+           ${CYN}sudo bash /opt/morse-pi/transition.sh --deploy${RST}"
+    fi
+  fi
 fi
 
 # ── Pull the full repo (ensure morse-translator-zig/ is present) ──────────────
@@ -131,8 +184,33 @@ fi
 info "Service will run as user: ${RUN_USER}"
 
 # ===========================================================================
-#  STEP 1 — Install Zig compiler
+#  STEP 1 — Install Zig compiler  (skipped in --deploy mode)
 # ===========================================================================
+if [[ "${DEPLOY_ONLY}" == "true" ]]; then
+  banner "Steps 1-3 skipped — Deploy-Only Mode"
+
+  # In deploy mode, the cross-compile script places the binary here:
+  ZIG_BINARY="${ZIG_SRC}/zig-out/bin/${BINARY_NAME}"
+  if [[ ! -f "${ZIG_BINARY}" ]]; then
+    # Also check the deploy drop location
+    ZIG_BINARY="${APP_DIR}/${BINARY_NAME}"
+    if [[ ! -f "${ZIG_BINARY}" ]]; then
+      die "Pre-built binary not found.
+      Expected at: ${ZIG_SRC}/zig-out/bin/${BINARY_NAME}
+           or at: ${APP_DIR}/${BINARY_NAME}
+
+      Run cross-compile.sh on your PC first, then try again."
+    fi
+    ok "Pre-built binary found at ${ZIG_BINARY}"
+    # Skip straight to step 4 — binary is already in APP_DIR
+    BINARY_ALREADY_INSTALLED=true
+  else
+    ok "Pre-built binary found at ${ZIG_BINARY}"
+    BINARY_ALREADY_INSTALLED=false
+  fi
+else
+  BINARY_ALREADY_INSTALLED=false
+
 banner "Step 1 / 5 — Install Zig Compiler"
 
 NEED_ZIG=true
@@ -160,11 +238,13 @@ if [[ "${NEED_ZIG}" == "true" ]]; then
   fi
   ok "Downloaded Zig tarball"
 
-  # Extract
+  # Extract (exclude tsan/doc to save ~100 MB)
   info "Extracting Zig…"
   rm -rf /tmp/zig-extract
   mkdir -p /tmp/zig-extract
-  tar -xf "zig.tar.xz" -C /tmp/zig-extract
+  tar -xf "zig.tar.xz" -C /tmp/zig-extract \
+    --exclude='*/lib/tsan/*' \
+    --exclude='*/doc/*' || die "Extraction failed (disk full?)"
   ok "Extracted"
 
   # Install
@@ -267,6 +347,8 @@ if [[ ! -f "${ZIG_BINARY}" ]]; then
 fi
 ok "Binary built: ${ZIG_BINARY} ($(du -h "${ZIG_BINARY}" | cut -f1))"
 
+fi  # end of DEPLOY_ONLY check (steps 1-3)
+
 # ===========================================================================
 #  STEP 4 — Back up and swap
 # ===========================================================================
@@ -310,8 +392,10 @@ done
 rm -rf "${APP_DIR}/__pycache__"
 
 # Install the Zig binary
-info "Installing Zig binary to ${APP_DIR}/${BINARY_NAME}…"
-cp "${ZIG_BINARY}" "${APP_DIR}/${BINARY_NAME}"
+if [[ "${BINARY_ALREADY_INSTALLED:-false}" != "true" ]]; then
+  info "Installing Zig binary to ${APP_DIR}/${BINARY_NAME}…"
+  cp "${ZIG_BINARY}" "${APP_DIR}/${BINARY_NAME}"
+fi
 chmod +x "${APP_DIR}/${BINARY_NAME}"
 chown "${RUN_USER}:${RUN_USER}" "${APP_DIR}/${BINARY_NAME}"
 ok "Binary installed: ${APP_DIR}/${BINARY_NAME}"
