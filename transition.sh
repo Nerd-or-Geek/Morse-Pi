@@ -170,7 +170,7 @@ REPO_SCRIPT="${INSTALL_DIR}/transition.sh"
 if [[ -f "${REPO_SCRIPT}" ]] && [[ "${BASH_SOURCE[0]:-}" != "${REPO_SCRIPT}" ]]; then
   # We were piped from curl — re-run the repo's (up-to-date) copy
   info "Re-executing transition.sh from ${REPO_SCRIPT}…"
-  exec bash "${REPO_SCRIPT}"
+  exec bash "${REPO_SCRIPT}" "$@"
 fi
 
 # ── Resolve run user ──────────────────────────────────────────────────────────
