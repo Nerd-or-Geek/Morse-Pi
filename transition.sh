@@ -58,8 +58,23 @@ case "${ARCH}" in
   aarch64)       ZIG_ARCH="aarch64"  ;;
   armv7l)        ZIG_ARCH="armv7a"   ;;
   armv6l)        ZIG_ARCH="armv7a"
-                 warn "Pi Zero (armv6l) detected — Zig has no armv6 build."
-                 warn "Will try armv7a binary (works on some armv6l kernels)." ;;
+                 if [[ "${DEPLOY_ONLY}" != "true" ]]; then
+                   warn "Pi Zero (armv6l) detected — Zig cannot run on ARMv6."
+                   echo ""
+                   die "The Pi Zero's ARMv6 CPU cannot run the Zig compiler.
+    On-device compilation is not possible on this hardware.
+
+    ${YEL}Use cross-compilation from your PC instead:${RST}
+      ${BLD}Windows:${RST}
+        ${CYN}winget install zig.zig${RST}
+        ${CYN}.\\cross-compile.ps1 -PiHost $(hostname 2>/dev/null || echo '<pi-host>')${RST}
+
+      ${BLD}Linux / macOS / WSL:${RST}
+        ${CYN}./cross-compile.sh $(hostname 2>/dev/null || echo '<pi-host>')${RST}
+
+    This builds the binary on your PC and deploys it to this Pi."
+                 fi
+                 warn "Pi Zero (armv6l) — using cross-compiled binary." ;;
   x86_64)        ZIG_ARCH="x86_64"   ;;
   *)             die "Unsupported architecture: ${ARCH}" ;;
 esac
