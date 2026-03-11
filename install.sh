@@ -402,10 +402,13 @@ info "Cloning ${REPO_URL} → ${INSTALL_DIR}…"
 git clone --branch "${BRANCH}" --depth 1 "${REPO_URL}" "${INSTALL_DIR}"
 ok "Repository cloned"
 
-if [[ ! -f "${APP_DIR}/app.py" ]]; then
-  die "app.py not found at ${APP_DIR} — check REPO_URL and directory structure."
-fi
-ok "app.py verified"
+# Verify all Python modules exist after clone
+for pyfile in app.py shared.py morse.py keyboard.py gpio_monitor.py sound.py; do
+  if [[ ! -f "${APP_DIR}/${pyfile}" ]]; then
+    die "${pyfile} not found at ${APP_DIR} — check REPO_URL and directory structure."
+  fi
+done
+ok "All Python modules verified (app, shared, morse, keyboard, gpio_monitor, sound)"
 
 # Install from requirements.txt if present
 if [[ -f "${INSTALL_DIR}/requirements.txt" ]]; then

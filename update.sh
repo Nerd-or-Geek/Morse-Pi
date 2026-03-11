@@ -372,10 +372,13 @@ if [[ -n "${STATS_BACKUP}" && -f "${STATS_BACKUP}" ]]; then
   ok "Restored stats.json"
 fi
 
-if [[ ! -f "${APP_DIR}/app.py" ]]; then
-  die "app.py not found after update — something went wrong."
-fi
-ok "app.py verified"
+# Verify all Python modules exist after update
+for pyfile in app.py shared.py morse.py keyboard.py gpio_monitor.py sound.py; do
+  if [[ ! -f "${APP_DIR}/${pyfile}" ]]; then
+    die "${pyfile} not found after update — something went wrong."
+  fi
+done
+ok "All Python modules verified (app, shared, morse, keyboard, gpio_monitor, sound)"
 
 # Remove leftover virtual environments from old installs
 for leftover in "${INSTALL_DIR}/venv" "${INSTALL_DIR}/.venv" "${INSTALL_DIR}/env" "${APP_DIR}/venv" "${APP_DIR}/.venv" "${APP_DIR}/env"; do
