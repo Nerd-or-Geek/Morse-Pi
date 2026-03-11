@@ -107,6 +107,36 @@
   <li>Verify the HID service: <code>sudo systemctl status morse-pi-hid</code></li>
 </ul>
 
+<h3><code>g_ether</code> conflict (most common cause)</h3>
+<p>The Pi Zero has only one USB controller (UDC). If <code>g_ether</code> (USB Ethernet for SSH-over-USB) loads first, it monopolises the UDC and blocks the HID gadget. Check with:</p>
+<pre><code>lsmod | grep g_ether
+dmesg | grep -i "UDC.*busy"</code></pre>
+<p>To fix immediately (note: this will disconnect USB SSH):</p>
+<pre><code># Unload g_ether
+sudo rmmod g_ether usb_f_ecm usb_f_rndis u_ether 2>/dev/null
+
+# Re-bind the HID gadget
+echo "20980000.usb" | sudo tee /sys/kernel/config/usb_gadget/morse-pi-keyboard/UDC
+
+# Verify
+ls /dev/hidg0</code></pre>
+<p>To fix permanently (recommended — the installer does this automatically):</p>
+<pre><code># Blacklist g_ether so it never loads
+echo "blacklist g_ether" | sudo tee /etc/modprobe.d/morse-pi-no-gadget-conflict.conf
+
+# Remove from cmdline.txt if present
+sudo sed -i 's/,g_ether//g; s/g_ether,//g' /boot/firmware/cmdline.txt
+
+# Remove from /etc/modules if present
+sudo sed -i '/^g_ether/d' /etc/modules
+
+# Reboot
+sudo reboot</code></pre>
+<div class="callout">
+  <div class="callout-title">⚠ WiFi required</div>
+  Disabling <code>g_ether</code> removes USB-over-Ethernet networking. Make sure you have WiFi SSH configured before blacklisting, or you'll lose remote access to the Pi.
+</div>
+
 <h3>Computer doesn't recognize the keyboard</h3>
 <ul>
   <li>Use the <strong>data port</strong>, not the power-only port</li>

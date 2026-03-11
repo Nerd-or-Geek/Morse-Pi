@@ -136,6 +136,15 @@
   <li>Check kernel config: <code>grep dtoverlay=dwc2 /boot/config.txt</code></li>
 </ul>
 
+<h3><code>g_ether</code> blocking HID (most common)</h3>
+<p>The Pi Zero has only <strong>one USB controller</strong>. If <code>g_ether</code> (USB Ethernet for SSH-over-USB) loads before the HID gadget, it monopolises the port. Run <code>lsmod | grep g_ether</code> to check.</p>
+<ul>
+  <li><strong>Quick fix</strong>: <code>sudo rmmod g_ether usb_f_ecm usb_f_rndis u_ether 2>/dev/null</code>, then <code>echo "20980000.usb" | sudo tee /sys/kernel/config/usb_gadget/morse-pi-keyboard/UDC</code></li>
+  <li><strong>Permanent fix</strong>: <code>echo "blacklist g_ether" | sudo tee /etc/modprobe.d/morse-pi-no-gadget-conflict.conf</code> and reboot</li>
+  <li>The installer (v2+) does this automatically. Re-run the installer to apply the fix.</li>
+  <li>⚠ Disabling <code>g_ether</code> removes USB-over-Ethernet SSH. Ensure WiFi is configured first.</li>
+</ul>
+
 <h3>"Permission denied" writing to /dev/hidg0</h3>
 <ul>
   <li>Fix permissions: <code>sudo chmod 666 /dev/hidg0</code></li>

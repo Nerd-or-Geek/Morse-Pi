@@ -118,12 +118,56 @@ if [[ "${IS_PI}" == "true" ]]; then
     HID_NEEDS_REBOOT=true
   fi
 
-  # ── HID gadget setup script ──
-  if [[ -x "${HID_SCRIPT}" ]]; then
-    ok "HID setup script exists at ${HID_SCRIPT}"
-  else
-    info "Writing HID gadget setup script to ${HID_SCRIPT}…"
-    cat > "${HID_SCRIPT}" <<'HIDEOF'
+  # ── Blacklist conflicting USB gadget drivers ──
+  # g_ether provides USB Ethernet (SSH-over-USB) but monopolises the single
+  # UDC on a Pi Zero, preventing the HID keyboard gadget from binding.
+  BLACKLIST_FILE="/etc/modprobe.d/morse-pi-no-gadget-conflict.conf"
+  info "Ensuring conflicting USB gadget modules are blacklisted…"
+  cat > "${BLACKLIST_FILE}" <<'BLEOF'
+# Morse-Pi: prevent legacy gadget drivers from grabbing the UDC
+# These conflict with the configfs-based USB HID keyboard gadget.
+blacklist g_ether
+blacklist g_serial
+blacklist g_mass_storage
+blacklist g_multi
+blacklist g_zero
+blacklist g_webcam
+BLEOF
+  ok "Conflicting modules blacklisted"
+
+  # ── Clean g_ether from cmdline.txt / modules ──
+  CMDLINE=""
+  if [[ -f /boot/firmware/cmdline.txt ]]; then
+    CMDLINE="/boot/firmware/cmdline.txt"
+  elif [[ -f /boot/cmdline.txt ]]; then
+    CMDLINE="/boot/cmdline.txt"
+  fi
+  if [[ -n "${CMDLINE}" ]]; then
+    if grep -q "g_ether" "${CMDLINE}" 2>/dev/null; then
+      info "Removing g_ether from ${CMDLINE}…"
+      sed -i 's/,g_ether//g; s/g_ether,//g; s/modules-load=g_ether //g' "${CMDLINE}"
+      ok "g_ether removed from ${CMDLINE}"
+      HID_NEEDS_REBOOT=true
+    fi
+  fi
+  if grep -q "^g_ether" /etc/modules 2>/dev/null; then
+    info "Removing g_ether from /etc/modules…"
+    sed -i '/^g_ether/d' /etc/modules
+    ok "g_ether removed from /etc/modules"
+    HID_NEEDS_REBOOT=true
+  fi
+
+  # ── Remove stale dr_mode=host from config.txt ──
+  if grep -q "dr_mode=host" "${CONFIG_TXT}" 2>/dev/null; then
+    info "Removing dr_mode=host from ${CONFIG_TXT} (breaks USB gadget mode)…"
+    sed -i '/dtoverlay=dwc2,dr_mode=host/d' "${CONFIG_TXT}"
+    ok "dr_mode=host line removed"
+    HID_NEEDS_REBOOT=true
+  fi
+
+  # ── HID gadget setup script (always rewrite to pick up fixes) ──
+  info "Writing HID gadget setup script to ${HID_SCRIPT}…"
+  cat > "${HID_SCRIPT}" <<'HIDEOF'
 #!/bin/bash
 # Morse-Pi USB HID Keyboard Gadget Setup
 set -e
@@ -132,8 +176,39 @@ modprobe libcomposite 2>/dev/null || true
 
 GADGET_DIR="/sys/kernel/config/usb_gadget/morse-pi-keyboard"
 
+# ── Remove conflicting USB gadget drivers ──
+# g_ether (USB Ethernet), g_serial, g_mass_storage, g_multi etc. monopolise
+# the single UDC on a Pi Zero, preventing us from binding the HID gadget.
+for mod in g_ether g_serial g_mass_storage g_multi g_zero g_webcam; do
+  if lsmod | grep -q "^${mod} "; then
+    echo "Removing conflicting gadget module: ${mod}"
+    rmmod "${mod}" 2>/dev/null || true
+  fi
+done
+
+# Also clean up orphaned function drivers left behind
+for mod in usb_f_ecm usb_f_rndis u_ether usb_f_acm u_serial; do
+  if lsmod | grep -q "^${mod} "; then
+    rmmod "${mod}" 2>/dev/null || true
+  fi
+done
+
+# If gadget dir exists, check if UDC is already bound.  If so, we're done.
 if [[ -d "${GADGET_DIR}" ]]; then
-  exit 0
+  CURRENT_UDC=$(cat "${GADGET_DIR}/UDC" 2>/dev/null | tr -d '[:space:]')
+  if [[ -n "${CURRENT_UDC}" ]]; then
+    echo "USB HID already bound to ${CURRENT_UDC}"
+    exit 0
+  fi
+  # Gadget dir exists but UDC is empty — try to bind it
+  UDC=$(ls /sys/class/udc 2>/dev/null | head -n1)
+  if [[ -n "${UDC}" ]]; then
+    echo "${UDC}" > "${GADGET_DIR}/UDC"
+    echo "USB HID keyboard gadget re-bound to ${UDC}"
+    exit 0
+  fi
+  echo "Gadget configured but no UDC available" >&2
+  exit 1
 fi
 
 if [[ ! -d /sys/kernel/config/usb_gadget ]]; then
@@ -180,9 +255,8 @@ else
   exit 1
 fi
 HIDEOF
-    chmod +x "${HID_SCRIPT}"
-    ok "HID setup script created"
-  fi
+  chmod +x "${HID_SCRIPT}"
+  ok "HID setup script created"
 
   # ── udev rule ──
   UDEV_RULE="/etc/udev/rules.d/99-morse-pi-hid.rules"
