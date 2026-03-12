@@ -23,7 +23,7 @@ use std::time::Duration;
 // ════════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug)]
-enum Method { GET, POST, OTHER }
+enum Method { GET, POST, OPTIONS, OTHER }
 
 struct Request {
     method: Method,
@@ -57,6 +57,7 @@ fn parse_request(stream: &mut TcpStream) -> Option<Request> {
     let method = match method_str {
         "GET" => Method::GET,
         "POST" => Method::POST,
+        "OPTIONS" => Method::OPTIONS,
         _ => Method::OTHER,
     };
 
@@ -84,17 +85,23 @@ fn parse_request(stream: &mut TcpStream) -> Option<Request> {
 fn send_response(stream: &mut TcpStream, status: u16, content_type: &str, body: &str) {
     let status_text = match status {
         200 => "OK",
+        204 => "No Content",
         404 => "Not Found",
         405 => "Method Not Allowed",
         500 => "Internal Server Error",
         _ => "OK",
     };
     let header = format!(
-        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nConnection: close\r\n\r\n",
         status, status_text, content_type, body.len(),
     );
     let _ = stream.write_all(header.as_bytes());
     let _ = stream.write_all(body.as_bytes());
+}
+
+fn send_no_content(stream: &mut TcpStream) {
+    let header = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let _ = stream.write_all(header.as_bytes());
 }
 
 fn send_json(stream: &mut TcpStream, body: &str) {
@@ -118,8 +125,20 @@ fn json_str<'a>(body: &'a str, key: &str) -> Option<&'a str> {
     let trimmed = after.trim_start();
     if trimmed.starts_with('"') {
         let rest = &trimmed[1..];
-        let end = rest.find('"')?;
-        Some(&rest[..end])
+        // Walk through chars to find unescaped closing quote
+        let mut i = 0;
+        let bytes = rest.as_bytes();
+        while i < bytes.len() {
+            if bytes[i] == b'\\' {
+                i += 2; // skip escaped char
+                continue;
+            }
+            if bytes[i] == b'"' {
+                return Some(&rest[..i]);
+            }
+            i += 1;
+        }
+        None
     } else {
         // Non-string value
         let end = trimmed.find(|c: char| c == ',' || c == '}' || c == ' ' || c == '\r' || c == '\n').unwrap_or(trimmed.len());
@@ -197,6 +216,10 @@ fn substitute_expr(result: &mut String, expr: &str) {
 // ════════════════════════════════════════════════════════════════════════════
 
 fn handle_connection(mut stream: TcpStream) {
+    // Set read/write timeout so stalled connections don't hang threads forever
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+
     let req = match parse_request(&mut stream) {
         Some(r) => r,
         None => return,
@@ -205,6 +228,7 @@ fn handle_connection(mut stream: TcpStream) {
     match req.method {
         Method::GET => route_get(&mut stream, &req.path),
         Method::POST => route_post(&mut stream, &req.path, &req.body),
+        Method::OPTIONS => send_no_content(&mut stream),
         Method::OTHER => send_405(&mut stream),
     }
 }
@@ -225,6 +249,7 @@ fn route_get(stream: &mut TcpStream, path: &str) {
         }
         "/net_status" => handle_net_status(stream),
         "/kb_status" => handle_kb_status(stream),
+        "/favicon.ico" => send_response(stream, 204, "image/x-icon", ""),
         _ => send_404(stream),
     }
 }
@@ -277,9 +302,11 @@ fn handle_status(stream: &mut TcpStream) {
         json.pop();
     }
     let keyer_label = sound::KEYER_STATE_LABEL.lock().unwrap().clone();
+    let pin_states = gpio::pin_states_json();
     let extra = format!(
-        r#","gpio_available":{},"pin_states":{{}},"keyer_state":"{}","kb_enabled":{},"kb_mode":"{}","kb_dot_key":"{}","kb_dash_key":"{}","usb_hid_available":{}}}"#,
+        r#","gpio_available":{},"pin_states":{},"keyer_state":"{}","kb_enabled":{},"kb_mode":"{}","kb_dot_key":"{}","kb_dash_key":"{}","usb_hid_available":{}}}"#,
         st.gpio_available,
+        pin_states,
         escape_json(&keyer_label),
         st.settings.kb_enabled,
         escape_json(&st.settings.kb_mode),
@@ -345,16 +372,9 @@ fn handle_gpio_poll(stream: &mut TcpStream) {
 }
 
 fn handle_net_status(stream: &mut TcpStream) {
-    let ip = network::get_local_ip();
-    let device_name = state::STATE.lock().unwrap().settings.device_name.clone();
-    let _now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
+    // Build response from peers_json() (contains self + peers), then append inbox
+    let mut base = network::peers_json();
 
-    let _peers_json = network::peers_json();
-    // The peers_json already includes self — we need to also add inbox
-    // For simplicity, build the full response
     let st = state::STATE.lock().unwrap();
     let inbox: Vec<String> = st.net_inbox.iter().rev().map(|msg| {
         format!(
@@ -367,16 +387,12 @@ fn handle_net_status(stream: &mut TcpStream) {
     }).collect();
     drop(st);
 
-    // Parse peers from peers_json and rebuild with inbox
-    // Simpler: use the same format as the Zig version
-    let json = format!(
-        r#"{{"self":{{"uuid":"{}","name":"{}","ip":"{}","port":5000}},"peers":[],"inbox":[{}]}}"#,
-        escape_json(network::device_uuid()),
-        escape_json(&device_name),
-        escape_json(&ip),
-        inbox.join(","),
-    );
-    send_json(stream, &json);
+    // peers_json() ends with "}" — strip it and append inbox
+    if base.ends_with('}') {
+        base.pop();
+    }
+    base.push_str(&format!(r#","inbox":[{}]}}"#, inbox.join(",")));
+    send_json(stream, &base);
 }
 
 fn handle_kb_status(stream: &mut TcpStream) {
@@ -1094,21 +1110,29 @@ fn main() {
     let gpio_avail = state::STATE.lock().unwrap().gpio_available;
     let pin_mode = state::STATE.lock().unwrap().settings.pin_mode.clone();
     let hid_avail = keyboard::USB_HID_AVAILABLE.load(std::sync::atomic::Ordering::Relaxed);
+    let local_ip = network::get_local_ip();
     println!("=== Morse-Pi (Rust) Starting ===");
     println!(" GPIO available:   {}", gpio_avail);
     println!(" Pin mode:         {}", pin_mode);
     println!(" USB HID:          {}", if hid_avail { "AVAILABLE" } else { "NOT AVAILABLE" });
+    println!(" Local IP:         {}", local_ip);
     println!(" Listening on:     http://0.0.0.0:5000");
     println!("================================");
 
     // ── Start HTTP server ──
+    // Use 256KB stack per handler thread instead of the default 2MB (Pi Zero only has 512MB RAM).
     let listener = TcpListener::bind("0.0.0.0:5000").expect("Failed to bind to port 5000");
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                thread::spawn(move || {
-                    handle_connection(stream);
-                });
+                thread::Builder::new()
+                    .stack_size(256 * 1024)
+                    .spawn(move || {
+                        handle_connection(stream);
+                    })
+                    .unwrap_or_else(|e| {
+                        eprintln!("thread spawn error: {}", e);
+                    });
             }
             Err(e) => {
                 eprintln!("accept error: {}", e);
