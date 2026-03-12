@@ -288,11 +288,13 @@ pub fn init_gpio() {
         start_keyer_thread();
     } else {
         gpio::setup_input_pin(pi, settings.data_pin);
+        start_straight_key_thread();
     }
 }
 
 pub fn recreate_gpio() {
     stop_keyer_thread();
+    stop_straight_key_thread();
     VIRTUAL_DOT.store(false, Ordering::Relaxed);
     VIRTUAL_DASH.store(false, Ordering::Relaxed);
     init_gpio();
@@ -309,6 +311,9 @@ static KEYER_RUNNING: AtomicBool = AtomicBool::new(false);
 
 pub static VIRTUAL_DOT: AtomicBool = AtomicBool::new(false);
 pub static VIRTUAL_DASH: AtomicBool = AtomicBool::new(false);
+
+static STRAIGHT_KEY_STOP: AtomicBool = AtomicBool::new(false);
+static STRAIGHT_KEY_RUNNING: AtomicBool = AtomicBool::new(false);
 
 fn is_dot_pressed() -> bool {
     if VIRTUAL_DOT.load(Ordering::Relaxed) { return true; }
@@ -495,6 +500,65 @@ fn stop_keyer_thread() {
     KEYER_STOP.store(true, Ordering::Relaxed);
     // Wait for thread to exit
     while KEYER_RUNNING.load(Ordering::Relaxed) {
+        thread::sleep(Duration::from_millis(5));
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  STRAIGHT KEY GPIO POLLING  (single-pin mode)
+// ════════════════════════════════════════════════════════════════════════════
+
+fn straight_key_worker() {
+    let mut was_pressed = false;
+    while !STRAIGHT_KEY_STOP.load(Ordering::Relaxed) {
+        // Read pin and current mode under a single lock scope
+        let (pressed, mode) = {
+            let st = state::STATE.lock().unwrap();
+            if !gpio::use_pigpio() || st.pi_handle < 0 {
+                drop(st);
+                thread::sleep(Duration::from_millis(50));
+                continue;
+            }
+            let p = gpio::read_pin(st.pi_handle, st.settings.data_pin as u32)
+                        == Some(false);          // active-low
+            let m = st.mode.clone();
+            (p, m)
+        };
+        // STATE lock is dropped — safe to call press/release functions
+
+        if pressed != was_pressed {
+            was_pressed = pressed;
+            if pressed {
+                match mode.as_str() {
+                    "speed"   => speed_button_pressed(),
+                    "network" => net_key_pressed(),
+                    _         => send_button_pressed(),
+                }
+            } else {
+                match mode.as_str() {
+                    "speed"   => speed_button_released(),
+                    "network" => net_key_released(),
+                    _         => send_button_released(),
+                }
+            }
+            thread::sleep(Duration::from_millis(50)); // debounce
+        } else {
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+    STRAIGHT_KEY_RUNNING.store(false, Ordering::Relaxed);
+}
+
+fn start_straight_key_thread() {
+    STRAIGHT_KEY_STOP.store(false, Ordering::Relaxed);
+    if STRAIGHT_KEY_RUNNING.load(Ordering::Relaxed) { return; }
+    STRAIGHT_KEY_RUNNING.store(true, Ordering::Relaxed);
+    thread::spawn(straight_key_worker);
+}
+
+fn stop_straight_key_thread() {
+    STRAIGHT_KEY_STOP.store(true, Ordering::Relaxed);
+    while STRAIGHT_KEY_RUNNING.load(Ordering::Relaxed) {
         thread::sleep(Duration::from_millis(5));
     }
 }

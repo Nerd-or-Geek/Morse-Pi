@@ -1288,8 +1288,10 @@ function renderNetPeers(peers){
       <button class="btn btn-primary" style="font-size:0.57rem;" onclick="quickSendToPeer('${esc(p.ip)}',${p.port},'${esc(p.name)}')">&#9654; SEND</button>
     </div>`).join('');
   if(selectEl){
+    const prev = selectEl.value;
     selectEl.innerHTML = '<option value="">-- select peer --</option>' +
       peers.map(p=>`<option value="${esc(p.ip)}:${p.port}">${esc(p.name)} (${esc(p.ip)})</option>`).join('');
+    if(prev) selectEl.value = prev;
   }
 }
 
