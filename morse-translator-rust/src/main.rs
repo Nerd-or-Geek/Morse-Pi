@@ -436,29 +436,29 @@ fn handle_set_mode(stream: &mut TcpStream, body: &str) {
         return;
     }
 
-    let mut st = state::STATE.lock().unwrap();
-    st.mode = mode_str.clone();
+    {
+        let mut st = state::STATE.lock().unwrap();
+        st.mode = mode_str.clone();
+    }
 
     if mode_str == "decode" {
-        let diff = st.settings.difficulty.clone();
-        drop(st);
+        let diff = state::STATE.lock().unwrap().settings.difficulty.clone();
         let phrase = morse::random_phrase(&diff);
         let mut st = state::STATE.lock().unwrap();
         st.current_phrase = phrase;
         st.decode_result.clear();
     } else if mode_str == "speed" {
-        let diff = st.settings.difficulty.clone();
-        drop(st);
+        let diff = state::STATE.lock().unwrap().settings.difficulty.clone();
         let phrase = morse::random_phrase(&diff);
-        let mut st = state::STATE.lock().unwrap();
-        st.speed_phrase = phrase;
-        st.speed_result.clear();
-        st.speed_morse_buffer.clear();
-        st.speed_morse_output.clear();
-        drop(st);
+        {
+            let mut st = state::STATE.lock().unwrap();
+            st.speed_phrase = phrase;
+            st.speed_result.clear();
+            st.speed_morse_buffer.clear();
+            st.speed_morse_output.clear();
+        }
         sound::recreate_gpio();
     } else if mode_str == "send" {
-        drop(st);
         sound::recreate_gpio();
     }
     send_state_json(stream);
@@ -875,14 +875,19 @@ fn handle_assign_gpio(stream: &mut TcpStream, body: &str) {
 
 fn handle_net_key_mode(stream: &mut TcpStream, body: &str) {
     let enabled = json_bool(body, "enabled").unwrap_or(false);
-    let mut st = state::STATE.lock().unwrap();
-    st.net_key_mode_enabled = enabled;
+    {
+        let mut st = state::STATE.lock().unwrap();
+        st.net_key_mode_enabled = enabled;
+        if !enabled {
+            st.net_morse_buffer_str.clear();
+            st.net_morse_output_str.clear();
+        }
+    }
+    // Drop lock before clear_net_morse_buffers to avoid ABBA deadlock with net_key_released
     if !enabled {
-        st.net_morse_buffer_str.clear();
-        st.net_morse_output_str.clear();
         sound::clear_net_morse_buffers();
     }
-    let json = format!(r#"{{"ok":true,"net_key_mode":{}}}"#, st.net_key_mode_enabled);
+    let json = format!(r#"{{"ok":true,"net_key_mode":{}}}"#, enabled);
     send_json(stream, &json);
 }
 
@@ -925,12 +930,14 @@ fn handle_net_send_morse(stream: &mut TcpStream, body: &str) {
 
     match network::send_to_peer_http(&ip, port_val, &payload) {
         Ok(_) => {
-            let mut st = state::STATE.lock().unwrap();
-            st.net_morse_buffer_str.clear();
-            st.net_morse_output_str.clear();
+            {
+                let mut st = state::STATE.lock().unwrap();
+                st.net_morse_buffer_str.clear();
+                st.net_morse_output_str.clear();
+            }
+            // Drop lock before clear_net_morse_buffers to avoid ABBA deadlock
             sound::clear_net_morse_buffers();
             let resp = format!(r#"{{"ok":true,"result":{{"ok":true}},"sent_text":"{}"}}"#, escape_json(&text_upper));
-            drop(st);
             send_json(stream, &resp);
         }
         Err(_) => {
