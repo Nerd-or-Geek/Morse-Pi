@@ -236,6 +236,7 @@ fn handle_connection(mut stream: TcpStream) {
 fn route_get(stream: &mut TcpStream, path: &str) {
     match path {
         "/" => serve_template(stream, "templates/index.html"),
+        "/radio" => serve_template(stream, "templates/radio.html"),
         "/diag" => serve_template(stream, "templates/diag.html"),
         "/status" => handle_status(stream),
         "/gpio_poll" => handle_gpio_poll(stream),
@@ -575,6 +576,9 @@ fn handle_save_settings(stream: &mut TcpStream, body: &str) {
     if let Some(v) = json_float(body, "volume") { st.settings.volume = v; }
     if let Some(v) = json_bool(body, "use_external_switch") { st.settings.use_external_switch = v; }
     if let Some(v) = json_bool(body, "kb_enabled") { st.settings.kb_enabled = v; }
+    if let Some(v) = json_bool(body, "radio_local_monitor") { st.settings.radio_local_monitor = v; }
+    if let Some(v) = json_bool(body, "radio_remote_monitor") { st.settings.radio_remote_monitor = v; }
+    if let Some(v) = json_bool(body, "radio_receive_enabled") { st.settings.radio_receive_enabled = v; }
 
     // Legacy Farnsworth compatibility for older frontends that still post toggle/multiplier settings.
     let legacy_enabled = json_bool(body, "farnsworth_enabled");
@@ -995,6 +999,9 @@ fn handle_net_live_transmit_set(stream: &mut TcpStream, body: &str) {
         if enabled {
             st.net_live_transmit_target_ip = ip;
             st.net_live_transmit_target_port = port;
+        } else {
+            st.net_live_transmit_target_ip.clear();
+            st.net_live_transmit_target_port = 5000;
         }
     }
     
@@ -1047,32 +1054,37 @@ fn handle_net_live_key(stream: &mut TcpStream, body: &str) {
     let pressed = json_bool(body, "pressed").unwrap_or(false);
     let sym = json_str(body, "sym").unwrap_or("single").to_string();
 
-    // Play or stop tone locally
+    let (enabled, remote_enabled, local_monitor, ip, port, dev_name, freq) = {
+        let st = state::STATE.lock().unwrap();
+        (
+            st.net_live_transmit_enabled,
+            st.settings.radio_remote_monitor,
+            st.settings.radio_local_monitor,
+            st.net_live_transmit_target_ip.clone(),
+            st.net_live_transmit_target_port,
+            st.settings.device_name.clone(),
+            if sym == "dash" {
+                st.settings.dash_freq as u32
+            } else {
+                st.settings.dot_freq as u32
+            },
+        )
+    };
+
     if pressed {
-        let freq = {
-            let st = state::STATE.lock().unwrap();
-            if sym == "dash" { st.settings.dash_freq as u32 } else { st.settings.dot_freq as u32 }
-        };
-        thread::spawn(move || { sound::play_tone(freq, None); });
+        if !enabled || local_monitor {
+            thread::spawn(move || { sound::play_tone(freq, None); });
+        }
         state::STATE.lock().unwrap().button_active = true;
     } else {
         sound::stop_tone();
         state::STATE.lock().unwrap().button_active = false;
     }
 
-    // Forward to live transmit peer if enabled
-    let (enabled, ip, port, dev_name) = {
-        let st = state::STATE.lock().unwrap();
-        (
-            st.net_live_transmit_enabled,
-            st.net_live_transmit_target_ip.clone(),
-            st.net_live_transmit_target_port,
-            st.settings.device_name.clone(),
-        )
-    };
-    if enabled && !ip.is_empty() {
+    if enabled && remote_enabled && !ip.is_empty() {
+        let sym_to_send = sym.clone();
         thread::spawn(move || {
-            network::send_live_key_http(&ip, port, pressed, &dev_name);
+            network::send_live_key_http(&ip, port, pressed, &sym_to_send, &dev_name);
         });
     }
 
@@ -1081,8 +1093,9 @@ fn handle_net_live_key(stream: &mut TcpStream, body: &str) {
 
 fn handle_net_receive_live_key(stream: &mut TcpStream, body: &str) {
     let pressed = json_bool(body, "pressed").unwrap_or(false);
+    let sym = json_str(body, "sym").unwrap_or("single").to_string();
     if pressed {
-        thread::spawn(|| { sound::net_live_receive_key_down(); });
+        thread::spawn(move || { sound::net_live_receive_key_down(&sym); });
     } else {
         sound::net_live_receive_key_up();
     }
@@ -1094,6 +1107,11 @@ fn handle_net_receive_live_symbol(stream: &mut TcpStream, body: &str) {
     
     if symbol != "." && symbol != "-" {
         send_json(stream, r#"{"ok":false,"error":"invalid symbol"}"#);
+        return;
+    }
+
+    if !state::STATE.lock().unwrap().settings.radio_receive_enabled {
+        send_json(stream, r#"{"ok":true}"#);
         return;
     }
     

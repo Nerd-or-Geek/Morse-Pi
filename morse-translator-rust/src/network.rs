@@ -247,14 +247,15 @@ pub fn send_to_peer_http(ip: &str, port: u16, payload: &str) -> Result<(), Strin
 
 /// Send a live-key event (key_down / key_up) to a peer — single attempt, short timeout.
 /// Used for real-time transmission forwarding; latency matters more than reliability.
-pub fn send_live_key_http(ip: &str, port: u16, pressed: bool, sender_name: &str) {
+pub fn send_live_key_http(ip: &str, port: u16, pressed: bool, sym: &str, sender_name: &str) {
     let addr: SocketAddr = match format!("{}:{}", ip, port).parse() {
         Ok(a) => a,
         Err(_) => return,
     };
     let payload = format!(
-        r#"{{"pressed":{},"sender_name":"{}"}}"#,
+        r#"{{"pressed":{},"sym":"{}","sender_name":"{}"}}"#,
         pressed,
+        state::escape_json(sym),
         sender_name.replace('\\', "\\\\").replace('"', "\\\""),
     );
     if let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(600)) {

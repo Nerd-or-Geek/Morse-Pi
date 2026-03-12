@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Morse-Pi Radio Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#050a0e;
+      --bg2:#0b1520;
+      --bg3:#0f1e2e;
+      --border:#1a3a5c;
+      --accent:#00d4ff;
+      --accent2:#ff6b35;
+      --accent3:#39ff14;
+      --danger:#ff3366;
+      --text:#c8dce8;
+      --text-dim:#5b7b95;
+      --gold:#ffd700;
+      --glow:0 0 18px rgba(0,212,255,0.25);
+      --glow-green:0 0 18px rgba(57,255,20,0.25);
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      font-family:'Inter',sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      min-height:100vh;
+      padding:18px;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size:40px 40px;
+    }
+    .wrap { max-width:1080px; margin:0 auto; }
+    .header {
+      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--border);
+    }
+    .brand {
+      font-family:'Orbitron',monospace; font-weight:900; letter-spacing:.08em;
+      color:var(--accent); font-size:1.35rem;
+    }
+    .sub { color:var(--text-dim); font-size:.82rem; margin-top:4px; }
+    .header-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn {
+      border:1px solid var(--border); background:var(--bg2); color:var(--text);
+      border-radius:8px; cursor:pointer; padding:9px 14px;
+      font-family:'Orbitron',monospace; font-size:.62rem; letter-spacing:.08em; text-transform:uppercase;
+      transition:.15s ease;
+    }
+    .btn:hover { border-color:var(--accent); color:var(--accent); box-shadow:var(--glow); }
+    .btn.primary { border-color:rgba(0,212,255,0.35); color:var(--accent); }
+    .btn.success { border-color:rgba(57,255,20,0.35); color:var(--accent3); }
+    .btn.warn { border-color:rgba(255,107,53,0.35); color:var(--accent2); }
+    .grid { display:grid; grid-template-columns:1.1fr .9fr; gap:16px; }
+    .panel {
+      background:var(--bg2); border:1px solid var(--border); border-radius:14px;
+      padding:18px; position:relative; overflow:hidden;
+    }
+    .panel::before {
+      content:''; position:absolute; inset:0 auto auto 0; width:100%; height:1px;
+      background:linear-gradient(90deg, transparent, var(--accent), transparent); opacity:.35;
+    }
+    .title {
+      font-family:'Orbitron',monospace; font-size:.68rem; letter-spacing:.14em;
+      text-transform:uppercase; color:var(--accent); margin-bottom:14px;
+    }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+    .stat {
+      background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px; text-align:center;
+    }
+    .stat .v { font-family:'Orbitron',monospace; font-size:1.1rem; color:var(--accent3); }
+    .stat .l { font-size:.58rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:.08em; margin-top:3px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .field { display:flex; flex-direction:column; gap:5px; flex:1; min-width:170px; }
+    .label {
+      font-family:'Orbitron',monospace; font-size:.58rem; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--text-dim);
+    }
+    .input, select {
+      width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border);
+      border-radius:8px; padding:10px 12px; font-family:'Share Tech Mono',monospace; outline:none;
+    }
+    .input:focus, select:focus { border-color:var(--accent); box-shadow:var(--glow); }
+    .hint { color:var(--text-dim); font-size:.76rem; line-height:1.5; margin-top:8px; }
+    .seg {
+      display:flex; background:var(--bg); border:1px solid var(--border); border-radius:10px; overflow:hidden;
+    }
+    .seg button {
+      flex:1; border:none; background:transparent; color:var(--text-dim); cursor:pointer;
+      padding:10px 8px; font-family:'Orbitron',monospace; font-size:.58rem; letter-spacing:.08em; text-transform:uppercase;
+      transition:.15s ease;
+    }
+    .seg button.active { background:rgba(0,212,255,0.12); color:var(--accent); }
+    .seg button.good.active { background:rgba(57,255,20,0.12); color:var(--accent3); }
+    .seg button.warn.active { background:rgba(255,107,53,0.14); color:var(--accent2); }
+    .live-display {
+      min-height:82px; display:flex; align-items:center; justify-content:center; text-align:center;
+      border-radius:12px; border:1px solid var(--border); background:var(--bg);
+      font-family:'Share Tech Mono',monospace; font-size:1.25rem; letter-spacing:.12em;
+      padding:14px; margin:12px 0;
+      transition:border-color .15s ease, box-shadow .15s ease;
+    }
+    .live-display.active { border-color:var(--accent3); box-shadow:var(--glow-green); }
+    .key-row { display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; }
+    .key {
+      flex:1; min-width:170px; min-height:92px; border-radius:12px; border:2px solid var(--border);
+      background:linear-gradient(135deg, rgba(0,212,255,0.08), var(--bg3)); color:var(--accent);
+      display:flex; flex-direction:column; justify-content:center; align-items:center; gap:6px;
+      font-family:'Orbitron',monospace; font-weight:700; letter-spacing:.1em; cursor:pointer; user-select:none;
+      transition:.08s ease;
+    }
+    .key.dot { color:var(--accent3); border-color:rgba(57,255,20,0.35); background:linear-gradient(135deg, rgba(57,255,20,0.09), var(--bg3)); }
+    .key.dash { color:var(--accent2); border-color:rgba(255,107,53,0.35); background:linear-gradient(135deg, rgba(255,107,53,0.12), var(--bg3)); }
+    .key.single { border-color:rgba(0,212,255,0.35); }
+    .key.pressed { transform:scale(.98); box-shadow:0 0 20px rgba(0,212,255,0.22); }
+    .key.dot.pressed { box-shadow:0 0 20px rgba(57,255,20,0.22); }
+    .key.dash.pressed { box-shadow:0 0 20px rgba(255,107,53,0.22); }
+    .key small { font-family:'Share Tech Mono',monospace; font-size:.72rem; opacity:.65; letter-spacing:normal; }
+    .peer-list { display:flex; flex-direction:column; gap:8px; max-height:310px; overflow:auto; }
+    .peer {
+      background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:10px 12px;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .peer strong { font-family:'Orbitron',monospace; font-size:.68rem; color:var(--accent); }
+    .peer .meta { font-size:.74rem; color:var(--text-dim); margin-top:3px; font-family:'Share Tech Mono',monospace; }
+    .pill {
+      display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px;
+      border:1px solid var(--border); background:var(--bg); font-size:.64rem; color:var(--text-dim);
+      font-family:'Orbitron',monospace; letter-spacing:.06em; text-transform:uppercase;
+    }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--text-dim); }
+    .dot.ok { background:var(--accent3); box-shadow:var(--glow-green); }
+    .dot.live { background:var(--accent); box-shadow:var(--glow); }
+    .toast-wrap { position:fixed; right:18px; bottom:18px; display:flex; flex-direction:column; gap:8px; z-index:9999; }
+    .toast {
+      background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:11px 14px;
+      font-family:'Orbitron',monospace; font-size:.62rem; letter-spacing:.06em;
+    }
+    .toast.ok { color:var(--accent3); border-color:rgba(57,255,20,0.35); }
+    .toast.err { color:var(--danger); border-color:rgba(255,51,102,0.35); }
+    .toast.info { color:var(--accent); border-color:rgba(0,212,255,0.35); }
+    @media (max-width: 880px) {
+      .grid { grid-template-columns:1fr; }
+      .stats { grid-template-columns:repeat(2,1fr); }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <div class="brand">◈ MORSE-PI RADIO CONTROL</div>
+      <div class="sub">Dedicated live link window for real-time sidetone and peer audio.</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn" onclick="window.location.href='/'">Main App</button>
+      <button class="btn" onclick="window.open('/diag','gpio_diag','width=560,height=820,resizable=yes,menubar=no,toolbar=no,location=no')">GPIO Diag</button>
+      <button class="btn primary" onclick="refreshAll(true)">Refresh</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="v" id="stat-device">--</div><div class="l">Device</div></div>
+    <div class="stat"><div class="v" id="stat-peer-count">0</div><div class="l">Peers</div></div>
+    <div class="stat"><div class="v" id="stat-mode">--</div><div class="l">Input</div></div>
+    <div class="stat"><div class="v" id="stat-speed">--</div><div class="l">WPM</div></div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <div class="title">Live link</div>
+        <div class="row">
+          <div class="field" style="flex:1.4;">
+            <div class="label">Target Raspberry Pi</div>
+            <select id="peer-select" onchange="selectPeer(this.value)"></select>
+          </div>
+          <div class="field" style="max-width:220px;">
+            <div class="label">Live Session</div>
+            <div class="seg" id="seg-live"></div>
+          </div>
+        </div>
+        <div class="hint" id="target-hint">Choose a peer, arm the live link, and key away.</div>
+
+        <div class="row" style="margin-top:14px;">
+          <div class="field">
+            <div class="label">Local Sidetone</div>
+            <div class="seg" id="seg-local"></div>
+          </div>
+          <div class="field">
+            <div class="label">Send Audio To Peer</div>
+            <div class="seg" id="seg-remote"></div>
+          </div>
+          <div class="field">
+            <div class="label">Receive Peer Audio</div>
+            <div class="seg" id="seg-receive"></div>
+          </div>
+        </div>
+
+        <div class="live-display" id="live-display">Initializing…</div>
+        <div class="row" style="justify-content:space-between;align-items:center;">
+          <div class="pill"><span class="dot" id="server-dot"></span> Server</div>
+          <div class="pill"><span class="dot" id="radio-dot"></span> Radio Link</div>
+          <div class="pill"><span class="dot" id="key-dot"></span> Key Active</div>
+        </div>
+
+        <div class="key-row" id="live-keys"></div>
+        <div class="hint">Keyboard shortcuts: <strong>Space</strong> for straight key, <strong>Z</strong>/<strong>X</strong> for dot/dash in iambic mode. Physical GPIO keying follows the same live switches.</div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="title">Backend control</div>
+        <div class="row">
+          <div class="field" style="flex:1.2;">
+            <div class="label">Device Name</div>
+            <input class="input" id="device-name" type="text" maxlength="48">
+          </div>
+          <div class="field" style="max-width:220px;">
+            <div class="label">Input Mode</div>
+            <div class="seg" id="seg-pin-mode"></div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:14px;">
+          <div class="field">
+            <div class="label">Character Speed (WPM)</div>
+            <input class="input" id="char-wpm" type="number" min="5" max="60">
+          </div>
+          <div class="field">
+            <div class="label">Farnsworth Speed (WPM)</div>
+            <input class="input" id="farn-wpm" type="number" min="5" max="60">
+          </div>
+          <div class="field">
+            <div class="label">Dot Tone (Hz)</div>
+            <input class="input" id="dot-freq" type="number" min="50" max="4000">
+          </div>
+          <div class="field">
+            <div class="label">Dash Tone (Hz)</div>
+            <input class="input" id="dash-freq" type="number" min="50" max="4000">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:14px; align-items:flex-end;">
+          <button class="btn success" onclick="saveRadioSettings()">Save Radio Settings</button>
+          <button class="btn warn" onclick="testTiming()">Test Timing</button>
+        </div>
+        <div class="hint" id="timing-hint"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <div class="title">Discovered peers</div>
+        <div class="peer-list" id="peer-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script id="init-state" type="application/json">{{ state|tojson }}</script>
+<script id="init-settings" type="application/json">{{ settings|tojson }}</script>
+<script>
+'use strict';
+
+let state = JSON.parse(document.getElementById('init-state').textContent);
+let settings = JSON.parse(document.getElementById('init-settings').textContent);
+let peers = [];
+let selfInfo = null;
+let selectedPeer = state.net_live_transmit_target_ip
+  ? `${state.net_live_transmit_target_ip}:${state.net_live_transmit_target_port || 5000}`
+  : '';
+let selectedPeerLabel = '';
+let liveSpaceDown = false, liveDotDown = false, liveDashDown = false;
+let pollBusy = false;
+
+const DEF = {
+  device_name:'Morse Pi',
+  pin_mode:'single',
+  wpm_target:20,
+  farnsworth_wpm:20,
+  dot_freq:700,
+  dash_freq:500,
+  radio_local_monitor:true,
+  radio_remote_monitor:true,
+  radio_receive_enabled:true
+};
+settings = Object.assign({}, DEF, settings || {});
+
+function esc(s){return typeof s==='string'?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):'';}
+function toast(msg,type='info',ms=2400){
+  const el=document.createElement('div');
+  el.className=`toast ${type==='error'?'err':type==='success'?'ok':'info'}`;
+  el.textContent=msg;
+  document.getElementById('toast-wrap').appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .25s';setTimeout(()=>el.remove(),260);},ms);
+}
+function setServerDot(ok){ document.getElementById('server-dot').className='dot'+(ok?' ok':''); }
+function api(url, method='GET', body=null){
+  const opts={method,headers:{}};
+  if(body!==null){ opts.body=JSON.stringify(body); opts.headers['Content-Type']='application/json'; }
+  return fetch(url,opts).then(r=>{
+    setServerDot(true);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).catch(err=>{ setServerDot(false); throw err; });
+}
+function boolSeg(elId, value, onLabel, offLabel, onClick, good=false){
+  const cls = good ? 'good' : '';
+  document.getElementById(elId).innerHTML = `
+    <button class="${cls} ${!value?'active':''}" onclick="${onClick}(false)">${offLabel}</button>
+    <button class="${cls} ${value?'active':''}" onclick="${onClick}(true)">${onLabel}</button>`;
+}
+function pinModeSeg(){
+  document.getElementById('seg-pin-mode').innerHTML = `
+    <button class="${settings.pin_mode!=='dual'?'active':''}" onclick="setPinMode('single')">Straight Key</button>
+    <button class="${settings.pin_mode==='dual'?'active':''}" onclick="setPinMode('dual')">Iambic Paddle</button>`;
+}
+function renderPeerSelect(){
+  const select=document.getElementById('peer-select');
+  const options=['<option value="">-- select peer --</option>'];
+  for(const peer of peers){
+    const value=`${peer.ip}:${peer.port}`;
+    const selected=value===selectedPeer?' selected':'';
+    options.push(`<option value="${esc(value)}"${selected}>${esc(peer.name)} (${esc(peer.ip)})</option>`);
+  }
+  select.innerHTML=options.join('');
+}
+function renderPeers(){
+  const list=document.getElementById('peer-list');
+  if(!peers.length){
+    list.innerHTML='<div class="hint">No peers detected yet. Give the LAN a second or two — the UDP beacons are fashionably punctual.</div>';
+    return;
+  }
+  list.innerHTML=peers.map(peer=>{
+    const value=`${peer.ip}:${peer.port}`;
+    return `<div class="peer">
+      <div>
+        <strong>${esc(peer.name)}</strong>
+        <div class="meta">${esc(peer.ip)}:${peer.port} • seen ${peer.last_seen_ago}s ago</div>
+      </div>
+      <button class="btn" data-value="${esc(value)}" data-label="${esc(peer.name)}" onclick="quickSelectFromButton(this)">Select</button>
+    </div>`;
+  }).join('');
+}
+function renderKeys(){
+  const dual=settings.pin_mode==='dual';
+  document.getElementById('live-keys').innerHTML = dual
+    ? `<button class="key dot" id="key-dot-btn" onmousedown="liveKeyDown('dot')" onmouseup="liveKeyUp('dot')" onmouseleave="liveKeyUp('dot')">• DOT<small>Z key / dot paddle</small></button>
+       <button class="key dash" id="key-dash-btn" onmousedown="liveKeyDown('dash')" onmouseup="liveKeyUp('dash')" onmouseleave="liveKeyUp('dash')">— DASH<small>X key / dash paddle</small></button>`
+    : `<button class="key single" id="key-single-btn" onmousedown="liveKeyDown('single')" onmouseup="liveKeyUp('single')" onmouseleave="liveKeyUp('single')">KEY<small>Space / straight key</small></button>`;
+
+  const single=document.getElementById('key-single-btn');
+  if(single){
+    single.addEventListener('touchstart',e=>{e.preventDefault();liveKeyDown('single');},{passive:false});
+    single.addEventListener('touchend',e=>{e.preventDefault();liveKeyUp('single');},{passive:false});
+  }
+  const dot=document.getElementById('key-dot-btn');
+  const dash=document.getElementById('key-dash-btn');
+  if(dot){
+    dot.addEventListener('touchstart',e=>{e.preventDefault();liveKeyDown('dot');},{passive:false});
+    dot.addEventListener('touchend',e=>{e.preventDefault();liveKeyUp('dot');},{passive:false});
+  }
+  if(dash){
+    dash.addEventListener('touchstart',e=>{e.preventDefault();liveKeyDown('dash');},{passive:false});
+    dash.addEventListener('touchend',e=>{e.preventDefault();liveKeyUp('dash');},{passive:false});
+  }
+}
+function updateSummary(){
+  document.getElementById('stat-device').textContent=settings.device_name || 'Morse Pi';
+  document.getElementById('stat-peer-count').textContent=String(peers.length);
+  document.getElementById('stat-mode').textContent=settings.pin_mode==='dual'?'IAMBIC':'STRAIGHT';
+  document.getElementById('stat-speed').textContent=`${settings.wpm_target}/${settings.farnsworth_wpm}`;
+  document.getElementById('device-name').value=settings.device_name || 'Morse Pi';
+  document.getElementById('char-wpm').value=settings.wpm_target;
+  document.getElementById('farn-wpm').value=settings.farnsworth_wpm;
+  document.getElementById('dot-freq').value=settings.dot_freq;
+  document.getElementById('dash-freq').value=settings.dash_freq;
+  document.getElementById('timing-hint').textContent = settings.wpm_target===settings.farnsworth_wpm
+    ? `Standard timing at ${settings.wpm_target} WPM.`
+    : `Characters send at ${settings.wpm_target} WPM, spacing stretches to ${settings.farnsworth_wpm} WPM.`;
+}
+function updateStatus(){
+  boolSeg('seg-live', !!state.net_live_transmit_enabled, 'On Air', 'Off Air', 'toggleLive', true);
+  boolSeg('seg-local', !!settings.radio_local_monitor, 'On', 'Off', 'setLocalMonitor', true);
+  boolSeg('seg-remote', !!settings.radio_remote_monitor, 'On', 'Off', 'setRemoteMonitor', true);
+  boolSeg('seg-receive', !!settings.radio_receive_enabled, 'On', 'Off', 'setReceiveMonitor', true);
+  pinModeSeg();
+  renderPeerSelect();
+  renderPeers();
+  renderKeys();
+
+  const active = !!state.button_active;
+  const target = selectedPeerLabel || (selectedPeer || 'no peer selected');
+  const live=document.getElementById('live-display');
+  live.className='live-display'+(active?' active':'');
+  live.innerHTML = active
+    ? '<span style="color:var(--accent3);">● TRANSMITTING LIVE</span>'
+    : `<div><div style="color:var(--accent);font-family:'Orbitron',monospace;font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;">Target</div><div>${esc(target)}</div></div>`;
+
+  document.getElementById('radio-dot').className='dot'+(state.net_live_transmit_enabled?' live':'');
+  document.getElementById('key-dot').className='dot'+(active?' ok':'');
+  document.getElementById('target-hint').innerHTML = state.net_live_transmit_enabled
+    ? `Live link armed for <strong>${esc(target)}</strong>. Local sidetone is <strong>${settings.radio_local_monitor?'on':'off'}</strong>, remote send is <strong>${settings.radio_remote_monitor?'on':'off'}</strong>, and receive audio is <strong>${settings.radio_receive_enabled?'on':'off'}</strong>.`
+    : 'Choose a peer, arm the live link, and key away.';
+}
+function renderAll(){ updateSummary(); updateStatus(); }
+function selectPeer(value){
+  selectedPeer=value || '';
+  const peer=peers.find(p=>`${p.ip}:${p.port}`===selectedPeer);
+  selectedPeerLabel=peer ? peer.name : '';
+  if(state.net_live_transmit_enabled && selectedPeer){
+    toggleLive(true);
+  } else {
+    updateStatus();
+  }
+}
+function quickSelect(value,label){
+  selectedPeer=value;
+  selectedPeerLabel=label;
+  updateStatus();
+  toast('Selected '+label,'success',1600);
+}
+function quickSelectFromButton(btn){
+  quickSelect(btn.dataset.value || '', btn.dataset.label || 'peer');
+}
+function toggleLive(enabled){
+  if(enabled && !selectedPeer){ toast('Select a Raspberry Pi first','error'); return; }
+  const body = enabled
+    ? { enabled:true, ip:selectedPeer.split(':')[0], port:parseInt(selectedPeer.split(':')[1]||'5000',10) }
+    : { enabled:false };
+  api('/net_live_transmit_set','POST',body).then(res=>{
+    state.net_live_transmit_enabled = !!res.enabled;
+    state.net_live_transmit_target_ip = res.ip || '';
+    state.net_live_transmit_target_port = res.port || 5000;
+    updateStatus();
+    toast(enabled ? 'Live link armed' : 'Live link disarmed', enabled ? 'success' : 'info');
+  }).catch(()=>toast('Failed to toggle live link','error'));
+}
+function persistSetting(key, value, okMsg){
+  const payload={};
+  payload[key]=value;
+  api('/save_settings','POST',payload).then(res=>{
+    settings=Object.assign({}, DEF, res || {});
+    renderAll();
+    if(okMsg) toast(okMsg,'success',1600);
+  }).catch(()=>toast('Failed to save setting','error'));
+}
+function setLocalMonitor(v){ persistSetting('radio_local_monitor', !!v, 'Local sidetone updated'); }
+function setRemoteMonitor(v){ persistSetting('radio_remote_monitor', !!v, 'Peer send updated'); }
+function setReceiveMonitor(v){ persistSetting('radio_receive_enabled', !!v, 'Receive audio updated'); }
+function setPinMode(mode){ persistSetting('pin_mode', mode, mode==='dual' ? 'Iambic paddle enabled' : 'Straight key enabled'); }
+function saveRadioSettings(){
+  const wpm = Math.max(5, parseInt(document.getElementById('char-wpm').value||settings.wpm_target,10) || settings.wpm_target);
+  const farn = Math.min(wpm, Math.max(5, parseInt(document.getElementById('farn-wpm').value||settings.farnsworth_wpm,10) || settings.farnsworth_wpm));
+  const payload = {
+    device_name:(document.getElementById('device-name').value || settings.device_name || 'Morse Pi').trim() || 'Morse Pi',
+    wpm_target:wpm,
+    farnsworth_wpm:farn,
+    dot_freq:Math.max(50, parseInt(document.getElementById('dot-freq').value||settings.dot_freq,10) || settings.dot_freq),
+    dash_freq:Math.max(50, parseInt(document.getElementById('dash-freq').value||settings.dash_freq,10) || settings.dash_freq),
+    pin_mode:settings.pin_mode,
+    radio_local_monitor:!!settings.radio_local_monitor,
+    radio_remote_monitor:!!settings.radio_remote_monitor,
+    radio_receive_enabled:!!settings.radio_receive_enabled
+  };
+  api('/save_settings','POST',payload).then(res=>{
+    settings=Object.assign({}, DEF, res || {});
+    renderAll();
+    toast('Radio settings saved','success');
+  }).catch(()=>toast('Failed to save radio settings','error'));
+}
+function testTiming(){
+  api('/wpm_test','POST').then(res=>{
+    toast(`Timing test: ${res.character_wpm}/${res.farnsworth_wpm} WPM`,'info',3200);
+  }).catch(()=>toast('Timing test failed','error'));
+}
+function keyButton(sym){ return sym==='single' ? document.getElementById('key-single-btn') : document.getElementById(`key-${sym}-btn`); }
+function liveKeyDown(sym){
+  if(sym==='single'){ if(liveSpaceDown) return; liveSpaceDown=true; }
+  if(sym==='dot'){ if(liveDotDown) return; liveDotDown=true; }
+  if(sym==='dash'){ if(liveDashDown) return; liveDashDown=true; }
+  const btn=keyButton(sym); if(btn) btn.classList.add('pressed');
+  api('/net_live_key','POST',{pressed:true,sym}).catch(()=>{});
+}
+function liveKeyUp(sym){
+  if(sym==='single') liveSpaceDown=false;
+  if(sym==='dot') liveDotDown=false;
+  if(sym==='dash') liveDashDown=false;
+  const btn=keyButton(sym); if(btn) btn.classList.remove('pressed');
+  api('/net_live_key','POST',{pressed:false,sym}).catch(()=>{});
+}
+function syncSelectedPeerFromState(){
+  if(state.net_live_transmit_target_ip){
+    selectedPeer = `${state.net_live_transmit_target_ip}:${state.net_live_transmit_target_port || 5000}`;
+    const peer = peers.find(p=>`${p.ip}:${p.port}`===selectedPeer);
+    selectedPeerLabel = peer ? peer.name : selectedPeer;
+  } else if(!state.net_live_transmit_enabled) {
+    selectedPeer = selectedPeer || '';
+  }
+}
+function refreshAll(showToast=false){
+  if(pollBusy) return;
+  pollBusy=true;
+  Promise.all([
+    api('/status'),
+    fetch('/net_status').then(r=>{ if(!r.ok) throw new Error('net'); return r.json(); })
+  ]).then(([s, n])=>{
+    setServerDot(true);
+    state = Object.assign({}, state, s || {});
+    peers = (n && n.peers) || [];
+    selfInfo = n && n.self;
+    syncSelectedPeerFromState();
+    renderAll();
+    if(showToast) toast('Radio window refreshed','info',1400);
+  }).catch(()=>{
+    setServerDot(false);
+    if(showToast) toast('Refresh failed','error');
+  }).finally(()=>{ pollBusy=false; });
+}
+
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT' || e.target.tagName==='SELECT' || e.target.tagName==='TEXTAREA') return;
+  if(settings.pin_mode==='dual'){
+    if(e.code==='KeyZ' && !liveDotDown){ e.preventDefault(); liveKeyDown('dot'); }
+    if(e.code==='KeyX' && !liveDashDown){ e.preventDefault(); liveKeyDown('dash'); }
+  } else if(e.code==='Space' && !liveSpaceDown){
+    e.preventDefault();
+    liveKeyDown('single');
+  }
+});
+document.addEventListener('keyup', e=>{
+  if(e.target.tagName==='INPUT' || e.target.tagName==='SELECT' || e.target.tagName==='TEXTAREA') return;
+  if(settings.pin_mode==='dual'){
+    if(e.code==='KeyZ' && liveDotDown){ e.preventDefault(); liveKeyUp('dot'); }
+    if(e.code==='KeyX' && liveDashDown){ e.preventDefault(); liveKeyUp('dash'); }
+  } else if(e.code==='Space' && liveSpaceDown){
+    e.preventDefault();
+    liveKeyUp('single');
+  }
+});
+
+renderAll();
+refreshAll();
+setInterval(refreshAll, 450);
+</script>
+</body>
+</html>

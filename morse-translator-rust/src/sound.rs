@@ -38,6 +38,24 @@ pub fn get_dot_unit_secs(wpm: i32) -> f64 {
     1.2 / wpm_f
 }
 
+fn radio_local_monitor_enabled() -> bool {
+    let st = state::STATE.lock().unwrap();
+    !st.net_live_transmit_enabled || st.settings.radio_local_monitor
+}
+
+fn radio_receive_enabled() -> bool {
+    state::STATE.lock().unwrap().settings.radio_receive_enabled
+}
+
+fn tone_freq_for_symbol(sym: &str) -> u32 {
+    let st = state::STATE.lock().unwrap();
+    if sym == "dash" || sym == "-" {
+        st.settings.dash_freq as u32
+    } else {
+        st.settings.dot_freq as u32
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  LOW-LEVEL TONE / WAVE HELPERS (pigpio)
 // ════════════════════════════════════════════════════════════════════════════
@@ -411,8 +429,10 @@ fn iambic_keyer_worker() {
         if is_dot {
             *KEYER_STATE_LABEL.lock().unwrap() = "SENDING_DOT".into();
             keyer_emit('.');
-            send_live_key_to_peer(true);
-            play_tone(settings.dot_freq as u32, None);
+            send_live_key_to_peer(true, "dot");
+            if radio_local_monitor_enabled() {
+                play_tone(settings.dot_freq as u32, None);
+            }
             if settings.kb_enabled && settings.kb_mode == "custom" {
                 keyboard::send_custom_key(&settings.kb_dot_key, settings.kb_enabled);
             }
@@ -423,13 +443,15 @@ fn iambic_keyer_worker() {
                 thread::sleep(Duration::from_millis(1));
             }
             stop_tone();
-            send_live_key_to_peer(false);
+            send_live_key_to_peer(false, "dot");
             if opp { dash_memory = true; }
         } else {
             *KEYER_STATE_LABEL.lock().unwrap() = "SENDING_DASH".into();
             keyer_emit('-');
-            send_live_key_to_peer(true);
-            play_tone(settings.dash_freq as u32, None);
+            send_live_key_to_peer(true, "dash");
+            if radio_local_monitor_enabled() {
+                play_tone(settings.dash_freq as u32, None);
+            }
             if settings.kb_enabled && settings.kb_mode == "custom" {
                 keyboard::send_custom_key(&settings.kb_dash_key, settings.kb_enabled);
             }
@@ -440,7 +462,7 @@ fn iambic_keyer_worker() {
                 thread::sleep(Duration::from_millis(1));
             }
             stop_tone();
-            send_live_key_to_peer(false);
+            send_live_key_to_peer(false, "dash");
             if opp { dot_memory = true; }
         }
 
@@ -570,12 +592,16 @@ pub fn send_button_pressed() {
     *SEND_PRESS_TIME.lock().unwrap() = Instant::now();
     state::STATE.lock().unwrap().button_active = true;
     let freq = state::STATE.lock().unwrap().settings.dot_freq;
-    play_tone(freq as u32, None);
+    send_live_key_to_peer(true, "single");
+    if radio_local_monitor_enabled() {
+        play_tone(freq as u32, None);
+    }
 }
 
 pub fn send_button_released() {
     SEND_ACTIVE.store(false, Ordering::Relaxed);
     state::STATE.lock().unwrap().button_active = false;
+    send_live_key_to_peer(false, "single");
     stop_tone();
     let duration = SEND_PRESS_TIME.lock().unwrap().elapsed();
     let wpm = state::STATE.lock().unwrap().settings.wpm_target;
@@ -658,12 +684,16 @@ pub fn speed_button_pressed() {
     *SPEED_PRESS_TIME.lock().unwrap() = Instant::now();
     state::STATE.lock().unwrap().button_active = true;
     let freq = state::STATE.lock().unwrap().settings.dot_freq;
-    play_tone(freq as u32, None);
+    send_live_key_to_peer(true, "single");
+    if radio_local_monitor_enabled() {
+        play_tone(freq as u32, None);
+    }
 }
 
 pub fn speed_button_released() {
     SPEED_ACTIVE.store(false, Ordering::Relaxed);
     state::STATE.lock().unwrap().button_active = false;
+    send_live_key_to_peer(false, "single");
     stop_tone();
     let duration = SPEED_PRESS_TIME.lock().unwrap().elapsed();
     let wpm = state::STATE.lock().unwrap().settings.wpm_target;
@@ -729,43 +759,22 @@ pub fn net_key_pressed() {
     *NET_MORSE_PRESS_TIME.lock().unwrap() = Instant::now();
     state::STATE.lock().unwrap().button_active = true;
     let freq = state::STATE.lock().unwrap().settings.dot_freq;
-    send_live_key_to_peer(true);  // forward to peer in real-time
-    play_tone(freq as u32, None);
+    send_live_key_to_peer(true, "single");
+    if radio_local_monitor_enabled() {
+        play_tone(freq as u32, None);
+    }
 }
 
 pub fn net_key_released() {
     NET_MORSE_ACTIVE.store(false, Ordering::Relaxed);
     state::STATE.lock().unwrap().button_active = false;
-    send_live_key_to_peer(false);  // forward key-up to peer in real-time
+    send_live_key_to_peer(false, "single");
     stop_tone();
     let duration = NET_MORSE_PRESS_TIME.lock().unwrap().elapsed();
     let wpm = state::STATE.lock().unwrap().settings.wpm_target;
     let dot_unit = get_dot_unit(wpm);
     let symbol: char = if duration < dot_unit * 2 { '.' } else { '-' };
-    
-    // Send symbol to peer if live transmit is enabled
-    let (enabled, ip, port) = {
-        let st = state::STATE.lock().unwrap();
-        (
-            st.net_live_transmit_enabled,
-            st.net_live_transmit_target_ip.clone(),
-            st.net_live_transmit_target_port,
-        )
-    };
-    
-    if enabled && !ip.is_empty() {
-        let sym_str = symbol.to_string();
-        let dev_name = state::STATE.lock().unwrap().settings.device_name.clone();
-        thread::spawn(move || {
-            let payload = format!(
-                r#"{{"symbol":"{}","sender_name":"{}"}}"#,
-                sym_str,
-                dev_name.replace("\"", "\\\""),
-            );
-            let _ = crate::network::send_to_peer_http(&ip, port, &payload);
-        });
-    }
-    
+
     {
         let mut buf = NET_MORSE_BUFFER.lock().unwrap();
         buf.push(symbol);
@@ -806,33 +815,41 @@ pub fn clear_net_morse_buffers() {
 }
 
 /// Receive a live key-down event from a remote peer — start tone indefinitely.
-pub fn net_live_receive_key_down() {
-    let freq = state::STATE.lock().unwrap().settings.dot_freq as u32;
+pub fn net_live_receive_key_down(sym: &str) {
+    if !radio_receive_enabled() { return; }
+    let freq = tone_freq_for_symbol(sym);
     play_tone(freq, None);
     state::STATE.lock().unwrap().button_active = true;
 }
 
 /// Receive a live key-up event from a remote peer — stop tone immediately.
 pub fn net_live_receive_key_up() {
+    if !radio_receive_enabled() {
+        stop_tone();
+        state::STATE.lock().unwrap().button_active = false;
+        return;
+    }
     stop_tone();
     state::STATE.lock().unwrap().button_active = false;
 }
 
 /// Forward a live key_down or key_up event to the peer, if live transmit is active.
 /// Spawns a background thread so the caller is not blocked.
-fn send_live_key_to_peer(pressed: bool) {
-    let (enabled, ip, port, dev_name) = {
+fn send_live_key_to_peer(pressed: bool, sym: &str) {
+    let (enabled, remote_enabled, ip, port, dev_name) = {
         let st = state::STATE.lock().unwrap();
         (
             st.net_live_transmit_enabled,
+            st.settings.radio_remote_monitor,
             st.net_live_transmit_target_ip.clone(),
             st.net_live_transmit_target_port,
             st.settings.device_name.clone(),
         )
     };
-    if !enabled || ip.is_empty() { return; }
+    if !enabled || !remote_enabled || ip.is_empty() { return; }
+    let sym = sym.to_string();
     thread::spawn(move || {
-        crate::network::send_live_key_http(&ip, port, pressed, &dev_name);
+        crate::network::send_live_key_http(&ip, port, pressed, &sym, &dev_name);
     });
 }
 

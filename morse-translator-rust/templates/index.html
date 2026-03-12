@@ -440,6 +440,7 @@
       <div class="status-pill"><div class="dot" id="btn-dot"></div>KEY</div>
       <button onclick="toggleTheme()" id="theme-btn" title="Toggle light/dark theme" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">&#9788; LIGHT</button>
       <button onclick="window.open('/diag','gpio_diag','width=560,height=820,resizable=yes,menubar=no,toolbar=no,location=no')" title="Open GPIO live diagnostic window" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">GPIO DIAG</button>
+      <button onclick="window.open('/radio','morse_radio','width=1180,height=900,resizable=yes,menubar=no,toolbar=no,location=no')" title="Open dedicated radio control window" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent3)';this.style.color='var(--accent3)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">RADIO WINDOW</button>
     </div>
   </header>
 
@@ -451,7 +452,6 @@
     <button class="nav-btn" data-mode="keyboard"><span class="nav-icon">&#9000;</span>KB</button>
     <button class="nav-btn" data-mode="stats"><span class="nav-icon">&#9632;</span>STATS</button>
     <button class="nav-btn" data-mode="settings"><span class="nav-icon">&#9881;</span>CONFIG</button>
-    <button class="nav-btn" data-mode="network"><span class="nav-icon">&#9737;</span>NET</button>
     <button class="nav-btn" data-mode="help"><span class="nav-icon">&#9432;</span>HELP</button>
   </nav>
 
@@ -562,7 +562,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{btn.addEventListener('click'
 let _currentMode = null; // track to avoid redundant full renders
 
 function setMode(mode){
-  if(mode==='help'||mode==='network'||mode==='keyboard'){state.mode=mode;renderNav();transitionContent();return;}
+  if(mode==='help'||mode==='keyboard'){state.mode=mode;renderNav();transitionContent();return;}
   api('/set_mode','POST',{mode}).then(s=>{state=s;renderNav();transitionContent();});
 }
 function renderNav(){
@@ -592,11 +592,30 @@ function renderContent(){
     case 'keyboard': el.innerHTML=renderKeyboard(); break;
     case 'stats':    el.innerHTML=renderStats();    break;
     case 'settings': el.innerHTML=renderSettings(); break;
-    case 'network':  el.innerHTML=renderNetwork();  initNetworkTab(); break;
+    case 'network':
+    case 'radio':    el.innerHTML=renderRadioLaunch(); break;
     case 'help':     el.innerHTML=renderHelp();     break;
     default:         el.innerHTML=renderSend();
   }
   attachHandlers();
+}
+
+function renderRadioLaunch(){
+  return `
+    <div class="panel">
+      <div class="panel-title">RADIO CONTROL WINDOW</div>
+      <p class="hint-text">Live peer-to-peer radio control now lives in a dedicated window, so the main UI stays focused on practice and configuration.</p>
+      <div class="morse-display" style="justify-content:center;min-height:72px;text-align:center;line-height:1.7;">
+        <div>
+          <div style="font-family:'Orbitron',monospace;font-size:0.78rem;letter-spacing:0.12em;color:var(--accent);text-transform:uppercase;margin-bottom:6px;">Separate live radio console</div>
+          <div style="font-size:0.92rem;color:var(--text);">Select a Raspberry Pi, arm the link, choose straight key or iambic paddle, and control real-time local + remote sidetone from one place.</div>
+        </div>
+      </div>
+      <div class="btn-group" style="margin-top:12px;">
+        <button class="btn btn-success" onclick="window.open('/radio','morse_radio','width=1180,height=900,resizable=yes,menubar=no,toolbar=no,location=no')">Open Radio Window</button>
+        <button class="btn btn-ghost" onclick="window.open('/diag','gpio_diag','width=560,height=820,resizable=yes,menubar=no,toolbar=no,location=no')">GPIO Diag</button>
+      </div>
+    </div>`;
 }
 
 // ── SEND ───────────────────────────────────────

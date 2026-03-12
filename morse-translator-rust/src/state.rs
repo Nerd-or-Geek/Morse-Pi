@@ -61,6 +61,12 @@ pub struct Settings {
     pub farnsworth_word_mult: f64,
     #[serde(default = "default_device_name")]
     pub device_name: String,
+    #[serde(default = "default_radio_local_monitor")]
+    pub radio_local_monitor: bool,
+    #[serde(default = "default_radio_remote_monitor")]
+    pub radio_remote_monitor: bool,
+    #[serde(default = "default_radio_receive_enabled")]
+    pub radio_receive_enabled: bool,
     #[serde(default)]
     pub kb_enabled: bool,
     #[serde(default = "default_kb_mode")]
@@ -89,6 +95,9 @@ fn default_quiz_categories() -> Vec<String> { vec!["words".into()] }
 fn default_practice_chars() -> String { "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".into() }
 fn default_farnsworth_mult() -> f64 { 2.0 }
 fn default_device_name() -> String { "Morse Pi".into() }
+fn default_radio_local_monitor() -> bool { true }
+fn default_radio_remote_monitor() -> bool { true }
+fn default_radio_receive_enabled() -> bool { true }
 fn default_kb_mode() -> String { "letters".into() }
 fn default_kb_dot_key() -> String { "z".into() }
 fn default_kb_dash_key() -> String { "x".into() }
@@ -120,6 +129,9 @@ impl Default for Settings {
             farnsworth_letter_mult: 2.0,
             farnsworth_word_mult: 2.0,
             device_name: "Morse Pi".into(),
+            radio_local_monitor: true,
+            radio_remote_monitor: true,
+            radio_receive_enabled: true,
             kb_enabled: false,
             kb_mode: "letters".into(),
             kb_dot_key: "z".into(),
@@ -321,7 +333,7 @@ impl AppState {
         );
         let inbox_json = self.inbox_json();
         format!(
-            r#"{{"mode":"{}","cheat_sheet":{},"current_phrase":"{}","decode_result":"{}","decode_correct_answer":"{}","speed_phrase":"{}","speed_result":"{}","speed_morse_buffer":"{}","speed_morse_output":"{}","send_output":"{}","encode_output":"{}","encode_input":"{}","button_active":{},"current_morse_buffer":"{}","net_key_mode":{},"net_morse_buffer":"{}","net_morse_output":"{}","net_live_transmit_enabled":{},"kb_output":"{}","stats":{},"net_inbox":{}}}"#,
+            r#"{{"mode":"{}","cheat_sheet":{},"current_phrase":"{}","decode_result":"{}","decode_correct_answer":"{}","speed_phrase":"{}","speed_result":"{}","speed_morse_buffer":"{}","speed_morse_output":"{}","send_output":"{}","encode_output":"{}","encode_input":"{}","button_active":{},"current_morse_buffer":"{}","net_key_mode":{},"net_morse_buffer":"{}","net_morse_output":"{}","net_live_transmit_enabled":{},"net_live_transmit_target_ip":"{}","net_live_transmit_target_port":{},"kb_output":"{}","stats":{},"net_inbox":{}}}"#,
             escape_json(&self.mode),
             self.cheat_sheet,
             escape_json(&self.current_phrase),
@@ -340,6 +352,8 @@ impl AppState {
             escape_json(&self.net_morse_buffer_str),
             escape_json(&self.net_morse_output_str),
             self.net_live_transmit_enabled,
+            escape_json(&self.net_live_transmit_target_ip),
+            self.net_live_transmit_target_port,
             escape_json(&self.kb_output),
             stats_json,
             inbox_json,
