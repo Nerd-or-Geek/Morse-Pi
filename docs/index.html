@@ -35,7 +35,7 @@
 <!-- ── Hero ────────────────────────────────────────────── -->
 <div class="hero">
   <h1>Morse-Pi</h1>
-  <p class="hero-tagline">A full-featured Morse code trainer and practice tool built with Flask, designed for Raspberry Pi with a physical key or paddle. Access everything from any browser on your local network.</p>
+  <p class="hero-tagline">A full-featured Morse code trainer and practice tool for Raspberry Pi with a physical key or paddle. Choose between a <strong>native Rust backend</strong> (recommended) or the original <strong>Python/Flask backend</strong>. Access everything from any browser on your local network.</p>
   <div class="morse-decoration">−− −−− ·−· ··· · &nbsp; ·−−· ··</div>
 </div>
 
@@ -47,6 +47,7 @@
   <span class="feature-pill"><span class="fp-icon">🎯</span> Training Modes</span>
   <span class="feature-pill"><span class="fp-icon">📱</span> Browser UI</span>
   <span class="feature-pill"><span class="fp-icon">🔧</span> Zero Config</span>
+  <span class="feature-pill"><span class="fp-icon">🦀</span> Rust Native</span>
 </div>
 
 <!-- ── Widget Grid ────────────────────────────────────── -->
@@ -86,8 +87,16 @@
 <!-- ── Quick Install ──────────────────────────────────── -->
 <div class="quick-install">
   <h2>⚡ Quick Install</h2>
-  <p>SSH into your Raspberry Pi and run:</p>
+  <p>SSH into your Raspberry Pi and run one of these:</p>
+
+  <h3>Option A — Rust backend <span class="badge green">Recommended</span></h3>
+  <pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install-rust.sh | sudo bash</code></pre>
+  <p>Compiles a native binary on-device. Build takes 10–30 min on Pi Zero, ~3 min on Pi 4.</p>
+
+  <h3>Option B — Python backend</h3>
   <pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash</code></pre>
+  <p>Uses Flask and Python packages. Faster to install, easier to modify.</p>
+
   <p>Then open your browser to the IP printed on screen, e.g. <code>http://192.168.1.42:5000</code></p>
 </div>
 

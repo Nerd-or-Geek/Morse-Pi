@@ -34,6 +34,7 @@
   <div class="sidebar-title">On this page</div>
   <ul class="sidebar-links">
     <li><a href="#updating">Updating</a></li>
+    <li><a href="#transition">Switching Backends</a></li>
     <li><a href="#packages">Package Management</a></li>
     <li><a href="#services">Service Management</a></li>
     <li><a href="#autostart">Auto-Start on Boot</a></li>
@@ -61,6 +62,29 @@
 <pre><code>sudo git -C /opt/morse-pi pull
 sudo systemctl restart morse-pi</code></pre>
 
+<div class="callout info">
+  <div class="callout-title">ℹ Rust backend rebuild</div>
+  If you're running the Rust backend, you'll need to rebuild after pulling new code:
+  <pre><code>cd /opt/morse-pi/morse-translator-rust
+cargo build --release --features gpio
+sudo cp target/release/morse-pi /opt/morse-pi/morse-translator/morse-pi
+sudo systemctl restart morse-pi</code></pre>
+</div>
+
+<!-- ── TRANSITION ─────────────────────────────────────────────── -->
+<h2 id="transition">Switching Backends</h2>
+
+<h3>Python → Rust</h3>
+<p>Transition your existing Python installation to the Rust backend. Settings, stats, and word lists are preserved automatically:</p>
+<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/transition-rust.sh | sudo bash</code></pre>
+<p>The script installs the Rust toolchain, builds the binary, backs up your data, replaces the Python files, updates systemd, and starts the new service.</p>
+
+<h3>Rust → Python (revert)</h3>
+<p>To revert to the Python backend:</p>
+<pre><code>sudo systemctl stop morse-pi
+cd /opt/morse-pi && git checkout -- morse-translator/
+curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash</code></pre>
+
 <!-- ── PACKAGES ───────────────────────────────────────── -->
 <h2 id="packages">Package Management</h2>
 <p>To upgrade system and Python packages without changing application code:</p>
@@ -71,11 +95,19 @@ sudo systemctl restart morse-pi</code></pre>
 <h2 id="services">Service Management</h2>
 
 <h3>Main web app service</h3>
+<p>These commands work the same regardless of which backend (Python or Rust) is running:</p>
 <pre><code>sudo systemctl status  morse-pi    # check if running
 sudo systemctl restart morse-pi    # restart
 sudo systemctl stop    morse-pi    # stop
 sudo journalctl -u morse-pi -f     # live logs
 sudo journalctl -u morse-pi -n 50  # last 50 log lines</code></pre>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Which backend am I running?</div>
+  Check the ExecStart line in the service file:
+  <pre><code>grep ExecStart /etc/systemd/system/morse-pi.service</code></pre>
+  If it ends in <code>morse-pi</code> (no extension), you're on Rust. If it runs <code>python3 app.py</code>, you're on Python.
+</div>
 
 <h3>USB HID service</h3>
 <pre><code>sudo systemctl status  morse-pi-hid    # check HID gadget status

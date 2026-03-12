@@ -78,7 +78,8 @@
 
 <h3>Minimum (software only)</h3>
 <ul>
-  <li>Any computer with <strong>Python 3.9+</strong></li>
+  <li><strong>Rust backend:</strong> Any Linux system with a Rust toolchain (installed automatically)</li>
+  <li><strong>Python backend:</strong> Any computer with <strong>Python 3.9+</strong></li>
   <li>A modern browser on the same machine or network</li>
 </ul>
 <div class="callout info">
@@ -103,13 +104,30 @@
 <!-- ── INSTALLATION ───────────────────────────────────── -->
 <h2 id="installation">Installation</h2>
 
-<h3>One-line install</h3>
-<p>SSH into your Raspberry Pi and run:</p>
-<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash</code></pre>
+<h3>Option A — Rust backend <span class="badge green">Recommended</span></h3>
+<p>The Rust backend compiles to a single native binary with no runtime dependencies. SSH into your Raspberry Pi and run:</p>
+<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install-rust.sh | sudo bash</code></pre>
 
-<p>The installer performs four steps in order:</p>
+<p>The installer performs four steps:</p>
 <ol>
   <li><strong>USB HID Keyboard Gadget</strong> — configures the Pi to appear as a USB keyboard when plugged into a computer</li>
+  <li><strong>Rust Toolchain</strong> — installs <code>rustup</code>, <code>cargo</code>, <code>pigpio</code> dev headers, and <code>build-essential</code></li>
+  <li><strong>Build</strong> — clones the repo and runs <code>cargo build --release --features gpio</code></li>
+  <li><strong>Auto-start</strong> — creates a systemd service so Morse-Pi runs on every boot</li>
+</ol>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Build time</div>
+  First build takes <strong>10–30 minutes on Pi Zero</strong>, ~3 minutes on Pi 4. Subsequent rebuilds are faster thanks to Cargo's incremental compilation.
+</div>
+
+<h3>Option B — Python backend</h3>
+<p>The original Python/Flask backend. Faster to install, easier to modify:</p>
+<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash</code></pre>
+
+<p>The installer performs four steps:</p>
+<ol>
+  <li><strong>USB HID Keyboard Gadget</strong> — configures the Pi to appear as a USB keyboard</li>
   <li><strong>Packages</strong> — installs <code>python3</code>, <code>pip</code>, <code>git</code>, <code>flask</code>, <code>gpiozero</code>, <code>pigpio</code></li>
   <li><strong>Repository</strong> — clones the code to <code>/opt/morse-pi</code></li>
   <li><strong>Auto-start</strong> — creates a systemd service so Morse-Pi runs on every boot</li>
@@ -123,7 +141,29 @@
 <p>Once running, open your browser to the IP address shown on screen:</p>
 <pre><code>http://192.168.1.42:5000</code></pre>
 
-<h3>Manual installation</h3>
+<h3>Switching from Python to Rust</h3>
+<p>Already running the Python backend? Transition in-place without losing your settings:</p>
+<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/transition-rust.sh | sudo bash</code></pre>
+<p>This installs the Rust toolchain, builds the binary, backs up your data, replaces the Python files, and restarts the service.</p>
+
+<h3>Manual installation (Rust)</h3>
+<pre><code># 1. Clone
+git clone https://github.com/Nerd-or-Geek/Morse-Pi.git
+cd Morse-Pi/morse-translator-rust
+
+# 2. Install Rust toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+
+# On Raspberry Pi, also install GPIO deps:
+sudo apt install libpigpio-dev pigpio build-essential -y
+sudo systemctl enable pigpiod --now
+
+# 3. Build and run
+cargo build --release --features gpio
+./target/release/morse-pi</code></pre>
+
+<h3>Manual installation (Python)</h3>
 <pre><code># 1. Clone
 git clone https://github.com/Nerd-or-Geek/Morse-Pi.git
 cd Morse-Pi

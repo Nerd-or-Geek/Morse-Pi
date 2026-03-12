@@ -165,7 +165,7 @@
 
 <div class="callout info">
   <div class="callout-title">ℹ Settings persistence</div>
-  All settings are stored in <code>/opt/morse-pi/morse-translator/settings.json</code>. New settings added in updates are automatically merged with your existing file — you never lose your configuration.
+  All settings are stored in <code>/opt/morse-pi/morse-translator/settings.json</code> regardless of which backend you're running. New settings added in updates are automatically merged with your existing file — you never lose your configuration.
 </div>
 
 <!-- ── API ROUTES ─────────────────────────────────────── -->
@@ -215,9 +215,11 @@
 <!-- ── PROJECT STRUCTURE ──────────────────────────────── -->
 <h2 id="project-structure">Project Structure</h2>
 <pre><code>Morse-Pi/
-├── install.sh                  ← fresh installer (HID + packages + clone + systemd)
-├── update.sh                   ← updater (verify HID + pull code + restart)
-├── packages.sh                 ← package updater (upgrade apt + pip packages)
+├── install.sh                  ← fresh installer — Python backend
+├── install-rust.sh             ← fresh installer — Rust backend
+├── transition-rust.sh          ← transition script: Python → Rust
+├── update.sh                   ← updater (Python: verify HID + pull + restart)
+├── packages.sh                 ← package updater (Python: upgrade apt + pip)
 ├── docs/                       ← documentation site (GitHub Pages)
 │   ├── index.html              ← home / landing page
 │   ├── getting-started.html    ← features, install, wiring, modes guide
@@ -226,14 +228,24 @@
 │   ├── reference.html          ← morse table, settings, API, structure
 │   ├── troubleshooting.html    ← common issues &amp; error solutions
 │   └── style.css               ← shared stylesheet
-└── morse-translator/
-    ├── app.py                  ← Flask app, GPIO, Morse timing, networking, HID
-    ├── settings.json           ← user settings (auto-created, preserved on update)
-    ├── stats.json              ← user statistics (auto-created, preserved on update)
-    ├── words.json              ← word list for quiz/speed modes
-    └── templates/
-        ├── index.html          ← single-page web UI
-        └── diag.html           ← GPIO live diagnostic popup
+├── morse-translator/           ← Python backend (Flask)
+│   ├── app.py                  ← Flask app, GPIO, Morse timing, networking, HID
+│   ├── settings.json           ← user settings (auto-created, preserved on update)
+│   ├── stats.json              ← user statistics (auto-created, preserved on update)
+│   ├── words.json              ← word list for quiz/speed modes
+│   └── templates/
+│       ├── index.html          ← single-page web UI
+│       └── diag.html           ← GPIO live diagnostic popup
+└── morse-translator-rust/      ← Rust backend (native binary)
+    ├── Cargo.toml              ← Rust package manifest &amp; dependencies
+    └── src/
+        ├── main.rs             ← HTTP server, routing, template engine
+        ├── state.rs            ← settings, stats, app state, JSON serialization
+        ├── morse.rs            ← Morse code translation, word lists, phrases
+        ├── keyboard.rs         ← USB HID keyboard via /dev/hidg0
+        ├── gpio.rs             ← GPIO via pigpiod_if2 C FFI
+        ├── sound.rs            ← tones, iambic keyer, send/speed/net modes
+        └── network.rs          ← UDP beacon peer discovery
 
 # Created by installer on Raspberry Pi:
 /etc/systemd/system/morse-pi.service       ← auto-start on boot

@@ -34,6 +34,7 @@
   <div class="sidebar-title">On this page</div>
   <ul class="sidebar-links">
     <li><a href="#common-issues">Common Issues</a></li>
+    <li><a href="#rust-issues">Rust Backend</a></li>
     <li><a href="#gpio-errors">GPIO Errors</a></li>
     <li><a href="#connection-errors">Connection Errors</a></li>
     <li><a href="#hid-errors">USB HID Errors</a></li>
@@ -59,10 +60,51 @@
 <h3>Service won't start</h3>
 <ol>
   <li>Check logs: <code>sudo journalctl -u morse-pi -n 50</code></li>
-  <li>Try running manually: <code>cd /opt/morse-pi/morse-translator && python3 app.py</code></li>
+  <li>Try running manually:
+    <ul>
+      <li><strong>Rust:</strong> <code>cd /opt/morse-pi/morse-translator && ./morse-pi</code></li>
+      <li><strong>Python:</strong> <code>cd /opt/morse-pi/morse-translator && python3 app.py</code></li>
+    </ul>
+  </li>
   <li>Check file permissions: <code>ls -la /opt/morse-pi/morse-translator/</code></li>
-  <li>Re-run the updater: <code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update.sh | sudo bash</code></li>
+  <li>Re-run the installer to fix the service configuration</li>
 </ol>
+
+<!-- ── RUST ISSUES ──────────────────────────────────────────── -->
+<h2 id="rust-issues">Rust Backend</h2>
+
+<h3>Build fails with "out of memory"</h3>
+<p>Pi Zero has only 512 MB RAM. The Rust compiler can exhaust memory during linking.</p>
+<ul>
+  <li>Ensure a swap file exists: <code>free -h</code> — look for "Swap" row</li>
+  <li>Add or enlarge swap: <code>sudo dphys-swapfile swapoff && sudo sed -i 's/CONF_SWAPSIZE=.*/CONF_SWAPSIZE=512/' /etc/dphys-swapfile && sudo dphys-swapfile setup && sudo dphys-swapfile swapon</code></li>
+  <li>Retry the build: <code>cd /opt/morse-pi/morse-translator-rust && cargo build --release --features gpio</code></li>
+</ul>
+
+<h3>Build fails with "linker cc not found"</h3>
+<ul>
+  <li>Install build tools: <code>sudo apt install build-essential -y</code></li>
+</ul>
+
+<h3>Build fails with "pigpiod_if2.h not found"</h3>
+<ul>
+  <li>Install pigpio dev headers: <code>sudo apt install libpigpio-dev -y</code></li>
+  <li>If you don't need GPIO (not on a Pi), build without the feature: <code>cargo build --release</code></li>
+</ul>
+
+<h3>Rust binary crashes on startup</h3>
+<ul>
+  <li>Check that <code>pigpiod</code> is running: <code>sudo systemctl start pigpiod</code></li>
+  <li>Check logs: <code>sudo journalctl -u morse-pi -n 50</code></li>
+  <li>Verify the binary has execute permission: <code>chmod +x /opt/morse-pi/morse-translator/morse-pi</code></li>
+  <li>Run manually to see the error: <code>cd /opt/morse-pi/morse-translator && ./morse-pi</code></li>
+</ul>
+
+<h3>Cargo / rustup not found after install</h3>
+<ul>
+  <li>Source the environment: <code>source "$HOME/.cargo/env"</code></li>
+  <li>Or log out and log back in to pick up the PATH change</li>
+</ul>
 
 <h3>Settings aren't saving</h3>
 <ul>
