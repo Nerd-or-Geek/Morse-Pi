@@ -411,6 +411,7 @@ fn iambic_keyer_worker() {
         if is_dot {
             *KEYER_STATE_LABEL.lock().unwrap() = "SENDING_DOT".into();
             keyer_emit('.');
+            send_live_key_to_peer(true);
             play_tone(settings.dot_freq as u32, None);
             if settings.kb_enabled && settings.kb_mode == "custom" {
                 keyboard::send_custom_key(&settings.kb_dot_key, settings.kb_enabled);
@@ -422,10 +423,12 @@ fn iambic_keyer_worker() {
                 thread::sleep(Duration::from_millis(1));
             }
             stop_tone();
+            send_live_key_to_peer(false);
             if opp { dash_memory = true; }
         } else {
             *KEYER_STATE_LABEL.lock().unwrap() = "SENDING_DASH".into();
             keyer_emit('-');
+            send_live_key_to_peer(true);
             play_tone(settings.dash_freq as u32, None);
             if settings.kb_enabled && settings.kb_mode == "custom" {
                 keyboard::send_custom_key(&settings.kb_dash_key, settings.kb_enabled);
@@ -437,6 +440,7 @@ fn iambic_keyer_worker() {
                 thread::sleep(Duration::from_millis(1));
             }
             stop_tone();
+            send_live_key_to_peer(false);
             if opp { dot_memory = true; }
         }
 
@@ -725,12 +729,14 @@ pub fn net_key_pressed() {
     *NET_MORSE_PRESS_TIME.lock().unwrap() = Instant::now();
     state::STATE.lock().unwrap().button_active = true;
     let freq = state::STATE.lock().unwrap().settings.dot_freq;
+    send_live_key_to_peer(true);  // forward to peer in real-time
     play_tone(freq as u32, None);
 }
 
 pub fn net_key_released() {
     NET_MORSE_ACTIVE.store(false, Ordering::Relaxed);
     state::STATE.lock().unwrap().button_active = false;
+    send_live_key_to_peer(false);  // forward key-up to peer in real-time
     stop_tone();
     let duration = NET_MORSE_PRESS_TIME.lock().unwrap().elapsed();
     let wpm = state::STATE.lock().unwrap().settings.wpm_target;
@@ -797,6 +803,37 @@ fn net_gap_worker() {
 
 pub fn clear_net_morse_buffers() {
     NET_MORSE_BUFFER.lock().unwrap().clear();
+}
+
+/// Receive a live key-down event from a remote peer — start tone indefinitely.
+pub fn net_live_receive_key_down() {
+    let freq = state::STATE.lock().unwrap().settings.dot_freq as u32;
+    play_tone(freq, None);
+    state::STATE.lock().unwrap().button_active = true;
+}
+
+/// Receive a live key-up event from a remote peer — stop tone immediately.
+pub fn net_live_receive_key_up() {
+    stop_tone();
+    state::STATE.lock().unwrap().button_active = false;
+}
+
+/// Forward a live key_down or key_up event to the peer, if live transmit is active.
+/// Spawns a background thread so the caller is not blocked.
+fn send_live_key_to_peer(pressed: bool) {
+    let (enabled, ip, port, dev_name) = {
+        let st = state::STATE.lock().unwrap();
+        (
+            st.net_live_transmit_enabled,
+            st.net_live_transmit_target_ip.clone(),
+            st.net_live_transmit_target_port,
+            st.settings.device_name.clone(),
+        )
+    };
+    if !enabled || ip.is_empty() { return; }
+    thread::spawn(move || {
+        crate::network::send_live_key_http(&ip, port, pressed, &dev_name);
+    });
 }
 
 /// Play a live morse symbol (. or -) from a remote peer.

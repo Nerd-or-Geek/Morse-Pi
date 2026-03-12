@@ -1190,39 +1190,33 @@ function renderNetwork(){
         </div>
         
         <div class="setting-row full">
-          <div class="setting-label">Key in Morse using ${dual ? 'paddles (Z/X)' : 'key (SPACE)'}</div>
+          <div class="setting-label">Press key/paddle &mdash; sound plays live on target Pi</div>
           <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:8px;">
-            <div style="font-family:'Orbitron',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;">Transmitting:</div>
-            <div class="morse-display ${isActive?'active-send':''}" id="net-live-display" style="font-size:1.5rem;justify-content:center;min-height:50px;background:var(--bg);border-radius:4px;">
-              <span style="color:var(--text-dim);font-size:0.85rem;">start transmitting\u2026</span>
-            </div>
-            <div style="font-family:'Orbitron',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-top:8px;margin-bottom:4px;">Decoded:</div>
-            <div class="morse-display" id="net-live-decoded" style="font-size:1.1rem;justify-content:center;min-height:40px;background:var(--bg);border-radius:4px;">
-              <span style="color:var(--text-dim);font-size:0.8rem;">—</span>
+            <div style="font-family:'Orbitron',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;">Transmit Status:</div>
+            <div class="morse-display ${isActive?'active-send':''}" id="net-live-display" style="font-size:1.2rem;justify-content:center;min-height:50px;background:var(--bg);border-radius:4px;">
+              ${isActive
+                ? '<span style="color:var(--accent3);">\u25cf &nbsp;TRANSMITTING&hellip;</span>'
+                : '<span style="color:var(--text-dim);font-size:0.85rem;">hold key or paddle to transmit\u2026</span>'}
             </div>
           </div>
           
           ${dual?`
           <div class="morse-key-area" style="margin-top:12px;">
             <button class="btn morse-key morse-key-dot" id="net-key-dot"
-              onmousedown="netKeyDownDual('dot')" onmouseup="netKeyUpDual('dot')">
+              onmousedown="netLiveKeyDown('dot')" onmouseup="netLiveKeyUp('dot')">
               &bull;&nbsp; DOT<span class="morse-key-sub">Z key</span>
             </button>
             <button class="btn morse-key morse-key-dash" id="net-key-dash"
-              onmousedown="netKeyDownDual('dash')" onmouseup="netKeyUpDual('dash')">
+              onmousedown="netLiveKeyDown('dash')" onmouseup="netLiveKeyUp('dash')">
               &mdash;&nbsp; DASH<span class="morse-key-sub">X key</span>
             </button>
           </div>`:`
           <div class="morse-key-area" style="margin-top:12px;">
             <button class="btn morse-key morse-key-single" id="net-key-single"
-              onmousedown="netKeyDown()" onmouseup="netKeyUp()">
+              onmousedown="netLiveKeyDown('single')" onmouseup="netLiveKeyUp('single')">
               KEY<span class="morse-key-sub">SPACE or hold</span>
             </button>
           </div>`}
-          
-          <div class="btn-group" style="margin-top:10px;">
-            <button class="btn btn-danger" onclick="clearNetMorse()">Clear Buffer</button>
-          </div>
         </div>
         ` : `
         <div class="setting-row full" style="margin-bottom:10px;">
@@ -1467,29 +1461,34 @@ function clearInbox(){
 
 // ── Network Live Transmit Mode ──────────────────
 function setNetLiveTransmit(enabled){
-  const selectEl = enabled ? document.getElementById('net-live-target') : document.getElementById('net-send-target');
-  if(enabled && (!selectEl || !selectEl.value)){
-    toast('Select a peer first','warning');
-    return;
-  }
-  
   if(enabled){
-    const value = selectEl.value;
+    // Resolve peer: check live selector, then store selector, then remembered value
+    let value = '';
+    const liveEl  = document.getElementById('net-live-target');
+    const storeEl = document.getElementById('net-send-target');
+    if(liveEl  && liveEl.value)  value = liveEl.value;
+    else if(storeEl && storeEl.value) value = storeEl.value;
+    else if(_netSelectedPeer) value = _netSelectedPeer;
+    if(!value){ toast('Select a peer first','warning'); return; }
+
     const parts = value.split(':');
     const ip = parts[0];
     const port = parseInt(parts[1]||'5000');
     _netLiveTransmitTarget = value;
-    const opt = selectEl.selectedOptions && selectEl.selectedOptions[0];
-    _netLiveTransmitTargetLabel = opt ? opt.textContent.replace(/\s+\(.*\)$/,'') : '';
-    
+    const usedEl = (liveEl && liveEl.value===value) ? liveEl : storeEl;
+    const opt = usedEl && usedEl.selectedOptions && usedEl.selectedOptions[0];
+    _netLiveTransmitTargetLabel = opt ? opt.textContent.replace(/\s+\(.*\)$/,'') : value;
+
     api('/net_live_transmit_set','POST',{enabled:true,ip,port}).then(res=>{
       if(res.ok){
         state.net_live_transmit_enabled = true;
         renderContent();
-        toast('Live transmit: targeting '+_netLiveTransmitTargetLabel,'success');
+        toast('\u25cf Live transmit active \u2192 '+_netLiveTransmitTargetLabel,'success');
       }
     }).catch(()=>toast('Failed to enable live transmit','error'));
   } else {
+    // Force key-up to peer before disabling, in case key is still held
+    api('/net_live_key','POST',{pressed:false,sym:'single'}).catch(()=>{});
     api('/net_live_transmit_set','POST',{enabled:false}).then(res=>{
       if(res.ok){
         state.net_live_transmit_enabled = false;
@@ -1528,6 +1527,29 @@ function updateNetLiveTarget(){
   }).catch(()=>{
     toast('Failed to update target','error');
   });
+}
+
+// ── Network Live Key (real-time radio-style forwarding) ──────────────────
+let _netLiveSpaceDown = false, _netLiveDotDown = false, _netLiveDashDown = false;
+function netLiveKeyDown(sym){
+  if(sym==='single') { if(_netLiveSpaceDown) return; _netLiveSpaceDown=true; }
+  else if(sym==='dot')  { if(_netLiveDotDown)   return; _netLiveDotDown=true; }
+  else if(sym==='dash') { if(_netLiveDashDown)  return; _netLiveDashDown=true; }
+  document.getElementById(sym==='single'?'net-key-single':'net-key-'+sym)?.classList.add('pressed');
+  api('/net_live_key','POST',{pressed:true,sym}).catch(()=>{});
+  // Update live display locally
+  const ld = document.getElementById('net-live-display');
+  if(ld) ld.innerHTML = '<span style="color:var(--accent3);">● &nbsp;TRANSMITTING&hellip;</span>';
+}
+function netLiveKeyUp(sym){
+  if(sym==='single') _netLiveSpaceDown=false;
+  else if(sym==='dot')  _netLiveDotDown=false;
+  else if(sym==='dash') _netLiveDashDown=false;
+  document.getElementById(sym==='single'?'net-key-single':'net-key-'+sym)?.classList.remove('pressed');
+  api('/net_live_key','POST',{pressed:false,sym}).catch(()=>{});
+  // Update live display locally
+  const ld = document.getElementById('net-live-display');
+  if(ld) ld.innerHTML = '<span style="color:var(--text-dim);font-size:0.85rem;">hold key or paddle to transmit…</span>';
 }
 
 // ── Network Key-Based Morse Input ─────────────────
@@ -2112,6 +2134,15 @@ let spaceDown=false,zDown=false,xDown=false;
 let _dotReleaseTimer=null,_dashReleaseTimer=null;
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  // Network live transmit mode shortcuts
+  if(state.mode==='network' && state.net_live_transmit_enabled){
+    if(e.code==='Space'&&!spaceDown){spaceDown=true;e.preventDefault();netLiveKeyDown('single');}
+    if(settings.pin_mode==='dual'){
+      if(e.code==='KeyZ'&&!zDown){zDown=true;e.preventDefault();netLiveKeyDown('dot');}
+      if(e.code==='KeyX'&&!xDown){xDown=true;e.preventDefault();netLiveKeyDown('dash');}
+    }
+    return;
+  }
   if(e.code==='Space'&&!spaceDown&&(state.mode==='send'||state.mode==='speed')){
     spaceDown=true;e.preventDefault();api('/key_press','POST',{pressed:true}).catch(()=>{});
   }
@@ -2130,6 +2161,15 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keyup',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  // Network live transmit mode shortcuts
+  if(state.mode==='network' && state.net_live_transmit_enabled){
+    if(e.code==='Space'&&spaceDown){spaceDown=false;e.preventDefault();netLiveKeyUp('single');}
+    if(settings.pin_mode==='dual'){
+      if(e.code==='KeyZ'&&zDown){zDown=false;e.preventDefault();netLiveKeyUp('dot');}
+      if(e.code==='KeyX'&&xDown){xDown=false;e.preventDefault();netLiveKeyUp('dash');}
+    }
+    return;
+  }
   if(e.code==='Space'&&spaceDown){spaceDown=false;e.preventDefault();api('/key_press','POST',{pressed:false}).catch(()=>{});}
   if(e.code==='KeyZ'&&zDown){
     zDown=false;e.preventDefault();
@@ -2193,6 +2233,19 @@ setInterval(()=>{
         _patchNetKeyDisplay();
       }
       _pNetBuf = s.net_morse_buffer; _pNetOut = s.net_morse_output;
+    }
+    // Incremental update for Network LIVE transmit mode
+    else if(state.mode==='network' && state.net_live_transmit_enabled){
+      if(s.button_active !== _pBtn){
+        state.button_active = s.button_active;
+        const ld = document.getElementById('net-live-display');
+        if(ld){
+          ld.className = 'morse-display'+(s.button_active?' active-send':'');
+          ld.innerHTML = s.button_active
+            ? '<span style="color:var(--accent3);">\u25cf &nbsp;TRANSMITTING&hellip;</span>'
+            : '<span style="color:var(--text-dim);font-size:0.85rem;">hold key or paddle to transmit\u2026</span>';
+        }
+      }
     }
     // Update keyboard output if on keyboard tab and output changed
     else if(state.mode==='keyboard'){

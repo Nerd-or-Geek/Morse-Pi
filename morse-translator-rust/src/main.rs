@@ -278,6 +278,8 @@ fn route_post(stream: &mut TcpStream, path: &str, body: &str) {
         "/net_live_transmit_set" => handle_net_live_transmit_set(stream, body),
         "/net_live_transmit_symbol" => handle_net_live_transmit_symbol(stream, body),
         "/net_receive_live_symbol" => handle_net_receive_live_symbol(stream, body),
+        "/net_live_key" => handle_net_live_key(stream, body),
+        "/net_receive_live_key" => handle_net_receive_live_key(stream, body),
         "/kb_enable" => handle_kb_enable(stream, body),
         "/kb_hid_setup" => handle_kb_hid_setup(stream),
         "/kb_mode" => handle_kb_mode(stream, body),
@@ -1035,9 +1037,55 @@ fn handle_net_live_transmit_symbol(stream: &mut TcpStream, body: &str) {
     );
     
     thread::spawn(move || {
-        let _ = network::send_to_peer_http(&ip, port, &payload);
+        let _ = network::send_to_peer_http_path(&ip, port, "/net_receive_live_symbol", &payload);
     });
     
+    send_json(stream, r#"{"ok":true}"#);
+}
+
+fn handle_net_live_key(stream: &mut TcpStream, body: &str) {
+    let pressed = json_bool(body, "pressed").unwrap_or(false);
+    let sym = json_str(body, "sym").unwrap_or("single").to_string();
+
+    // Play or stop tone locally
+    if pressed {
+        let freq = {
+            let st = state::STATE.lock().unwrap();
+            if sym == "dash" { st.settings.dash_freq as u32 } else { st.settings.dot_freq as u32 }
+        };
+        thread::spawn(move || { sound::play_tone(freq, None); });
+        state::STATE.lock().unwrap().button_active = true;
+    } else {
+        sound::stop_tone();
+        state::STATE.lock().unwrap().button_active = false;
+    }
+
+    // Forward to live transmit peer if enabled
+    let (enabled, ip, port, dev_name) = {
+        let st = state::STATE.lock().unwrap();
+        (
+            st.net_live_transmit_enabled,
+            st.net_live_transmit_target_ip.clone(),
+            st.net_live_transmit_target_port,
+            st.settings.device_name.clone(),
+        )
+    };
+    if enabled && !ip.is_empty() {
+        thread::spawn(move || {
+            network::send_live_key_http(&ip, port, pressed, &dev_name);
+        });
+    }
+
+    send_json(stream, r#"{"ok":true}"#);
+}
+
+fn handle_net_receive_live_key(stream: &mut TcpStream, body: &str) {
+    let pressed = json_bool(body, "pressed").unwrap_or(false);
+    if pressed {
+        thread::spawn(|| { sound::net_live_receive_key_down(); });
+    } else {
+        sound::net_live_receive_key_up();
+    }
     send_json(stream, r#"{"ok":true}"#);
 }
 

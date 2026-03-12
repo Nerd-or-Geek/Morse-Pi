@@ -213,8 +213,8 @@ pub fn peers_json() -> String {
     )
 }
 
-/// Send an HTTP POST to a peer.
-pub fn send_to_peer_http(ip: &str, port: u16, payload: &str) -> Result<(), String> {
+/// Send an HTTP POST to a peer at the given path (up to 3 retries, 3 s timeout each).
+pub fn send_to_peer_http_path(ip: &str, port: u16, path: &str, payload: &str) -> Result<(), String> {
     let addr: SocketAddr = format!("{}:{}", ip, port)
         .parse()
         .map_err(|_| "invalid address".to_string())?;
@@ -223,8 +223,8 @@ pub fn send_to_peer_http(ip: &str, port: u16, payload: &str) -> Result<(), Strin
         match TcpStream::connect_timeout(&addr, Duration::from_secs(3)) {
             Ok(mut stream) => {
                 let http_req = format!(
-                    "POST /receive_morse HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                    ip, payload.len(), payload,
+                    "POST {} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    path, ip, payload.len(), payload,
                 );
                 if stream.write_all(http_req.as_bytes()).is_ok() {
                     return Ok(());
@@ -238,4 +238,30 @@ pub fn send_to_peer_http(ip: &str, port: u16, payload: &str) -> Result<(), Strin
         }
     }
     Err("connection failed".into())
+}
+
+/// Send an HTTP POST to a peer at /receive_morse (legacy store-and-send path).
+pub fn send_to_peer_http(ip: &str, port: u16, payload: &str) -> Result<(), String> {
+    send_to_peer_http_path(ip, port, "/receive_morse", payload)
+}
+
+/// Send a live-key event (key_down / key_up) to a peer — single attempt, short timeout.
+/// Used for real-time transmission forwarding; latency matters more than reliability.
+pub fn send_live_key_http(ip: &str, port: u16, pressed: bool, sender_name: &str) {
+    let addr: SocketAddr = match format!("{}:{}", ip, port).parse() {
+        Ok(a) => a,
+        Err(_) => return,
+    };
+    let payload = format!(
+        r#"{{"pressed":{},"sender_name":"{}"}}"#,
+        pressed,
+        sender_name.replace('\\', "\\\\").replace('"', "\\\""),
+    );
+    if let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(600)) {
+        let http_req = format!(
+            "POST /net_receive_live_key HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            ip, payload.len(), payload,
+        );
+        let _ = stream.write_all(http_req.as_bytes());
+    }
 }

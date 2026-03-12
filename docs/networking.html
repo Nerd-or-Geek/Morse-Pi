@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Networking — Morse-Pi</title>
+<meta name="description" content="Multi-Pi networking: peer discovery, store-and-forward messages, live radio-style transmission, and troubleshooting for Morse-Pi.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header class="site-header">
+  <span class="logo"><a href="index.html">Morse-Pi</a></span>
+  <div class="header-right">
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi" target="_blank">GitHub</a>
+    <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues" target="_blank">Issues</a>
+  </div>
+</header>
+
+<!-- ═══ TAB NAVIGATION ═══ -->
+<nav class="tab-nav">
+  <a href="index.html"><span class="tab-icon">🏠</span> Home</a>
+  <a href="getting-started.html"><span class="tab-icon">🚀</span> Getting Started</a>
+  <a href="maintenance.html"><span class="tab-icon">🔧</span> Maintenance</a>
+  <a href="usb-hid.html"><span class="tab-icon">⌨️</span> USB HID</a>
+  <a href="reference.html"><span class="tab-icon">📖</span> Reference</a>
+  <a href="troubleshooting.html"><span class="tab-icon">🔍</span> Troubleshooting</a>
+  <a class="active" href="networking.html"><span class="tab-icon">📡</span> Networking</a>
+</nav>
+
+<!-- ═══ MAIN CONTENT ═══ -->
+<div class="page-wrap has-sidebar">
+<aside class="sidebar">
+  <div class="sidebar-title">On this page</div>
+  <ul class="sidebar-links">
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#discovery">Peer Discovery</a></li>
+    <li><a href="#setup">Setup</a></li>
+    <li><a href="#store-forward">Store &amp; Forward Messages</a></li>
+    <li><a href="#live-transmit">Live Radio Transmission</a></li>
+    <li><a href="#key-modes">Network Key Modes</a></li>
+    <li><a href="#inbox">Inbox</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+  </ul>
+</aside>
+<main class="content">
+
+<h1>Networking</h1>
+<p class="subtitle">Connect multiple Morse-Pi devices on the same network for real-time radio-style communication.</p>
+
+<!-- ── OVERVIEW ───────────────────────────────────────── -->
+<h2 id="overview">Overview</h2>
+<p>The <strong>NET</strong> tab lets Morse-Pi devices on the same LAN discover each other automatically and exchange Morse code in two ways:</p>
+<ul>
+  <li><strong>Store &amp; Forward</strong> — key or type a complete message, then send it to a peer. The receiving Pi plays it through its speaker and stores it in the inbox.</li>
+  <li><strong>Live Radio Transmission</strong> — select a peer, then every paddle press or key-down is forwarded in real time. The remote Pi's speaker plays the tone as you press — just like a radio contact.</li>
+</ul>
+<p>No configuration is needed. Devices discover each other automatically as long as they are on the same subnet.</p>
+
+<!-- ── DISCOVERY ──────────────────────────────────────── -->
+<h2 id="discovery">Peer Discovery</h2>
+<p>Morse-Pi uses <strong>UDP broadcast beacons</strong> for zero-configuration discovery:</p>
+<ol>
+  <li>Every device sends a UDP broadcast to port <strong>5001</strong> every 3 seconds.</li>
+  <li>The beacon payload is a JSON object: <code>{"name":"&lt;device-name&gt;","ip":"&lt;ip&gt;","port":5000}</code></li>
+  <li>Receiving devices add the peer to their peer list and update its last-seen timestamp.</li>
+  <li>Peers that have not sent a beacon for <strong>15 seconds</strong> are automatically removed from the list.</li>
+</ol>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Broadcast scope</div>
+  UDP broadcasts are limited to the local subnet. Devices on different VLANs or subnets will not see each other. All Pis must be on the same network segment (e.g., all connected to the same router or access point).
+</div>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Firewall</div>
+  Make sure port <strong>5000</strong> (HTTP) and port <strong>5001</strong> (UDP) are not blocked by a firewall on any of the devices. On Raspberry Pi OS the default firewall is open, so this is usually not an issue.
+</div>
+
+<!-- ── SETUP ──────────────────────────────────────────── -->
+<h2 id="setup">Setup</h2>
+<ol>
+  <li>Install Morse-Pi on each Raspberry Pi (see <a href="getting-started.html#installation">Getting Started → Installation</a>).</li>
+  <li>Connect all Pis to the same Wi-Fi or wired network.</li>
+  <li>Open the web UI on each Pi (<code>http://&lt;pi-ip&gt;:5000</code>).</li>
+  <li>Open the <strong>NET</strong> tab on each Pi.</li>
+  <li>Set a unique <strong>Device Name</strong> for each Pi (top of the NET tab). Examples: <em>Shack-1</em>, <em>Portable</em>.</li>
+  <li>Within a few seconds, each Pi should appear in the other's peer list.</li>
+</ol>
+
+<div class="callout success">
+  <div class="callout-title">✓ No configuration files to edit</div>
+  All networking settings are configured live from the NET tab in the web UI. Changes take effect immediately.
+</div>
+
+<!-- ── STORE & FORWARD ────────────────────────────────── -->
+<h2 id="store-forward">Store &amp; Forward Messages</h2>
+<p>In store-and-forward mode, you compose a complete Morse message on your device and then send it. The receiving Pi plays the message and stores it in its inbox.</p>
+
+<h3>Send a typed message</h3>
+<ol>
+  <li>In the NET tab, select a peer from the <strong>Peers</strong> list.</li>
+  <li>Choose <strong>Message Mode</strong>.</li>
+  <li>Type your message in the text field and click <strong>SEND</strong>.</li>
+</ol>
+
+<h3>Send keyed Morse</h3>
+<ol>
+  <li>Select a peer and choose <strong>Key Mode</strong>.</li>
+  <li>Key your message using the physical paddle, on-screen buttons, or keyboard shortcuts (<kbd>Space</kbd> / <kbd>Z</kbd> / <kbd>X</kbd>).</li>
+  <li>Your keyed dots and dashes are decoded in the buffer display.</li>
+  <li>Click <strong>SEND</strong> (or press <kbd>Enter</kbd>) to dispatch the decoded text to the peer.</li>
+</ol>
+
+<div class="callout info">
+  <div class="callout-title">ℹ How it works under the hood</div>
+  The message is sent via <strong>HTTP POST</strong> to the peer's <code>/receive_morse</code> endpoint. The receiving Pi plays the message through its speaker using the same Morse timing engine used for local playback.
+</div>
+
+<!-- ── LIVE TRANSMIT ───────────────────────────────────── -->
+<h2 id="live-transmit">Live Radio Transmission</h2>
+<p>Live transmit mode is the real-time radio contact feature. Every key-down/key-up event is forwarded to the selected peer immediately — the remote Pi's speaker tone follows your paddle in real time.</p>
+
+<h3>Enabling live transmit</h3>
+<ol>
+  <li>Select a peer from the <strong>Peers</strong> list in the NET tab.</li>
+  <li>Toggle the <strong>Live Transmit</strong> switch to <strong>ON</strong>.</li>
+  <li>The NET display shows <em>"hold key or paddle to transmit…"</em> when idle.</li>
+</ol>
+
+<h3>Transmitting</h3>
+<p>Once enabled, use any of these input methods to transmit:</p>
+<table>
+  <tr><th>Input method</th><th>Action</th></tr>
+  <tr><td>Physical straight key</td><td>Press/release → tone on/off at peer in real time</td></tr>
+  <tr><td>Physical iambic paddle</td><td>Dot/dash paddle → keyer sends timed elements to peer</td></tr>
+  <tr><td>On-screen DOT / DASH buttons</td><td>Hold to transmit that element to peer</td></tr>
+  <tr><td><kbd>Space</kbd> key</td><td>Straight key emulation — hold to transmit</td></tr>
+  <tr><td><kbd>Z</kbd> key</td><td>Dot paddle in iambic/dual-pin mode</td></tr>
+  <tr><td><kbd>X</kbd> key</td><td>Dash paddle in iambic/dual-pin mode</td></tr>
+</table>
+
+<h3>What the receiving Pi does</h3>
+<ul>
+  <li>When a key-down event arrives, the receiving Pi immediately starts playing a tone through its speaker.</li>
+  <li>When the key-up event arrives, the tone stops.</li>
+  <li>The <strong>button active</strong> indicator on the receiving Pi's UI lights up while the key is held.</li>
+  <li>No message is stored — live transmit is ephemeral, just like a radio contact.</li>
+</ul>
+
+<div class="callout warn">
+  <div class="callout-title">⚠ Latency</div>
+  Live transmit adds network latency. On a local LAN this is typically &lt;5 ms and imperceptible. Over Wi-Fi with congestion it can reach 20–50 ms. Wired Ethernet gives the most consistent results. Live transmit is <strong>not</strong> recommended over the internet.
+</div>
+
+<div class="callout info">
+  <div class="callout-title">ℹ How it works under the hood</div>
+  Key-down and key-up events are sent via HTTP POST to the peer's <code>/net_receive_live_key</code> endpoint. The timeout is 600 ms per request with a single attempt to minimize latency. If a packet is lost the tone will be cut short or held slightly longer — the system self-corrects on the next event.
+</div>
+
+<!-- ── KEY MODES ───────────────────────────────────────── -->
+<h2 id="key-modes">Network Key Modes</h2>
+<p>The NET tab has three selectable key modes, controlled by the buttons at the top of the NET panel:</p>
+<table>
+  <tr><th>Mode</th><th>Description</th></tr>
+  <tr><td><strong>Message</strong></td><td>Type a text message and send it to a peer.</td></tr>
+  <tr><td><strong>Key Mode</strong></td><td>Key Morse on your paddle; the decoded text is buffered and sent when you click SEND.</td></tr>
+  <tr><td><strong>Live Transmit</strong></td><td>Every key event is forwarded in real time — no buffering, no decoding.</td></tr>
+</table>
+
+<!-- ── INBOX ──────────────────────────────────────────── -->
+<h2 id="inbox">Inbox</h2>
+<p>Received messages (from store-and-forward sends) are stored in the <strong>Inbox</strong> at the bottom of the NET tab. Each entry shows the sender name, timestamp, and message text.</p>
+<ul>
+  <li>Click a message to replay it through the speaker.</li>
+  <li>Messages persist until you click <strong>Clear</strong>.</li>
+  <li>Inbox capacity: the 20 most recent messages are kept.</li>
+</ul>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Live transmit &amp; inbox</div>
+  Live transmit events do <em>not</em> appear in the inbox. Only store-and-forward messages sent to <code>/receive_morse</code> are logged.
+</div>
+
+<!-- ── TROUBLESHOOTING ─────────────────────────────────── -->
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3>No peers appear</h3>
+<ul>
+  <li>Confirm both Pis are on the <strong>same subnet</strong> (e.g., both on 192.168.1.x with the same router).</li>
+  <li>Check that UDP port 5001 is not blocked. Test with: <code>nc -u -l 5001</code> on one Pi and <code>echo hello &gt; /dev/udp/&lt;other-ip&gt;/5001</code> on the other.</li>
+  <li>Ensure both Pis are running Morse-Pi and that the service is active: <code>sudo systemctl status morse-pi</code>.</li>
+  <li>Wait up to 5 seconds after starting — the first beacon fires within 3 seconds.</li>
+</ul>
+
+<h3>Peer appears but messages fail to send</h3>
+<ul>
+  <li>Confirm port <strong>5000</strong> (TCP/HTTP) is reachable: <code>curl http://&lt;peer-ip&gt;:5000/status</code> should return JSON.</li>
+  <li>Check for firewall rules: <code>sudo iptables -L</code>.</li>
+  <li>If the sending Pi shows a timeout error, verify the peer IP hasn't changed (reassign a static IP or use DHCP reservations).</li>
+</ul>
+
+<h3>Live transmit tone is choppy or delayed</h3>
+<ul>
+  <li>Use <strong>wired Ethernet</strong> instead of Wi-Fi for the most consistent latency.</li>
+  <li>Reduce other network traffic during the contact.</li>
+  <li>Make sure the pigpiod daemon is running on the receiving Pi: <code>sudo systemctl status pigpiod</code>.</li>
+  <li>If the keyer fires but no tone plays at the receiver, restart the Morse-Pi service: <code>sudo systemctl restart morse-pi</code>.</li>
+</ul>
+
+<h3>Live transmit is enabled but nothing happens when I key</h3>
+<ul>
+  <li>Make sure a peer is selected in the Peers list <em>before</em> enabling Live Transmit.</li>
+  <li>After selecting the peer, toggle the Live Transmit switch off and back on.</li>
+  <li>Check that the peer is still online (the peer's status indicator should show it as active).</li>
+</ul>
+
+<div class="callout info">
+  <div class="callout-title">ℹ More troubleshooting</div>
+  See the <a href="troubleshooting.html">Troubleshooting</a> page for general Morse-Pi diagnostics and the DIAG tab in the web UI for real-time GPIO and audio status.
+</div>
+
+<div class="site-footer">
+  Morse-Pi &mdash; MIT License &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi">GitHub</a> &mdash;
+  <a href="https://github.com/Nerd-or-Geek/Morse-Pi/issues">Report an Issue</a>
+</div>
+
+</main>
+</div>
+
+<a class="back-top" id="back-top" href="#" title="Back to top">↑</a>
+<script>
+const btn=document.getElementById('back-top');
+window.addEventListener('scroll',()=>{btn.classList.toggle('visible',window.scrollY>400);},{passive:true});
+(function(){
+  const links=document.querySelectorAll('.sidebar-links a');
+  const ids=Array.from(links).map(a=>a.getAttribute('href').slice(1));
+  function update(){
+    let active='';
+    for(let i=ids.length-1;i>=0;i--){
+      const el=document.getElementById(ids[i]);
+      if(el&&el.getBoundingClientRect().top<=140){active=ids[i];break;}
+    }
+    links.forEach(a=>{a.classList.toggle('active',a.getAttribute('href')==='#'+active);});
+  }
+  window.addEventListener('scroll',update,{passive:true});
+  update();
+})();
+</script>
+</body>
+</html>
