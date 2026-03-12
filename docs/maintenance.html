@@ -47,6 +47,19 @@
 
 <!-- ── UPDATING ───────────────────────────────────────── -->
 <h2 id="updating">Updating</h2>
+
+<h3>Rust backend</h3>
+<p>Pulls the latest code, rebuilds the binary, and restarts the service:</p>
+<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update-rust.sh | sudo bash</code></pre>
+<p>The updater will:</p>
+<ol>
+  <li>Verify USB HID gadget configuration</li>
+  <li>Pull the latest code (preserves <code>settings.json</code>, <code>stats.json</code>, <code>words.json</code>)</li>
+  <li>Rebuild the Rust binary with <code>cargo build --release</code></li>
+  <li>Recreate the systemd service and restart</li>
+</ol>
+
+<h3>Python backend</h3>
 <p>Use the dedicated update script to pull the latest code while preserving your settings:</p>
 <pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update.sh | sudo bash</code></pre>
 

@@ -338,6 +338,10 @@ ok "Service file updated"
 systemctl daemon-reload
 ok "systemd daemon reloaded"
 
+# Enable for boot — ensures restart on reboot
+systemctl enable "${SERVICE_NAME}" 2>&1
+ok "${SERVICE_NAME} enabled for auto-start on boot"
+
 systemctl start "${SERVICE_NAME}"
 
 sleep 2

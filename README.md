@@ -159,6 +159,10 @@ sudo systemctl status morse-pi
 Re-run the update script to fix it:
 
 ```bash
+# For Rust backend:
+curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update-rust.sh | sudo bash
+
+# For Python backend:
 curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update.sh | sudo bash
 ```
 
@@ -317,6 +321,23 @@ Then open `http://localhost:5000` (or the Pi's IP from another device).
 
 ## Updating
 
+### Rust backend
+
+Pulls latest code, rebuilds the binary, and restarts the service:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update-rust.sh | sudo bash
+```
+
+The Rust update script will:
+1. **Verify USB HID** — ensures the HID gadget is properly configured
+2. **Update all code** — pulls the latest source from the repo
+3. **Preserve your data** — `settings.json`, `stats.json`, and `words.json` are kept intact
+4. **Rebuild the binary** — runs `cargo build --release` with the latest source
+5. **Ensure auto-start** — recreates the systemd service and restarts
+
+### Python backend
+
 Use the dedicated update script to pull the latest code:
 
 ```bash
@@ -424,7 +445,8 @@ Morse-Pi/
 ├── install.sh                  ← fresh installer — Python backend
 ├── install-rust.sh             ← fresh installer — Rust backend
 ├── transition-rust.sh          ← switch existing Python install → Rust
-├── update.sh                   ← updater (verify HID + pull code + restart)
+├── update.sh                   ← updater — Python backend
+├── update-rust.sh              ← updater — Rust backend (pull + rebuild)
 ├── packages.sh                 ← package updater (upgrade apt + pip packages)
 ├── morse-translator/           ← shared runtime directory (templates, data, binary)
 │   ├── app.py                  ← Python backend (Flask app)
