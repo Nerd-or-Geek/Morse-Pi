@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPIO Diagnostic &#9672; Morse-Pi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:    #0d1117; --bg2: #161b22; --bg3: #1c2330;
+      --border: #30363d; --text: #e6edf3; --dim: #6e7681;
+      --green: #39ff14; --blue: #00d4ff; --red: #ef4444;
+      --orange: #ff8c42; --yellow: #facc15;
+      --glow-g: 0 0 12px rgba(57,255,20,0.7);
+      --glow-b: 0 0 12px rgba(0,212,255,0.7);
+      --overlay-bg: rgba(13,17,23,.7);
+      --overlay-full: rgba(13,17,23,.9);
+    }
+    :root.light {
+      --bg:    #f5f7fa; --bg2: #ffffff; --bg3: #e8ecf1;
+      --border: #d0d7de; --text: #1f2328; --dim: #656d76;
+      --green: #1a7f37; --blue: #0969da; --red: #cf222e;
+      --orange: #bf5700; --yellow: #9a6700;
+      --glow-g: 0 0 10px rgba(26,127,55,0.5);
+      --glow-b: 0 0 10px rgba(9,105,218,0.5);
+      --overlay-bg: rgba(245,247,250,.85);
+      --overlay-full: rgba(245,247,250,.95);
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      background:var(--bg); color:var(--text);
+      font-family:'Share Tech Mono',monospace;
+      font-size:13px; min-height:100vh;
+      padding:12px 14px 24px;
+    }
+    h1 { font-family:'Orbitron',monospace; font-size:1rem; letter-spacing:.18em;
+         color:var(--blue); text-transform:uppercase; margin-bottom:2px; }
+    .subtitle { color:var(--dim); font-size:.72rem; margin-bottom:14px; }
+
+    /* ── Top bar ─────────────────────── */
+    .topbar { display:flex; align-items:center; justify-content:space-between;
+              margin-bottom:16px; }
+    .pill { display:inline-flex; align-items:center; gap:6px;
+            background:var(--bg2); border:1px solid var(--border);
+            border-radius:20px; padding:4px 10px 4px 7px;
+            font-family:'Orbitron',monospace; font-size:.57rem; letter-spacing:.08em; }
+    .dot  { width:9px;height:9px;border-radius:50%;background:var(--dim); flex-shrink:0; }
+    .dot.ok  { background:var(--green); box-shadow:var(--glow-g); }
+    .dot.err { background:var(--red); }
+    .dot.warn{ background:var(--yellow); }
+    .btn-sm {
+      font-family:'Orbitron',monospace; font-size:.6rem; letter-spacing:.07em;
+      padding:5px 12px; background:var(--bg3); border:1px solid var(--border);
+      border-radius:5px; color:var(--text); cursor:pointer;
+      transition:border-color .15s,color .15s;
+    }
+    .btn-sm:hover { border-color:var(--blue); color:var(--blue); }
+    .btn-sm.danger:hover { border-color:var(--red); color:var(--red); }
+
+    /* ── Big-pin hero section ─────────── */
+    .hero { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
+    .hero-pin {
+      flex:1; min-width:120px; background:var(--bg2);
+      border:1px solid var(--border); border-radius:10px;
+      padding:14px 12px; text-align:center; position:relative;
+      transition:border-color .2s;
+    }
+    .hero-pin.active  { border-color:var(--green); }
+    .hero-pin.output  { border-color:var(--blue); }
+    .hero-pin.inactive{ border-color:var(--border); }
+    .hero-ring {
+      width:52px; height:52px; border-radius:50%;
+      border:3px solid var(--border); margin:0 auto 10px;
+      display:flex; align-items:center; justify-content:center;
+      font-family:'Orbitron',monospace; font-size:.75rem; font-weight:700;
+      transition:border-color .15s, box-shadow .15s, color .15s;
+      color:var(--dim);
+    }
+    .hero-pin.active  .hero-ring { border-color:var(--green); box-shadow:var(--glow-g); color:var(--green); animation:bigPulse .5s ease-in-out infinite alternate; }
+    .hero-pin.output  .hero-ring { border-color:var(--blue);  box-shadow:var(--glow-b); color:var(--blue); }
+    .hero-pin.gnd-out .hero-ring { border-color:#9ca3af; box-shadow:0 0 10px rgba(156,163,175,.7); color:#9ca3af; }
+    .hero-pin.gnd-out .hero-status { color:#9ca3af; }
+    @keyframes bigPulse { to { box-shadow:0 0 28px 8px rgba(57,255,20,.6); border-color:#7fff00; } }
+    .hero-role { font-family:'Orbitron',monospace; font-size:.55rem; letter-spacing:.1em;
+                 text-transform:uppercase; color:var(--dim); margin-bottom:4px; }
+    .hero-status { font-size:.75rem; font-weight:700; min-height:16px; }
+    .hero-pin.active  .hero-status { color:var(--green); }
+    .hero-pin.inactive .hero-status{ color:var(--dim); }
+    .hero-pin.output  .hero-status { color:var(--blue); }
+
+    /* ── Section label ───────────────── */
+    .section-lbl {
+      font-family:'Orbitron',monospace; font-size:.58rem; letter-spacing:.14em;
+      text-transform:uppercase; color:var(--dim); margin-bottom:8px;
+      padding-bottom:5px; border-bottom:1px solid var(--border);
+    }
+
+    /* ── Full pin grid ───────────────── */
+    .pin-grid {
+      display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr));
+      gap:5px; margin-bottom:16px;
+    }
+    .pin-cell {
+      background:var(--bg2); border:1px solid var(--border); border-radius:6px;
+      padding:6px 5px 5px; text-align:center; cursor:default;
+      transition:border-color .1s;
+    }
+    .pin-cell.active   { border-color:var(--green); background:rgba(57,255,20,.06); animation:cellPulse .5s ease-in-out infinite alternate; }
+    .pin-cell.output   { border-color:var(--blue);  background:rgba(0,212,255,.05); }
+    .pin-cell.gnd-out  { border-color:#9ca3af; background:rgba(156,163,175,.07); }
+    .pin-cell.error    { border-color:var(--red);   background:rgba(239,68,68,.06); }
+    @keyframes cellPulse { to { border-color:#7fff00; background:rgba(57,255,20,.13); } }
+    .pin-cell-bcm  { font-family:'Orbitron',monospace; font-size:.62rem; color:var(--dim); }
+    .pin-cell-dot  { width:10px;height:10px;border-radius:50%;background:var(--border);margin:4px auto; transition:background .1s,box-shadow .1s; }
+    .pin-cell.active .pin-cell-dot  { background:var(--green); box-shadow:0 0 8px rgba(57,255,20,.8); }
+    .pin-cell.output .pin-cell-dot  { background:var(--blue);  box-shadow:0 0 8px rgba(0,212,255,.7); }
+    .pin-cell.gnd-out .pin-cell-dot { background:#9ca3af; box-shadow:0 0 8px rgba(156,163,175,.7); }
+    .pin-cell.error  .pin-cell-dot  { background:var(--red); }
+    .pin-cell-role { font-size:.55rem; color:var(--dim); line-height:1.2; min-height:12px; }
+    .pin-cell.active .pin-cell-role { color:var(--green); }
+    .pin-cell.output .pin-cell-role  { color:var(--blue); }
+    .pin-cell.gnd-out .pin-cell-role { color:#9ca3af; }
+
+    /* ── Error log ───────────────────── */
+    .err-log { background:var(--bg2); border:1px solid var(--border); border-radius:6px;
+               padding:8px 10px; min-height:38px; max-height:90px; overflow-y:auto;
+               font-size:.7rem; color:var(--red); line-height:1.6;
+               margin-bottom:14px; white-space:pre-wrap; }
+    .err-log.ok { color:var(--green); }
+
+    /* ── Instructions ────────────────── */
+    .instr { background:var(--bg2); border:1px solid var(--border); border-radius:8px;
+             padding:10px 12px; margin-bottom:14px; line-height:1.7; font-size:.72rem;
+             color:var(--dim); }
+    .instr b { color:var(--text); }
+    .instr code { background:var(--bg3); padding:1px 5px; border-radius:3px;
+                  font-family:'Share Tech Mono',monospace; color:var(--yellow); }
+
+    /* ── Footer ──────────────────────── */
+    .footer { text-align:center; color:var(--dim); font-size:.65rem; margin-top:16px; }
+
+    /* ── No-GPIO overlay ─────────────── */
+    #no-gpio { background:var(--overlay-full); position:fixed; inset:0;
+               display:flex; flex-direction:column; align-items:center;
+               justify-content:center; gap:14px; z-index:99; padding:24px; text-align:center; }
+    #no-gpio h2 { font-family:'Orbitron',monospace; color:var(--red); font-size:1.1rem; }
+    #no-gpio p  { color:var(--dim); font-size:.8rem; line-height:1.7; max-width:380px; }
+    #no-gpio code { background:var(--bg3); padding:2px 7px; border-radius:4px;
+                    color:var(--yellow); font-family:'Share Tech Mono',monospace; }
+
+    .spinner { width:14px;height:14px;border:2px solid var(--border);
+               border-top-color:var(--blue); border-radius:50%;
+               animation:spin .7s linear infinite; display:inline-block; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ── GPIO Click Menu ─────────────── */
+    .gpio-menu-overlay {
+      position:fixed; inset:0; background:var(--overlay-bg);
+      z-index:100; display:none; align-items:center; justify-content:center;
+    }
+    .gpio-menu-overlay.active { display:flex; }
+    .gpio-menu {
+      background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+      padding:16px 18px; min-width:220px; max-width:280px;
+      box-shadow:0 8px 32px rgba(0,0,0,.5);
+    }
+    .gpio-menu-header {
+      font-family:'Orbitron',monospace; font-size:.85rem; letter-spacing:.1em;
+      color:var(--blue); margin-bottom:12px; text-align:center;
+      padding-bottom:10px; border-bottom:1px solid var(--border);
+    }
+    .gpio-menu-item {
+      display:block; width:100%; padding:10px 12px; margin:5px 0;
+      background:var(--bg3); border:1px solid var(--border); border-radius:6px;
+      color:var(--text); font-family:'Share Tech Mono',monospace; font-size:.75rem;
+      cursor:pointer; text-align:left; transition:border-color .15s, color .15s;
+    }
+    .gpio-menu-item:hover { border-color:var(--blue); color:var(--blue); }
+    .gpio-menu-item.ground:hover { border-color:#9ca3af; color:#9ca3af; }
+    .gpio-menu-item.speaker:hover { border-color:var(--blue); color:var(--blue); }
+    .gpio-menu-item.danger:hover { border-color:var(--red); color:var(--red); }
+    .gpio-menu-item.disabled {
+      opacity:0.4; cursor:not-allowed; pointer-events:none;
+    }
+    .gpio-menu-item .icon { display:inline-block; width:20px; text-align:center; margin-right:6px; }
+    .gpio-menu-close {
+      margin-top:12px; padding:8px; width:100%; background:transparent;
+      border:1px solid var(--border); border-radius:5px; color:var(--dim);
+      font-family:'Orbitron',monospace; font-size:.6rem; cursor:pointer;
+      transition:border-color .15s, color .15s;
+    }
+    .gpio-menu-close:hover { border-color:var(--red); color:var(--red); }
+    .gpio-menu-status {
+      font-size:.65rem; color:var(--dim); text-align:center;
+      margin-top:8px; min-height:16px;
+    }
+    .gpio-menu-status.error { color:var(--red); }
+    .gpio-menu-status.success { color:var(--green); }
+    .pin-cell.clickable { cursor:pointer; }
+    .pin-cell.clickable:hover { border-color:var(--orange); }
+  </style>
+</head>
+<body>
+
+<div id="no-gpio" style="display:none">
+  <h2>&#9888; GPIO NOT AVAILABLE</h2>
+  <p>
+    The server cannot access GPIO hardware. This usually means one of the following:
+  </p>
+  <p>
+    <b>1. Missing backend library</b><br>
+    Run on your Pi: <code>sudo apt install python3-lgpio</code><br>
+    or <code>sudo apt install python3-rpi.gpio</code>
+  </p>
+  <p>
+    <b>2. Running on a non-Pi machine</b><br>
+    GPIO is only available on Raspberry Pi hardware.
+  </p>
+  <p>
+    <b>3. Permissions</b><br>
+    Try running the server with <code>sudo python3 app.py</code>
+    or add your user to the <code>gpio</code> group:<br>
+    <code>sudo usermod -a -G gpio $USER</code>
+  </p>
+  <div id="gpio-err-detail" style="color:var(--red);font-size:.72rem;margin-top:4px;"></div>
+</div>
+
+<div class="topbar">
+  <div>
+    <h1>&#9672; GPIO DIAGNOSTIC</h1>
+    <div class="subtitle">Live pin state monitor &mdash; Morse-Pi</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <div class="pill" id="conn-pill"><div class="dot" id="conn-dot"></div>SERVER</div>
+    <div class="pill" id="gpio-pill"><div class="dot" id="gpio-dot"></div>GPIO</div>
+    <button class="btn-sm" onclick="toggleTheme()" id="theme-btn">&#9788; LIGHT</button>
+    <button class="btn-sm" onclick="reinit()">&#9861; REINIT</button>
+    <button class="btn-sm" onclick="window.close()">&#10005; CLOSE</button>
+  </div>
+</div>
+
+<!-- Hero: assigned key pins only -->
+<div class="section-lbl">ASSIGNED KEY PINS</div>
+<div class="hero" id="hero-section">
+  <div class="hero-pin inactive"><div class="hero-ring">--</div><div class="hero-role">NO PINS</div><div class="hero-status">assign pins in CONFIG</div></div>
+</div>
+
+<!-- Full grid -->
+<div class="section-lbl">ALL BCM GPIO PINS &nbsp;<span style="font-size:.55rem;font-weight:400;text-transform:none;">(click to assign)</span></div>
+<div class="pin-grid" id="pin-grid"></div>
+
+<!-- Error log -->
+<div class="section-lbl">INIT / ERROR LOG &nbsp;<span id="reinit-spinner" style="display:none;"><span class="spinner"></span></span></div>
+<div class="err-log" id="err-log">Waiting for data&hellip;</div>
+
+<!-- Instructions -->
+<div class="section-lbl">HOW TO USE</div>
+<div class="instr">
+  <b>Assigning GPIO Pins:</b><br>
+  &nbsp;&#x2022; <b>Click any GPIO pin</b> in the grid above to open the assignment menu.<br>
+  &nbsp;&#x2022; Choose from: <b>Ground</b> (driven LOW), <b>SP/LED+</b>, <b>SP/LED&minus;</b>, <b>Dot Key</b>, <b>Dash Key</b>, or <b>Straight/Data Key</b>.<br>
+  &nbsp;&#x2022; Key pins (dot, dash, straight) <b>cannot be grounded</b> &mdash; they use internal pull-up resistors.<br>
+  <br>
+  <b>Paddle / Straight Key (pull-up wiring):</b><br>
+  &nbsp;&#x2022; Connect the <b>common / ground wire</b> of your paddle/key to any <b>GND pin</b> on the header (e.g. Pi Pin&nbsp;6, 9, 14, 20, 25, 30, 34, or 39), or to a GPIO set as <b>Ground</b>.<br>
+  &nbsp;&#x2022; Connect each <b>signal wire</b> to its assigned BCM GPIO pin.<br>
+  &nbsp;&#x2022; When a paddle is pressed, the signal pin is pulled <b>LOW</b> (grounded) and will <b>glow green</b> above.<br>
+  <br>
+  <b>Expected behaviour:</b><br>
+  &nbsp;&#x2022; Key/paddle at rest &rarr; pin shows <span style="color:var(--dim)">IDLE (HIGH)</span><br>
+  &nbsp;&#x2022; Key/paddle pressed &rarr; pin shows <span style="color:var(--green)">GROUNDED (LOW) &#9679;</span><br>
+  <br>
+  <b>If pins stay IDLE even when pressed:</b><br>
+  &nbsp;&#x2022; Check your GND wire is on a GND pin (not a 3.3V or 5V pin).<br>
+  &nbsp;&#x2022; Check your signal wire is on the correct BCM pin number.<br>
+  &nbsp;&#x2022; Try <code>sudo apt install python3-lgpio</code> and restart the server.<br>
+  &nbsp;&#x2022; Click <b>REINIT</b> above to force GPIO re-initialization.
+</div>
+
+<div class="footer">Auto-refreshing every 150ms &nbsp;&bull;&nbsp; <a href="/" style="color:var(--blue)">Back to main app</a></div>
+
+<!-- GPIO Pin Assignment Menu -->
+<div class="gpio-menu-overlay" id="gpio-menu-overlay" onclick="closeGpioMenu(event)">
+  <div class="gpio-menu" onclick="event.stopPropagation()">
+    <div class="gpio-menu-header" id="gpio-menu-header">BCM --</div>
+    <button class="gpio-menu-item ground" onclick="assignPin('ground')">
+      <span class="icon">&#9632;</span>SET AS GROUND
+    </button>
+    <button class="gpio-menu-item speaker" onclick="assignPin('speaker')">
+      <span class="icon">&#9836;</span>SET AS SP/LED+
+    </button>
+    <button class="gpio-menu-item speaker" onclick="assignPin('speaker2')">
+      <span class="icon">&#9836;</span>SET AS SP/LED&minus;
+    </button>
+    <button class="gpio-menu-item" id="btn-dot" onclick="assignPin('dot')">
+      <span class="icon">&#183;</span>SET AS DOT KEY
+    </button>
+    <button class="gpio-menu-item" id="btn-dash" onclick="assignPin('dash')">
+      <span class="icon">&#8722;</span>SET AS DASH KEY
+    </button>
+    <button class="gpio-menu-item" id="btn-straight" onclick="assignPin('straight')">
+      <span class="icon">&#9679;</span>SET AS STRAIGHT/DATA KEY
+    </button>
+    <button class="gpio-menu-item danger" onclick="assignPin('clear')">
+      <span class="icon">&#10005;</span>CLEAR ASSIGNMENT
+    </button>
+    <div class="gpio-menu-status" id="gpio-menu-status"></div>
+    <button class="gpio-menu-close" onclick="closeGpioMenu()">CANCEL</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+const INIT_SETTINGS = {{ settings | tojson }};
+const SERVER_GPIO   = {{ gpio_available | tojson }};
+
+// Physical pin # for each BCM pin (for display reference)
+const BCM_PHYS = {
+  2:3,3:5,4:7,5:29,6:31,7:26,8:24,9:21,10:19,11:23,
+  12:32,13:33,14:8,15:10,16:36,17:11,18:12,19:35,20:38,21:40,
+  22:15,23:16,24:18,25:22,26:37,27:13
+};
+const ALL_BCM = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27];
+
+let lastData = null;
+let pollOk = false;
+let selectedBcm = null;
+
+// ── GPIO Menu Functions ────────────────────────
+function openGpioMenu(bcm) {
+  selectedBcm = bcm;
+  document.getElementById('gpio-menu-header').textContent = 'BCM ' + bcm;
+  document.getElementById('gpio-menu-status').textContent = '';
+  document.getElementById('gpio-menu-status').className = 'gpio-menu-status';
+  
+  // Update button states based on constraints
+  updateMenuButtons();
+  
+  document.getElementById('gpio-menu-overlay').classList.add('active');
+}
+
+function closeGpioMenu(evt) {
+  if (evt && evt.target !== document.getElementById('gpio-menu-overlay')) return;
+  document.getElementById('gpio-menu-overlay').classList.remove('active');
+  selectedBcm = null;
+}
+
+function updateMenuButtons() {
+  if (!lastData) return;
+  
+  const btnDot = document.getElementById('btn-dot');
+  const btnDash = document.getElementById('btn-dash');
+  const btnStraight = document.getElementById('btn-straight');
+  
+  // Get current pin assignments
+  const dotPin = lastData.dot_pin;
+  const dashPin = lastData.dash_pin;
+  const dataPin = lastData.data_pin;
+  const pinMode = lastData.pin_mode;
+  
+  // Show/hide based on pin mode
+  if (pinMode === 'dual') {
+    btnDot.style.display = 'block';
+    btnDash.style.display = 'block';
+    btnStraight.style.display = 'none';
+  } else {
+    btnDot.style.display = 'none';
+    btnDash.style.display = 'none';
+    btnStraight.style.display = 'block';
+  }
+}
+
+function assignPin(role) {
+  if (selectedBcm === null) return;
+  
+  const statusEl = document.getElementById('gpio-menu-status');
+  statusEl.textContent = 'Assigning...';
+  statusEl.className = 'gpio-menu-status';
+  
+  fetch('/assign_gpio', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({bcm: selectedBcm, role: role})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      statusEl.textContent = data.message || 'Assigned!';
+      statusEl.className = 'gpio-menu-status success';
+      // Close menu after short delay
+      setTimeout(() => closeGpioMenu(), 600);
+    } else {
+      statusEl.textContent = data.error || 'Assignment failed';
+      statusEl.className = 'gpio-menu-status error';
+    }
+  })
+  .catch(err => {
+    statusEl.textContent = 'Network error';
+    statusEl.className = 'gpio-menu-status error';
+  });
+}
+
+// ── Reinit ─────────────────────────────────────
+function reinit() {
+  document.getElementById('reinit-spinner').style.display='inline-block';
+  fetch('/gpio_reinit', {method:'POST'})
+    .then(r=>r.json())
+    .then(d=>{
+      document.getElementById('reinit-spinner').style.display='none';
+      const el=document.getElementById('err-log');
+      if(d.errors && d.errors.length){
+        el.className='err-log';
+        el.textContent=d.errors.join('\n');
+      } else {
+        el.className='err-log ok';
+        el.textContent='Re-init complete. No errors.';
+      }
+    })
+    .catch(()=>{
+      document.getElementById('reinit-spinner').style.display='none';
+    });
+}
+
+// ── Render helpers ──────────────────────────────
+function roleLabel(bcm, data) {
+  const pm  = data.pin_mode;
+  const sp  = data.speaker_pin;
+  const sp2 = data.speaker_pin2;
+  const gp  = data.ground_pin;
+  const dp  = data.data_pin;
+  const dop = data.dot_pin;
+  const dap = data.dash_pin;
+  const grounded = data.grounded_pins || [];
+  const gndMode = data.speaker_gnd_mode || '3v3';
+  if (bcm === sp) {
+    if (data.output_type === 'led') {
+      return sp2 != null ? 'LED +' : 'LED OUT';
+    }
+    if (sp2 != null) return 'SP/LED +';
+    return gndMode === '3v3' ? 'SP/LED (3.3V)' : 'SP/LED';
+  }
+  if (bcm === sp2) {
+    return data.output_type === 'led' ? 'LED \u2212' : 'SP/LED \u2212';
+  }
+  if (bcm === gp)  return 'GND OUT';
+  if (grounded.includes(bcm)) return 'GROUNDED';
+  if (pm === 'dual') {
+    if (bcm === dop) return 'DOT KEY';
+    if (bcm === dap) return 'DASH KEY';
+  } else {
+    if (bcm === dp)  return 'DATA KEY';
+  }
+  return '';
+}
+
+function pinClass(bcm, data) {
+  const info = data.states ? data.states[String(bcm)] : null;
+  if (!info) return 'error';
+  if (info.role === 'sp_led_pos')  return 'output';
+  if (info.role === 'sp_led_neg') return 'output';
+  if (info.role === 'ground')  return 'gnd-out';
+  // Check grounded_pins array
+  const grounded = data.grounded_pins || [];
+  if (grounded.includes(bcm)) return 'gnd-out';
+  if (info.active === true)    return 'active';
+  if (info.active === null)    return 'error';
+  return 'inactive';
+}
+
+function pinStateLabel(bcm, data) {
+  const info = data.states ? data.states[String(bcm)] : null;
+  if (!info) return 'ERR';
+  if (info.role === 'sp_led_pos')  return 'OUTPUT';
+  if (info.role === 'sp_led_neg') return 'OUTPUT';
+  if (info.role === 'ground')  return 'GND (driven LOW)';
+  if (info.active === true)  return 'GROUNDED \u25CF';
+  if (info.active === false) return 'IDLE';
+  return 'N/A';
+}
+
+// ── Render hero (assigned key pins only) ───────
+function renderHero(data) {
+  const pm  = data.pin_mode;
+  const sp  = data.speaker_pin;
+  const sp2 = data.speaker_pin2;
+  const dp  = data.data_pin;
+  const dop = data.dot_pin;
+  const dap = data.dash_pin;
+  const keyPins = [];
+  if (pm === 'dual') {
+    if (dop != null) keyPins.push({bcm: dop, role: 'DOT PADDLE'});
+    if (dap != null) keyPins.push({bcm: dap, role: 'DASH PADDLE'});
+  } else {
+    if (dp  != null) keyPins.push({bcm: dp,  role: 'DATA KEY'});
+  }
+  if (sp  != null) {
+    const spRole = data.output_type === 'led'
+      ? (sp2 != null ? 'LED +' : 'LED OUT')
+      : (sp2 != null ? 'SP/LED +' : (data.speaker_gnd_mode === '3v3' ? 'SP/LED (3.3V)' : 'SP/LED'));
+    keyPins.push({bcm: sp,  role: spRole});
+  }
+  if (sp2 != null) {
+    keyPins.push({bcm: sp2, role: data.output_type === 'led' ? 'LED \u2212' : 'SP/LED \u2212'});
+  }
+
+  const hero = document.getElementById('hero-section');
+  if (!keyPins.length) {
+    hero.innerHTML = '<div class="hero-pin inactive"><div class="hero-ring">--</div><div class="hero-role">NO PINS CONFIGURED</div><div class="hero-status">Assign pins in CONFIG tab</div></div>';
+    return;
+  }
+  hero.innerHTML = keyPins.map(({bcm, role}) => {
+    const cls   = pinClass(bcm, data);
+    const state = pinStateLabel(bcm, data);
+    const phys  = BCM_PHYS[bcm] ? 'Pi Pin '+BCM_PHYS[bcm] : '';
+    return `
+      <div class="hero-pin ${cls}">
+        <div class="hero-ring">BCM<br>${bcm}</div>
+        <div class="hero-role">${role}</div>
+        <div class="hero-status">${state}</div>
+        <div style="font-size:.6rem;color:var(--dim);margin-top:3px;">${phys}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── Render full pin grid ────────────────────────
+function renderGrid(data) {
+  const grid = document.getElementById('pin-grid');
+  grid.innerHTML = ALL_BCM.map(bcm => {
+    const cls   = pinClass(bcm, data);
+    const rl    = roleLabel(bcm, data);
+    const phys  = BCM_PHYS[bcm] || '?';
+    return `
+      <div class="pin-cell ${cls} clickable" title="BCM ${bcm} \u2014 Pi pin ${phys} \u2014 Click to assign" onclick="openGpioMenu(${bcm})">
+        <div class="pin-cell-bcm">BCM ${bcm}</div>
+        <div class="pin-cell-dot"></div>
+        <div class="pin-cell-role">${rl || '&nbsp;'}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── Render error log ────────────────────────────
+function renderErrors(data) {
+  const el = document.getElementById('err-log');
+  const errs = (data.errors || []).filter(Boolean);
+  if (!errs.length) {
+    el.className = 'err-log ok';
+    el.textContent = 'No errors. GPIO initialised OK.';
+  } else {
+    el.className = 'err-log';
+    el.textContent = errs.join('\n');
+  }
+}
+
+// ── Poll loop ───────────────────────────────────
+function poll() {
+  fetch('/gpio_poll')
+    .then(r => { pollOk=true; connOk(); return r.json(); })
+    .then(data => {
+      lastData = data;
+      // GPIO available indicator
+      const gd = document.getElementById('gpio-dot');
+      if (data.gpio_available) { gd.className='dot ok'; }
+      else                     { gd.className='dot err'; document.getElementById('no-gpio').style.display='flex'; }
+      // Render
+      renderHero(data);
+      renderGrid(data);
+      renderErrors(data);
+    })
+    .catch(() => { connLost(); });
+}
+
+function connOk() {
+  const d=document.getElementById('conn-dot');
+  d.className='dot ok';
+}
+function connLost() {
+  const d=document.getElementById('conn-dot');
+  d.className='dot err';
+}
+
+// Show no-gpio overlay from server-side flag immediately
+if (!SERVER_GPIO) {
+  document.getElementById('no-gpio').style.display='flex';
+  const gd = document.getElementById('gpio-dot');
+  gd.className='dot err';
+}
+
+setInterval(poll, 150);
+poll();
+
+// ── Theme Toggle ────────────────────────────
+function toggleTheme() {
+  const root = document.documentElement;
+  const btn = document.getElementById('theme-btn');
+  if (root.classList.contains('light')) {
+    root.classList.remove('light');
+    btn.innerHTML = '&#9788; LIGHT';
+    localStorage.setItem('morse-diag-theme', 'dark');
+  } else {
+    root.classList.add('light');
+    btn.innerHTML = '&#9790; DARK';
+    localStorage.setItem('morse-diag-theme', 'light');
+  }
+}
+
+// Apply saved theme on load
+(function() {
+  const saved = localStorage.getItem('morse-diag-theme');
+  const btn = document.getElementById('theme-btn');
+  if (saved === 'light') {
+    document.documentElement.classList.add('light');
+    if (btn) btn.innerHTML = '&#9790; DARK';
+  }
+})();
+</script>
+</body>
+</html>

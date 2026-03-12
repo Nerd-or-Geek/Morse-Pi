@@ -1,0 +1,2142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Morse-Pi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      --bg:       #050a0e;
+      --bg2:      #0b1520;
+      --bg3:      #0f1e2e;
+      --bg4:      #162840;
+      --border:   #1a3a5c;
+      --accent:   #00d4ff;
+      --accent2:  #ff6b35;
+      --accent3:  #39ff14;
+      --text:     #c8dce8;
+      --text-dim: #4a7090;
+      --danger:   #ff3366;
+      --gold:     #ffd700;
+      --purple:   #c084fc;
+      --glow:       0 0 20px rgba(0,212,255,0.3);
+      --glow-green: 0 0 20px rgba(57,255,20,0.4);
+      --glow-red:   0 0 20px rgba(255,51,102,0.4);
+      --grid-line:  rgba(0,212,255,0.03);
+      --scanline:   rgba(0,0,0,0.03);
+    }
+    :root.light {
+      --bg:       #f5f7fa;
+      --bg2:      #ffffff;
+      --bg3:      #e8ecf1;
+      --bg4:      #dde3eb;
+      --border:   #c5cdd8;
+      --accent:   #0077b6;
+      --accent2:  #d45500;
+      --accent3:  #1a7f37;
+      --text:     #1f2328;
+      --text-dim: #656d76;
+      --danger:   #cf222e;
+      --gold:     #9a6700;
+      --purple:   #8250df;
+      --glow:       0 0 12px rgba(0,119,182,0.25);
+      --glow-green: 0 0 12px rgba(26,127,55,0.3);
+      --glow-red:   0 0 12px rgba(207,34,46,0.3);
+      --grid-line:  rgba(0,119,182,0.04);
+      --scanline:   rgba(0,0,0,0.015);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, var(--scanline) 2px, var(--scanline) 4px);
+      pointer-events: none; z-index: 100;
+    }
+    .grid-bg {
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none; z-index: 0;
+    }
+    .app {
+      position: relative; z-index: 1;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 16px 20px 60px;
+    }
+    /* Header */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 0 22px; border-bottom: 1px solid var(--border);
+      margin-bottom: 18px; flex-wrap: wrap; gap: 10px; position: relative;
+    }
+    .header-left { display: flex; flex-direction: column; gap: 2px; }
+    .header-center {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    .device-name {
+      font-family: 'Orbitron', monospace;
+      font-weight: 700;
+      font-size: 1.3rem;
+      letter-spacing: 0.08em;
+      background: linear-gradient(135deg, var(--accent2), var(--gold));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      white-space: nowrap;
+    }
+    @media (max-width: 800px) {
+      .header-center { flex: none; width: 100%; order: 3; margin-top: 4px; justify-content: center; }
+    }
+    .logo {
+      font-family: 'Orbitron', monospace; font-weight: 900; font-size: 1.55rem;
+      letter-spacing: 0.08em;
+      background: linear-gradient(135deg, var(--accent), var(--accent3));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .logo span { font-size: 0.85rem; opacity: 0.55; font-weight: 400; }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 20px;
+      padding: 4px 10px; font-family: 'Share Tech Mono', monospace;
+      font-size: 0.63rem; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .status-pill .dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); transition: all 0.2s;
+    }
+    .status-pill .dot.ok    { background: var(--accent3); box-shadow: var(--glow-green); }
+    .status-pill .dot.err   { background: var(--danger);  box-shadow: var(--glow-red); }
+    .status-pill .dot.active { background: var(--accent); box-shadow: var(--glow); animation: pulse 0.6s ease-in-out infinite alternate; }
+    @keyframes pulse { from { opacity:0.5; } to { opacity:1; } }
+    /* Nav */
+    .nav {
+      display: flex; gap: 4px; margin-bottom: 18px;
+      background: var(--bg2); padding: 5px; border-radius: 10px;
+      border: 1px solid var(--border); flex-wrap: wrap;
+    }
+    .nav-btn {
+      flex: 1; min-width: 55px; padding: 9px 5px; border: none;
+      background: transparent; color: var(--text-dim);
+      font-family: 'Orbitron', monospace; font-size: 0.56rem;
+      letter-spacing: 0.07em; text-transform: uppercase;
+      border-radius: 7px; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    .nav-btn:hover { color: var(--text); background: var(--bg3); }
+    .nav-btn.active {
+      background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(57,255,20,0.1));
+      color: var(--accent); border: 1px solid rgba(0,212,255,0.3);
+      box-shadow: 0 0 10px rgba(0,212,255,0.1);
+    }
+    .nav-icon { display: block; font-size: 0.9rem; margin-bottom: 2px; }
+    /* Panel */
+    .panel {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 22px 26px; margin-bottom: 16px; position: relative;
+      overflow: hidden; animation: fadeIn 0.2s ease;
+    }
+    .panel::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.4;
+    }
+    .panel-title {
+      font-family: 'Orbitron', monospace; font-size: 0.7rem;
+      letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent);
+      margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .panel-title::before {
+      content: ''; width: 3px; height: 14px; background: var(--accent);
+      border-radius: 2px; flex-shrink: 0;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
+    /* Displays */
+    .morse-display {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 16px 18px; font-family: 'Share Tech Mono', monospace;
+      font-size: 1.35rem; letter-spacing: 0.15em; color: var(--accent3);
+      min-height: 66px; display: flex; align-items: center; margin-bottom: 12px;
+      word-break: break-all; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .morse-display.large {
+      font-size: 1.8rem; min-height: 84px; justify-content: center;
+      text-align: center; color: var(--gold); letter-spacing: 0.18em;
+    }
+    .morse-display.active-send {
+      border-color: var(--accent3);
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 0 12px rgba(57,255,20,0.25);
+    }
+    .morse-display .cursor {
+      display: inline-block; width: 10px; height: 22px; background: var(--accent3);
+      margin-left: 4px; animation: blink 0.9s step-end infinite; vertical-align: middle; flex-shrink: 0;
+    }
+    @keyframes blink { 50% { opacity:0; } }
+    .text-display {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 18px; font-family: 'Share Tech Mono', monospace;
+      font-size: 1.1rem; color: var(--text); min-height: 48px;
+      display: flex; align-items: center; margin-bottom: 12px; word-break: break-all;
+    }
+    /* Encode breakdown */
+    .encode-breakdown { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+    .encode-char-block {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 9px; text-align: center; min-width: 42px;
+    }
+    .encode-char-block .ec-char { font-family:'Orbitron',monospace; font-size:0.88rem; color:var(--text); display:block; }
+    .encode-char-block .ec-morse { font-family:'Share Tech Mono',monospace; font-size:0.78rem; color:var(--accent3); display:block; margin-top:2px; letter-spacing:0.1em; }
+    .encode-char-block.space-block { opacity:0.38; background:transparent; }
+    /* Forms */
+    .input-field {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 11px 14px; color: var(--text);
+      font-family: 'Share Tech Mono', monospace; font-size: 0.93rem;
+      outline: none; transition: border-color 0.2s, box-shadow 0.2s; margin-bottom: 12px;
+    }
+    .input-field:focus { border-color: var(--accent); box-shadow: 0 0 8px rgba(0,212,255,0.15); }
+    select.input-field { cursor: pointer; }
+    select.input-field option { background: var(--bg2); }
+    /* Buttons */
+    .btn {
+      padding: 8px 17px; border: none; border-radius: 7px;
+      font-family: 'Orbitron', monospace; font-size: 0.61rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-primary { background:linear-gradient(135deg,rgba(0,212,255,0.25),rgba(0,212,255,0.1)); color:var(--accent); border:1px solid rgba(0,212,255,0.4); }
+    .btn-primary:hover:not(:disabled) { background:linear-gradient(135deg,rgba(0,212,255,0.4),rgba(0,212,255,0.2)); box-shadow:0 0 12px rgba(0,212,255,0.2); }
+    .btn-success { background:linear-gradient(135deg,rgba(57,255,20,0.2),rgba(57,255,20,0.05)); color:var(--accent3); border:1px solid rgba(57,255,20,0.3); }
+    .btn-success:hover:not(:disabled) { background:linear-gradient(135deg,rgba(57,255,20,0.35),rgba(57,255,20,0.15)); box-shadow:0 0 12px rgba(57,255,20,0.2); }
+    .btn-danger { background:linear-gradient(135deg,rgba(255,51,102,0.2),rgba(255,51,102,0.05)); color:var(--danger); border:1px solid rgba(255,51,102,0.3); }
+    .btn-danger:hover:not(:disabled) { background:linear-gradient(135deg,rgba(255,51,102,0.35),rgba(255,51,102,0.15)); }
+    .btn-ghost { background:transparent; color:var(--text-dim); border:1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled) { color:var(--text); border-color:var(--text-dim); }
+    .btn-orange { background:linear-gradient(135deg,rgba(255,107,53,0.25),rgba(255,107,53,0.1)); color:var(--accent2); border:1px solid rgba(255,107,53,0.35); }
+    .btn-orange:hover:not(:disabled) { background:linear-gradient(135deg,rgba(255,107,53,0.4),rgba(255,107,53,0.2)); box-shadow:0 0 12px rgba(255,107,53,0.2); }
+    .btn-group { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    /* On-Screen Morse Key */
+    .morse-key-area { display:flex; gap:12px; margin:12px 0; flex-wrap:wrap; }
+    .morse-key {
+      flex:1; min-width:110px; min-height:78px; border-radius:10px; border:2px solid;
+      font-family:'Orbitron',monospace; font-size:1.05rem; font-weight:700;
+      letter-spacing:0.1em; cursor:pointer; transition:all 0.08s;
+      user-select:none; -webkit-user-select:none;
+      display:flex; flex-direction:column; align-items:center;
+      justify-content:center; gap:4px; touch-action:none;
+    }
+    .morse-key-single { min-height:96px; background:linear-gradient(135deg,rgba(0,212,255,0.1),var(--bg3)); border-color:rgba(0,212,255,0.4); color:var(--accent); }
+    .morse-key-single.pressed { background:linear-gradient(135deg,rgba(0,212,255,0.35),rgba(0,212,255,0.15)); box-shadow:0 0 20px rgba(0,212,255,0.4); transform:scale(0.97); }
+    .morse-key-dot { background:linear-gradient(135deg,rgba(57,255,20,0.1),var(--bg3)); border-color:rgba(57,255,20,0.4); color:var(--accent3); }
+    .morse-key-dot.pressed { background:linear-gradient(135deg,rgba(57,255,20,0.35),rgba(57,255,20,0.15)); box-shadow:0 0 20px rgba(57,255,20,0.4); transform:scale(0.97); }
+    .morse-key-dash { background:linear-gradient(135deg,rgba(255,107,53,0.15),var(--bg3)); border-color:rgba(255,107,53,0.4); color:var(--accent2); }
+    .morse-key-dash.pressed { background:linear-gradient(135deg,rgba(255,107,53,0.35),rgba(255,107,53,0.15)); box-shadow:0 0 20px rgba(255,107,53,0.4); transform:scale(0.97); }
+    .morse-key-sub { font-family:'Share Tech Mono',monospace; font-size:0.68rem; opacity:0.5; }
+    /* Results */
+    .result-correct {
+      background:rgba(57,255,20,0.08); border:1px solid rgba(57,255,20,0.3); border-radius:8px;
+      padding:12px 16px; font-family:'Orbitron',monospace; font-size:0.7rem;
+      letter-spacing:0.08em; color:var(--accent3); animation:fadeIn 0.3s ease;
+    }
+    .result-wrong {
+      background:rgba(255,51,102,0.08); border:1px solid rgba(255,51,102,0.3); border-radius:8px;
+      padding:12px 16px; font-family:'Orbitron',monospace; font-size:0.7rem;
+      letter-spacing:0.08em; color:var(--danger); animation:fadeIn 0.3s ease;
+    }
+    .answer-reveal { color:var(--text); font-family:'Share Tech Mono',monospace; margin-top:6px; font-size:0.9rem; letter-spacing:0.05em; }
+    /* Stats */
+    .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+    .stat-card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center; }
+    .stat-value { font-family:'Orbitron',monospace; font-size:1.4rem; font-weight:700; color:var(--accent); display:block; }
+    .stat-label { font-size:0.6rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-dim); margin-top:4px; }
+    .accuracy-bar-wrap { background:var(--bg3); border-radius:4px; height:5px; overflow:hidden; margin-top:8px; }
+    .accuracy-bar-fill { height:100%; background:linear-gradient(90deg,var(--accent3),var(--accent)); border-radius:4px; transition:width 0.5s ease; }
+    .timer-display { font-family:'Orbitron',monospace; font-size:2.3rem; font-weight:900; color:var(--accent2); text-align:center; letter-spacing:0.1em; margin:8px 0; }
+    .wpm-result { text-align:center; padding:14px; }
+    .wpm-number { font-family:'Orbitron',monospace; font-size:3rem; font-weight:900; color:var(--accent2); }
+    .wpm-label { font-size:0.67rem; letter-spacing:0.15em; text-transform:uppercase; color:var(--text-dim); }
+    /* Settings */
+    .settings-section { margin-bottom:20px; }
+    .settings-section-title {
+      font-family:'Orbitron',monospace; font-size:0.6rem; letter-spacing:0.18em;
+      text-transform:uppercase; color:var(--text-dim); margin-bottom:12px;
+      padding-bottom:6px; border-bottom:1px solid var(--border);
+      display:flex; align-items:center; gap:8px;
+    }
+    .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .setting-row { display:flex; flex-direction:column; gap:5px; }
+    .setting-row.full { grid-column:1/-1; }
+    .setting-label { font-size:0.66rem; letter-spacing:0.07em; text-transform:uppercase; color:var(--text-dim); font-family:'Orbitron',monospace; }
+    .setting-input-row { display:flex; gap:8px; align-items:center; }
+    .setting-input-row .input-field { margin-bottom:0; flex:1; }
+    .setting-help { font-size:0.7rem; color:var(--text-dim); margin-top:3px; line-height:1.4; }
+    /* Toggles / Segmented */
+    .segmented { display:flex; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+    .segmented-btn {
+      flex:1; padding:8px 10px; border:none; background:transparent;
+      color:var(--text-dim); font-family:'Orbitron',monospace; font-size:0.58rem;
+      letter-spacing:0.07em; text-transform:uppercase; cursor:pointer; transition:all 0.15s;
+      border-right:1px solid var(--border);
+    }
+    .segmented-btn:last-child { border-right:none; }
+    .segmented-btn.active { background:rgba(0,212,255,0.15); color:var(--accent); }
+    /* Cheat Sheet */
+    .cheat-sheet-outer { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:20px; margin-top:12px; }
+    .cheat-tabs { display:flex; gap:4px; margin-bottom:12px; }
+    .cheat-tab {
+      padding:5px 13px; border-radius:20px; border:1px solid var(--border);
+      background:transparent; color:var(--text-dim); font-family:'Orbitron',monospace;
+      font-size:0.57rem; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; transition:all 0.15s;
+    }
+    .cheat-tab.active { background:rgba(0,212,255,0.15); color:var(--accent); border-color:rgba(0,212,255,0.4); }
+    .cheat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(56px,1fr)); gap:6px; }
+    .cheat-item {
+      background:var(--bg); border:1px solid var(--border); border-radius:6px;
+      padding:6px 4px; text-align:center; cursor:pointer; transition:all 0.12s;
+    }
+    .cheat-item:hover { border-color:var(--accent); background:rgba(0,212,255,0.06); }
+    .cheat-char { font-family:'Orbitron',monospace; font-size:0.82rem; font-weight:700; color:var(--text); display:block; }
+    .cheat-morse { font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--accent3); display:block; margin-top:2px; }
+    /* Toast */
+    #toast-container { position:fixed; bottom:22px; right:22px; z-index:9999; display:flex; flex-direction:column; gap:7px; pointer-events:none; }
+    .toast {
+      background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+      padding:11px 17px; font-family:'Orbitron',monospace; font-size:0.63rem;
+      letter-spacing:0.08em; color:var(--text); box-shadow:0 4px 20px rgba(0,0,0,0.5);
+      animation:toastIn 0.22s ease; max-width:270px;
+    }
+    .toast.success { border-color:rgba(57,255,20,0.4);  color:var(--accent3); }
+    .toast.error   { border-color:rgba(255,51,102,0.4); color:var(--danger); }
+    .toast.info    { border-color:rgba(0,212,255,0.4);  color:var(--accent); }
+    .toast.warning { border-color:rgba(255,107,53,0.4); color:var(--accent2); }
+    @keyframes toastIn { from { opacity:0; transform:translateX(18px); } to { opacity:1; transform:translateX(0); } }
+    /* Help */
+    .help-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .help-card { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:14px; }
+    .help-card-title { font-family:'Orbitron',monospace; font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); margin-bottom:10px; }
+    .help-card ul { list-style:none; }
+    .help-card li { font-size:0.77rem; color:var(--text-dim); padding:3px 0; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; gap:8px; }
+    .help-card li:last-child { border-bottom:none; }
+    .help-card li .kbd { font-family:'Share Tech Mono',monospace; font-size:0.7rem; background:var(--bg2); border:1px solid var(--border); border-radius:4px; padding:1px 6px; color:var(--text); white-space:nowrap; }
+    /* Pin diagram */
+    .pin-diagram { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:var(--text-dim); line-height:1.9; }
+    .pin-row { display:flex; align-items:center; gap:10px; }
+    .pin-badge { background:var(--bg3); border:1px solid var(--border); border-radius:4px; padding:2px 8px; font-family:'Orbitron',monospace; font-size:0.58rem; color:var(--accent); min-width:50px; text-align:center; }
+    /* GPIO Pin Map */
+    .gpio-map-wrap { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:16px 14px; overflow-x:auto; }
+    .gpio-legend { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+    .gpio-legend-item { display:flex; align-items:center; gap:5px; font-family:'Share Tech Mono',monospace; font-size:0.68rem; color:var(--text-dim); }
+    .gpio-map { display:flex; flex-direction:column; gap:1px; min-width:300px; }
+    .gpio-row { display:flex; align-items:center; height:24px; }
+    .gpio-pin { display:flex; align-items:center; gap:5px; flex:1; min-width:0; overflow:hidden; }
+    .gpio-pin.right { flex-direction:row-reverse; }
+    .gpio-phys { font-family:'Orbitron',monospace; font-size:0.55rem; color:var(--text-dim); width:20px; text-align:center; flex-shrink:0; }
+    .gpio-dot { width:11px; height:11px; border-radius:50%; flex-shrink:0; transition:box-shadow 0.2s; }
+    .gpio-pin-info { display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+    .gpio-pin-info.right { align-items:flex-end; }
+    .gpio-lbl { font-family:'Share Tech Mono',monospace; font-size:0.65rem; line-height:1; white-space:nowrap; }
+    .gpio-role { font-family:'Orbitron',monospace; font-size:0.5rem; letter-spacing:0.06em; line-height:1.1; white-space:nowrap; text-transform:uppercase; }
+    .gpio-connector { width:28px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+    .gpio-connector::before { content:''; display:block; width:10px; height:10px; border-radius:50%; background:var(--bg3); border:1px solid var(--border); }
+    .gpio-gnd-note { margin-top:10px; font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--text-dim); line-height:1.5; display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+    /* GPIO interactive */
+    .gpio-pin.clickable { cursor:pointer; }
+    .gpio-pin.clickable:hover .gpio-dot { filter:brightness(2); transform:scale(1.25); }
+    .gpio-dot { transition:filter 0.15s, transform 0.15s; }
+    .gpio-dot.pin-active { animation:pinPulse 0.35s ease-in-out infinite alternate; }
+    @keyframes pinPulse { to { transform:scale(1.7); filter:brightness(3.5); box-shadow:0 0 18px 6px rgba(255,255,255,0.85); } }
+    .gpio-popover { position:fixed; z-index:9999; background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:10px 10px 6px; min-width:210px; box-shadow:0 6px 24px rgba(0,0,0,0.6); }
+    .gpio-pop-title { font-family:'Orbitron',monospace; font-size:0.58rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+    .gpio-pop-btn { display:block; width:100%; padding:6px 10px; margin-bottom:3px; background:var(--bg3); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:'Share Tech Mono',monospace; font-size:0.72rem; cursor:pointer; text-align:left; transition:background 0.12s,color 0.12s; }
+    .gpio-pop-btn:hover { background:var(--accent); color:#000; border-color:var(--accent); }
+    .gpio-pop-btn.key-active  { background:rgba(57,255,20,0.15); border-color:var(--accent3); color:var(--accent3); }
+    .gpio-pop-btn.spkr-active { background:rgba(0,212,255,0.15); border-color:var(--accent); color:var(--accent); }
+    .gpio-pop-btn.gnd-active  { background:rgba(160,160,160,0.15); border-color:#a0a0a0; color:#c8c8c8; }
+    .gpio-pop-btn.clear-btn { margin-top:4px; color:var(--text-dim); border-color:transparent; }
+    /* Tags */
+    .tag { display:inline-block; padding:2px 8px; border-radius:10px; font-family:'Orbitron',monospace; font-size:0.53rem; letter-spacing:0.08em; text-transform:uppercase; }
+    .tag-green { background:rgba(57,255,20,0.12);  color:var(--accent3); border:1px solid rgba(57,255,20,0.25); }
+    .tag-blue  { background:rgba(0,212,255,0.12);  color:var(--accent);  border:1px solid rgba(0,212,255,0.25); }
+    .tag-orange{ background:rgba(255,107,53,0.12); color:var(--accent2); border:1px solid rgba(255,107,53,0.25); }
+    .tag-purple{ background:rgba(192,132,252,0.12); color:var(--purple); border:1px solid rgba(192,132,252,0.25); }
+    .tag-dev { background:rgba(255,215,0,0.12); color:var(--gold); border:1px solid rgba(255,215,0,0.25); font-size:0.48rem; padding:2px 6px; }
+    /* Misc */
+    .hint-text { font-size:0.78rem; color:var(--text-dim); margin-bottom:10px; line-height:1.5; }
+    .section-header { font-family:'Orbitron',monospace; font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); margin-bottom:7px; }
+    .phrase-label { font-family:'Orbitron',monospace; font-size:0.57rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-dim); margin-bottom:5px; }
+    .sep { border:none; border-top:1px solid var(--border); margin:16px 0; }
+    .key-hint { display:inline-flex; align-items:center; padding:2px 7px; background:var(--bg3); border:1px solid var(--border); border-radius:4px; font-family:'Share Tech Mono',monospace; font-size:0.67rem; color:var(--text-dim); }
+    /* Volume slider */
+    .vol-slider { -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:3px; background:var(--bg3); outline:none; cursor:pointer; margin-top:4px; }
+    .vol-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:18px; height:18px; border-radius:50%; background:var(--accent); border:2px solid var(--bg2); cursor:pointer; box-shadow:0 0 6px rgba(0,212,255,0.4); }
+    .vol-slider::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:var(--accent); border:2px solid var(--bg2); cursor:pointer; box-shadow:0 0 6px rgba(0,212,255,0.4); }
+    /* Smooth panel transitions */
+    .mode-panel { transition: opacity 0.15s ease; }
+    .mode-panel.fading { opacity: 0; }
+    /* Accuracy character display */
+    .accuracy-chars { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:12px 0; }
+    .accuracy-char {
+      display:flex; flex-direction:column; align-items:center; gap:2px;
+      background:var(--bg); border:1px solid var(--border); border-radius:6px;
+      padding:6px 10px; min-width:46px; text-align:center;
+    }
+    .accuracy-char.char-correct { border-color:rgba(57,255,20,0.4); background:rgba(57,255,20,0.06); }
+    .accuracy-char.char-wrong   { border-color:rgba(255,51,102,0.4); background:rgba(255,51,102,0.06); }
+    .accuracy-char.char-missing { border-color:rgba(255,215,0,0.4); background:rgba(255,215,0,0.06); }
+    .accuracy-char .ac-expected { font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:700; }
+    .accuracy-char .ac-got      { font-family:'Share Tech Mono',monospace; font-size:0.72rem; margin-top:1px; }
+    .accuracy-char.char-correct .ac-expected { color:var(--accent3); }
+    .accuracy-char.char-wrong   .ac-expected { color:var(--danger); }
+    .accuracy-char.char-missing .ac-expected { color:var(--gold); }
+    .accuracy-pct {
+      font-family:'Orbitron',monospace; font-size:2.6rem; font-weight:900;
+      text-align:center; margin:8px 0 4px;
+    }
+    .accuracy-pct-label { font-size:0.65rem; letter-spacing:0.15em; text-transform:uppercase; color:var(--text-dim); text-align:center; }
+    /* Responsive */
+    @media (max-width:640px) {
+      .settings-grid { grid-template-columns:1fr; }
+      .stats-row { grid-template-columns:repeat(2,1fr); }
+      .nav-btn { font-size:0.5rem; padding:7px 3px; }
+      .logo { font-size:1.15rem; }
+      .help-grid { grid-template-columns:1fr; }
+      .morse-display.large { font-size:1.35rem; }
+      .panel { padding:16px 14px; }
+    }
+  </style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="toast-container"></div>
+
+<div class="app">
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">&#9672; MORSE-PI <span>v2.0</span></div>
+    </div>
+    <div class="header-center">
+      <div class="device-name" id="device-name-display"></div>
+    </div>
+    <div class="header-right">
+      <div class="status-pill"><div class="dot" id="gpio-dot"></div>GPIO</div>
+      <div class="status-pill"><div class="dot" id="conn-dot"></div>SERVER</div>
+      <div class="status-pill"><div class="dot" id="btn-dot"></div>KEY</div>
+      <button onclick="toggleTheme()" id="theme-btn" title="Toggle light/dark theme" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">&#9788; LIGHT</button>
+      <button onclick="window.open('/diag','gpio_diag','width=560,height=820,resizable=yes,menubar=no,toolbar=no,location=no')" title="Open GPIO live diagnostic window" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">GPIO DIAG</button>
+    </div>
+  </header>
+
+  <nav class="nav">
+    <button class="nav-btn" data-mode="send"><span class="nav-icon">&#9654;</span>SEND</button>
+    <button class="nav-btn" data-mode="encode"><span class="nav-icon">&#8596;</span>ENCODE</button>
+    <button class="nav-btn" data-mode="decode"><span class="nav-icon">&#63;</span>DECODE</button>
+    <button class="nav-btn" data-mode="speed"><span class="nav-icon">&#8982;</span>SPEED</button>
+    <button class="nav-btn" data-mode="keyboard"><span class="nav-icon">&#9000;</span>KB</button>
+    <button class="nav-btn" data-mode="stats"><span class="nav-icon">&#9632;</span>STATS</button>
+    <button class="nav-btn" data-mode="settings"><span class="nav-icon">&#9881;</span>CONFIG</button>
+    <button class="nav-btn" data-mode="network"><span class="nav-icon">&#9737;</span>NET</button>
+    <button class="nav-btn" data-mode="help"><span class="nav-icon">&#9432;</span>HELP</button>
+  </nav>
+
+  <div id="main-content" class="mode-panel"></div>
+
+  <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+    <button class="btn btn-ghost" id="cheat-toggle-btn">Reference Sheet</button>
+  </div>
+  <div id="cheat-sheet-panel" style="display:none;"></div>
+</div>
+
+<script id="init-state"    type="application/json">{{ state|tojson }}</script>
+<script id="init-settings" type="application/json">{{ settings|tojson }}</script>
+
+<script>
+'use strict';
+
+// ── Bootstrap ──────────────────────────────────
+let state    = JSON.parse(document.getElementById('init-state').textContent);
+let settings = JSON.parse(document.getElementById('init-settings').textContent);
+let showSpeedResult = false;
+let cheatTabActive  = 'letters';
+let cheatOpen       = false;
+
+const SETTINGS_DEFAULTS = {
+  speaker_pin:18, speaker_pin2:null, speaker_gnd_mode:'3v3', output_type:'speaker',
+  pin_mode:'single', data_pin:17, dot_pin:22, dash_pin:27, ground_pin:null, grounded_pins:[],
+  use_external_switch:false,
+  dot_freq:700, dash_freq:500, volume:0.75,
+  wpm_target:20, difficulty:'easy',
+  quiz_categories:['words'], practice_chars:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+  farnsworth_enabled:false, farnsworth_letter_mult:2.0, farnsworth_word_mult:2.0,
+  device_name:'Morse Pi'
+};
+Object.entries(SETTINGS_DEFAULTS).forEach(([k,v])=>{ if (settings[k]===undefined) settings[k]=v; });
+
+// ── Morse Tables ───────────────────────────────
+const MORSE_CODE = {
+  'A':'.-','B':'-...','C':'-.-.','D':'-..','E':'.','F':'..-.','G':'--.','H':'....','I':'..','J':'.---',
+  'K':'-.-','L':'.-..','M':'--','N':'-.','O':'---','P':'.--.','Q':'--.-','R':'.-.','S':'...','T':'-',
+  'U':'..-','V':'...-','W':'.--','X':'-..-','Y':'-.--','Z':'--..',
+  '0':'-----','1':'.----','2':'..---','3':'...--','4':'....-','5':'.....','6':'-....','7':'--...','8':'---..',
+  '9':'----.','.':'.-.-.-',',':'--..--','?':'..--..','\'':'.----.','!':'-.-.--','/':'-..-.','(':'-.--.', 
+  ')':'-.--.-','&':'.-...', ':':'---...','=':'-...-','+':'.-.-.', '-':'-....-','@':'.--.-.', '_':'..--.-',
+  '"':'.-..-.'
+};
+const CHEAT_GROUPS = {
+  letters:'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
+  numbers:'0123456789'.split(''),
+  punctuation:['.', ',', '?', "'", '!', '/', '(', ')', '&', ':', '=', '+', '-', '@', '_', '"']
+};
+
+// ── Utils ──────────────────────────────────────
+function api(url, method='GET', body=null) {
+  const opts={method,headers:{}};
+  if (body!==null){opts.body=JSON.stringify(body);opts.headers['Content-Type']='application/json';}
+  return fetch(url,opts).then(r=>{
+    connOk(); // Connection worked
+    if(!r.ok){
+      // Server error - try to get error message from JSON
+      return r.json().catch(()=>({error:'Server error '+r.status})).then(d=>{throw new Error(d.error||'Request failed');});
+    }
+    return r.json();
+  }).catch(e=>{
+    // Only mark as disconnected for network failures, not server errors
+    if(e.name==='TypeError'||e.message.includes('fetch')||e.message.includes('network')){
+      connLost();
+    }
+    throw e;
+  });
+}
+function esc(s){if(typeof s!=='string')return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function morseEncode(text){return text.toUpperCase().split('').map(c=>{if(c===' ')return'/';return MORSE_CODE[c]||'';}).filter(Boolean).join(' ');}
+
+// ── Toast ──────────────────────────────────────
+function toast(msg,type='info',duration=2800){
+  const c=document.getElementById('toast-container');
+  const t=document.createElement('div');
+  t.className='toast '+type; t.textContent=msg; c.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity 0.3s';t.style.opacity='0';setTimeout(()=>t.remove(),350);},duration);
+}
+
+// ── Connection ─────────────────────────────────
+let _connOk=null, _connLostToastTime=0;
+function connOk(){
+  if(_connOk===true)return; _connOk=true;
+  document.getElementById('conn-dot').className='dot ok';
+  if(_connLostToastTime>0){ toast('Reconnected to Pi','success',2000); }
+}
+function connLost(){
+  if(_connOk===false)return; _connOk=false;
+  document.getElementById('conn-dot').className='dot err';
+  // Only show toast at most once per 8 seconds to avoid spamming
+  const now=Date.now();
+  if(now-_connLostToastTime>8000){
+    toast('Connection to Pi lost','error',4000);
+    _connLostToastTime=now;
+  }
+}
+
+// ── Navigation ─────────────────────────────────
+document.querySelectorAll('.nav-btn').forEach(btn=>{btn.addEventListener('click',()=>setMode(btn.dataset.mode));});
+
+let _currentMode = null; // track to avoid redundant full renders
+
+function setMode(mode){
+  if(mode==='help'||mode==='network'||mode==='keyboard'){state.mode=mode;renderNav();transitionContent();return;}
+  api('/set_mode','POST',{mode}).then(s=>{state=s;renderNav();transitionContent();});
+}
+function renderNav(){
+  document.querySelectorAll('.nav-btn').forEach(btn=>{btn.classList.toggle('active',btn.dataset.mode===state.mode);});
+}
+
+// ── Smooth transition helper ───────────────────
+function transitionContent(){
+  const el=document.getElementById('main-content');
+  el.classList.add('fading');
+  setTimeout(()=>{
+    _currentMode=state.mode;
+    renderContent();
+    el.classList.remove('fading');
+  },100);
+}
+
+// ── Router ─────────────────────────────────────
+function renderContent(){
+  const el=document.getElementById('main-content');
+  el.className='mode-panel';
+  switch(state.mode){
+    case 'send':     el.innerHTML=renderSend();     break;
+    case 'encode':   el.innerHTML=renderEncode();   break;
+    case 'decode':   el.innerHTML=renderDecode();   break;
+    case 'speed':    el.innerHTML=renderSpeed();    break;
+    case 'keyboard': el.innerHTML=renderKeyboard(); break;
+    case 'stats':    el.innerHTML=renderStats();    break;
+    case 'settings': el.innerHTML=renderSettings(); break;
+    case 'network':  el.innerHTML=renderNetwork();  initNetworkTab(); break;
+    case 'help':     el.innerHTML=renderHelp();     break;
+    default:         el.innerHTML=renderSend();
+  }
+  attachHandlers();
+}
+
+// ── SEND ───────────────────────────────────────
+function renderSend(){
+  const buf=state.current_morse_buffer||'';
+  const out=state.send_output||'';
+  const isActive=state.button_active;
+  const dual=settings.pin_mode==='dual';
+  return `
+    <div class="panel">
+      <div class="panel-title">SEND MODE</div>
+      <p class="hint-text">${dual
+        ? 'Dual-pin mode active. Press <span class="key-hint">Z</span>=dot &nbsp; <span class="key-hint">X</span>=dash &nbsp; or use the on-screen keys below.'
+        : 'Single-pin mode. Hold <span class="key-hint">SPACE</span> or the on-screen key — short=dot, long=dash.'
+      } Physical GPIO button also works.</p>
+      <div class="section-header">Current Symbol Buffer</div>
+      <div class="morse-display ${isActive?'active-send':''}" id="send-buf-display" style="font-size:2.1rem;justify-content:center;min-height:74px;">
+        ${buf?esc(buf):'<span style="color:var(--text-dim);font-size:0.92rem;">awaiting input\u2026</span>'}
+        ${isActive?'<span class="cursor"></span>':''}
+      </div>
+      <div class="section-header">Decoded Output</div>
+      <div class="morse-display" id="send-out-display" style="font-size:1.55rem;justify-content:center;min-height:66px;">
+        ${out?esc(out):'<span style="color:var(--text-dim);font-size:0.88rem;">start sending\u2026</span>'}
+      </div>
+      ${dual?renderDualKeys():renderSingleKey()}
+      <div class="btn-group" style="margin-top:8px;">
+        <button class="btn btn-danger" onclick="clearAll()">Clear</button>
+        <button class="btn btn-ghost"  onclick="copyText(\`${esc(out)}\`)">Copy Output</button>
+      </div>
+    </div>`;
+}
+function renderSingleKey(){return `
+  <div class="morse-key-area">
+    <button class="btn morse-key morse-key-single" id="onscreen-key-single"
+      onmousedown="keyDown('single')" onmouseup="keyUp('single')"
+      ontouchstart="e=>{e.preventDefault();keyDown('single');}" ontouchend="e=>{e.preventDefault();keyUp('single');}">
+      KEY<span class="morse-key-sub">SPACE or hold</span>
+    </button>
+  </div>`;}
+function renderDualKeys(){return `
+  <div class="morse-key-area">
+    <button class="btn morse-key morse-key-dot" id="onscreen-key-dot"
+      onmousedown="keyDownDual('dot')" onmouseup="keyUpDual('dot')"
+      ontouchstart="return false;" ontouchend="return false;">
+      &bull;&nbsp; DOT<span class="morse-key-sub">Z key</span>
+    </button>
+    <button class="btn morse-key morse-key-dash" id="onscreen-key-dash"
+      onmousedown="keyDownDual('dash')" onmouseup="keyUpDual('dash')"
+      ontouchstart="return false;" ontouchend="return false;">
+      &mdash;&nbsp; DASH<span class="morse-key-sub">X key</span>
+    </button>
+  </div>`;}
+
+// ── ENCODE ─────────────────────────────────────
+function renderEncode(){
+  const morse=state.encode_output||'';
+  const text=state.encode_input||'';
+  let bkd='';
+  if(text.trim()){
+    bkd='<div class="encode-breakdown">'+text.toUpperCase().split('').map(c=>{
+      if(c===' ')return'<div class="encode-char-block space-block"><span class="ec-char">_</span><span class="ec-morse">/</span></div>';
+      const m=MORSE_CODE[c];if(!m)return'';
+      return`<div class="encode-char-block"><span class="ec-char">${esc(c)}</span><span class="ec-morse">${m}</span></div>`;
+    }).join('')+'</div>';
+  }
+  return `
+    <div class="panel">
+      <div class="panel-title">TEXT &#8594; MORSE ENCODE</div>
+      <p class="hint-text">Type text to see its Morse code and hear it through the Pi&rsquo;s speaker.</p>
+      <input id="encode-input" class="input-field" type="text" placeholder="Type text here\u2026" value="${esc(text)}" autocomplete="off" spellcheck="false">
+      ${bkd}
+      <div class="section-header">Full Morse String</div>
+      <div class="morse-display" style="font-size:1.12rem;min-height:74px;line-height:1.9;">
+        ${morse?esc(morse):'<span style="color:var(--text-dim);">output will appear here</span>'}
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="playEncode()">Play Audio</button>
+        <button class="btn btn-ghost"   onclick="copyText(\`${esc(morse)}\`)">Copy Morse</button>
+        <button class="btn btn-ghost"   onclick="clearAll()">Clear</button>
+      </div>
+    </div>`;}
+
+// ── DECODE ─────────────────────────────────────
+function renderDecode(){
+  const phrase=state.current_phrase||'';
+  const morse=phrase?morseEncode(phrase):'';
+  const result=state.decode_result;
+  let rhtml='';
+  if(result==='correct'){rhtml='<div class="result-correct">CORRECT &mdash; well done!</div>';}
+  else if(result==='wrong'){rhtml=`<div class="result-wrong">INCORRECT<div class="answer-reveal">Answer: ${esc(state.decode_correct_answer||phrase)}</div></div>`;}
+  return `
+    <div class="panel">
+      <div class="panel-title">DECODE QUIZ</div>
+      <p class="hint-text">Read the Morse code and type the plaintext answer. Use &ldquo;Hear It&rdquo; for an audio hint.</p>
+      <div class="phrase-label">Morse to Decode</div>
+      <div class="morse-display large">${esc(morse)}</div>
+      <div class="btn-group" style="margin-bottom:12px;">
+        <button class="btn btn-ghost" onclick="playPhrase()">Hear It</button>
+        <button class="btn btn-ghost" onclick="newDecode()">New Phrase</button>
+      </div>
+      <input id="decode-answer" class="input-field" type="text" placeholder="Type your answer here\u2026" autocomplete="off" spellcheck="false">
+      <div class="btn-group"><button class="btn btn-success" onclick="submitDecode()">SUBMIT</button></div>
+      ${rhtml?`<div style="margin-top:12px;">${rhtml}</div>`:''}
+    </div>`;}
+
+// ── SPEED ──────────────────────────────────────
+let speedStartTime=null,speedTimerInterval=null,speedRunning=false;
+
+function renderSpeed(){
+  const phrase=state.speed_phrase||'';
+  const result=state.speed_result;
+  const buf=state.speed_morse_buffer||'';
+  const out=state.speed_morse_output||'';
+  const isActive=state.button_active;
+  const dual=settings.pin_mode==='dual';
+
+  if(showSpeedResult&&result&&typeof result==='object'){return `
+    <div class="panel">
+      <div class="panel-title">SPEED TEST &mdash; RESULT</div>
+      <div class="phrase-label">Target Phrase</div>
+      <div class="text-display" style="font-size:1.4rem;font-family:'Orbitron',monospace;justify-content:center;color:var(--gold);">${esc(phrase)}</div>
+      ${renderSpeedResult(result)}
+      <div class="btn-group" style="margin-top:18px;"><button class="btn btn-primary" onclick="newSpeed()">New Test</button></div>
+    </div>`;}
+
+  return `
+    <div class="panel">
+      <div class="panel-title">SPEED TEST</div>
+      <p class="hint-text">Encode the phrase as fast as you can. ${dual?'<span class="key-hint">Z</span>=dot &nbsp;<span class="key-hint">X</span>=dash':'Short=dot, long=dash. <span class="key-hint">SPACE</span> or on-screen key.'}</p>
+      <div class="phrase-label">Encode This Phrase</div>
+      <div class="text-display" style="font-size:1.4rem;font-family:'Orbitron',monospace;justify-content:center;color:var(--gold);">${esc(phrase)}</div>
+      <div class="timer-display" id="speed-timer">00:00</div>
+      <div class="section-header">Current Symbol</div>
+      <div class="morse-display ${isActive?'active-send':''}" id="speed-buf-display" style="font-size:2.1rem;justify-content:center;min-height:74px;">
+        ${buf?esc(buf):'<span style="color:var(--text-dim);font-size:0.88rem;">awaiting\u2026</span>'}
+        ${isActive?'<span class="cursor"></span>':''}
+      </div>
+      <div class="section-header">Morse Being Sent</div>
+      <div class="morse-display" id="speed-out-display" style="font-size:1.45rem;justify-content:center;min-height:66px;">
+        ${out?esc(out):'<span style="color:var(--text-dim);font-size:0.83rem;">start sending\u2026</span>'}
+      </div>
+      ${dual?renderDualKeys():renderSingleKey()}
+      <div class="btn-group" style="margin-top:10px;">
+        <button class="btn btn-orange" onclick="submitSpeed()">Done</button>
+        <button class="btn btn-ghost"  onclick="newSpeed()">New Test</button>
+        <button class="btn btn-danger" onclick="clearSpeedUI()">Clear</button>
+      </div>
+    </div>`;}
+
+function renderSpeedResult(r){
+  if(!r||typeof r!=='object')return'';
+  const acc=r.accuracy||0;
+  const accColor=acc>=90?'var(--accent3)':acc>=60?'var(--gold)':'var(--danger)';
+  let charHtml='';
+  if(r.char_results&&r.char_results.length){
+    charHtml='<div class="accuracy-chars">'+r.char_results.map(c=>{
+      const cls=c.correct?'char-correct':(!c.expected?'char-missing':'char-wrong');
+      const expDisp=c.expected||'&mdash;';
+      const gotDisp=c.got||'&mdash;';
+      return `<div class="accuracy-char ${cls}">
+        <span class="ac-expected">${esc(expDisp)}</span>
+        <span class="ac-got" style="color:${c.correct?'var(--accent3)':'var(--danger)'}">${esc(gotDisp)}</span>
+      </div>`;
+    }).join('')+'</div>';
+  }
+  return `<div style="margin-top:12px;">
+    <div class="accuracy-pct" style="color:${accColor}">${acc}%</div>
+    <div class="accuracy-pct-label">ACCURACY</div>
+    ${charHtml}
+    <div style="display:flex;justify-content:center;gap:24px;margin:14px 0;">
+      <div class="wpm-result"><div class="wpm-number">${Math.round(r.wpm||0)}</div><div class="wpm-label">WPM</div></div>
+    </div>
+    ${acc===100?'<div class="result-correct" style="text-align:center;">PERFECT &mdash; excellent!</div>'
+      :`<div class="result-wrong" style="text-align:center;">
+        <div>Expected: <span style="font-family:\'Share Tech Mono\',monospace;letter-spacing:0.05em;">${esc(r.expected||'')}</span></div>
+        <div style="margin-top:4px;">Got: <span style="font-family:\'Share Tech Mono\',monospace;letter-spacing:0.05em;">${esc(r.decoded||'')}</span></div>
+      </div>`}
+  </div>`;}
+
+// ── STATS ──────────────────────────────────────
+function renderStats(){
+  const s=state.stats||{};
+  const total=s.total_attempts||0;
+  const correct=s.correct||0;
+  const accuracy=total>0?Math.round((correct/total)*100):0;
+  return `
+    <div class="panel">
+      <div class="panel-title">SESSION STATISTICS</div>
+      <div class="stats-row">
+        <div class="stat-card"><span class="stat-value" style="color:var(--accent3);">${accuracy}%</span><div class="stat-label">Accuracy</div><div class="accuracy-bar-wrap"><div class="accuracy-bar-fill" style="width:${accuracy}%"></div></div></div>
+        <div class="stat-card"><span class="stat-value">${correct}</span><div class="stat-label">Correct</div></div>
+        <div class="stat-card"><span class="stat-value" style="color:var(--gold);">${s.streak||0}</span><div class="stat-label">Streak</div></div>
+        <div class="stat-card"><span class="stat-value" style="color:var(--accent2);">${s.best_streak||0}</span><div class="stat-label">Best Streak</div></div>
+      </div>
+      <div class="stat-card" style="margin-bottom:12px;"><span class="stat-label">Total Attempts</span><span class="stat-value" style="font-size:1rem;color:var(--text);">${total}</span></div>
+      <button class="btn btn-danger" onclick="confirmResetStats()">Reset All Stats</button>
+    </div>`;}
+
+// ── SETTINGS ───────────────────────────────────
+function renderSettings(){
+  const s=settings;
+  const single=s.pin_mode!=='dual';
+  return `
+    <div class="panel">
+      <div class="panel-title">HARDWARE CONFIGURATION</div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">&#9656; MORSE TIMING</div>
+        <div class="settings-grid">
+          <div class="setting-row full">
+            <div class="setting-label">Device Name</div>
+            <div class="setting-input-row"><input class="input-field" type="text" id="s-device_name" value="${esc(s.device_name||'Morse Pi')}" placeholder="Morse Pi" style="margin-bottom:0;"></div>
+            <div class="setting-help">Human-readable name shown to other Morse-Pi devices on the same network.</div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Words Per Minute (WPM)</div>
+            <div class="setting-input-row">
+              <input class="input-field" type="number" id="s-wpm_target" value="${s.wpm_target}" min="5" max="60" style="max-width:90px;">
+              <button class="btn btn-primary" onclick="wpmTest()">Test WPM</button>
+            </div>
+            <div class="setting-help">All Morse timing is derived from WPM. Dot = 1200/${s.wpm_target} = ${Math.round(1200/s.wpm_target)} ms. Dash = ${Math.round(3600/s.wpm_target)} ms. Letter gap = ${Math.round(3600/s.wpm_target)} ms. Word gap = ${Math.round(8400/s.wpm_target)} ms.</div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Difficulty</div>
+            <select class="input-field" id="s-difficulty" style="margin-bottom:0;">
+              <option value="easy"   ${s.difficulty==='easy'  ?'selected':''}>Easy &mdash; single word</option>
+              <option value="medium" ${s.difficulty==='medium'?'selected':''}>Medium &mdash; two words</option>
+              <option value="hard"   ${s.difficulty==='hard'  ?'selected':''}>Hard &mdash; full phrase</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">&#9656; KEY / DATA PINS</div>
+        <div class="settings-grid">
+          <div class="setting-row full">
+            <div class="setting-label">Input Pin Mode</div>
+            <div class="segmented">
+              <button class="segmented-btn ${single?'active':''}" onclick="setPinMode('single')">Straight Key (single pin)</button>
+              <button class="segmented-btn ${!single?'active':''}" onclick="setPinMode('dual')">Iambic Paddle (dual pin)</button>
+            </div>
+            <div class="setting-help">${single
+              ?'<span class="tag tag-blue">Straight Key</span> &mdash; one GPIO pin; press duration determines dot vs. dash. Threshold auto-derived from WPM.'
+              :'<span class="tag tag-green">Iambic Paddle</span> &mdash; separate GPIO pins for dot and dash. Full electronic keyer with squeeze and paddle memory.'}</div>
+          </div>
+          ${single?`
+          <div class="setting-row full">
+            <div class="setting-label">Data Pin (BCM)</div>
+            <div class="setting-input-row"><input class="input-field" type="number" id="s-data_pin" value="${s.data_pin}" min="2" max="27"></div>
+            <div class="setting-help">GPIO BCM pin number for the straight key. Wired active-low (key connects pin to GND).</div>
+          </div>`:`
+          <div class="setting-row">
+            <div class="setting-label">Dot Pin (BCM)</div>
+            <div class="setting-input-row"><input class="input-field" type="number" id="s-dot_pin" value="${s.dot_pin}" min="2" max="27"></div>
+            <div class="setting-help">Pin for the dot paddle.</div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Dash Pin (BCM)</div>
+            <div class="setting-input-row"><input class="input-field" type="number" id="s-dash_pin" value="${s.dash_pin}" min="2" max="27"></div>
+            <div class="setting-help">Pin for the dash paddle.</div>
+          </div>`}
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">&#9656; OUTPUT / SP/LED</div>
+        <div class="settings-grid">
+          <div class="setting-row">
+            <div class="setting-label">SP/LED+ Pin (BCM)</div>
+            <div class="setting-input-row"><select class="input-field" id="s-speaker_pin">${(()=>{let o='';for(let p=2;p<=27;p++)o+='<option value="'+p+'"'+(p===s.speaker_pin?' selected':'')+'>BCM '+p+'</option>';return o;})()}</select><button class="btn btn-primary" onclick="previewTone()">Test</button></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">SP/LED&minus; Pin (BCM)</div>
+            <div class="setting-input-row"><select class="input-field" id="s-speaker_pin2"><option value=""${s.speaker_pin2==null?' selected':''}>None (single-pin)</option>${(()=>{let o='';for(let p=2;p<=27;p++)o+='<option value="'+p+'"'+(p===s.speaker_pin2?' selected':'')+'>BCM '+p+'</option>';return o;})()}</select></div>
+            <div class="setting-help">${s.speaker_pin2!=null
+              ?'<span class="tag tag-green">Dual-Pin (Push-Pull)</span> &mdash; Anti-phase drive doubles the voltage swing for louder, cleaner audio. Both pins drive the speaker/LED differentially.'
+              :'<span class="tag tag-blue">Single-Pin</span> &mdash; Set SP/LED&minus; to enable push-pull differential drive for improved sound / dual-LED output.'}</div>
+          </div>
+          ${s.speaker_pin2==null ? `
+          <div class="setting-row">
+            <div class="setting-label">SP/LED Wiring</div>
+            <div class="segmented" style="max-width:380px;">
+              <button class="segmented-btn ${s.speaker_gnd_mode==='3v3'?'active':''}" onclick="setSpeakerGndMode('3v3')">&#9889; GPIO + 3.3V</button>
+              <button class="segmented-btn ${s.speaker_gnd_mode==='gnd'?'active':''}" onclick="setSpeakerGndMode('gnd')">&#9178; GPIO + GND</button>
+            </div>
+            <div class="setting-help">${s.speaker_gnd_mode==='3v3'
+              ?'<span class="tag tag-orange">3.3V Reference</span> &mdash; SP/LED wired between GPIO pin and the 3.3V rail. Pin idles HIGH when silent.'
+              :'<span class="tag tag-blue">GND Reference</span> &mdash; SP/LED wired between GPIO pin and GND. Pin idles LOW when silent.'}</div>
+          </div>
+          ` : ''}
+          <div class="setting-row">
+            <div class="setting-label">Output Type</div>
+            <div class="segmented">
+              <button class="segmented-btn ${s.output_type!=='led'?'active':''}" onclick="setOutputType('speaker')">&#9835; Speaker</button>
+              <button class="segmented-btn ${s.output_type==='led'?'active':''}" onclick="setOutputType('led')">&#9788; LED</button>
+            </div>
+            <div class="setting-help">${s.output_type==='led'
+              ?'<span class="tag tag-orange">LED Mode</span> &mdash; Output turns ON/OFF to flash an LED. Connect LED+ to GPIO via 220-470\u03A9 resistor, LED\u2212 to GND.'
+              :'<span class="tag tag-blue">Speaker Mode</span> &mdash; PWM audio output for piezo/speaker. Connect via 100-470\u03A9 series resistor for protection.'}</div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Dot Tone (Hz)</div>
+            <div class="setting-input-row"><input class="input-field" type="number" id="s-dot_freq" value="${s.dot_freq}" min="50" max="4000"><button class="btn btn-ghost" onclick="previewTone(+document.getElementById('s-dot_freq').value)">Play</button></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Dash Tone (Hz)</div>
+            <div class="setting-input-row"><input class="input-field" type="number" id="s-dash_freq" value="${s.dash_freq}" min="50" max="4000"><button class="btn btn-ghost" onclick="previewTone(+document.getElementById('s-dash_freq').value)">Play</button></div>
+          </div>
+          <div class="setting-row full">
+            <div class="setting-label">Volume <span id="vol-display" style="color:var(--accent);margin-left:6px;">${Math.round(s.volume*100)}%</span></div>
+            <input type="range" min="0" max="100" value="${Math.round(s.volume*100)}" id="s-volume" class="vol-slider"
+              oninput="document.getElementById('vol-display').textContent=this.value+'%'">
+            <div class="setting-help">${s.output_type==='led'?'Volume has no effect in LED mode.':''}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">&#9656; ADDITIONAL OPTIONS</div>
+        <div class="settings-grid">
+          <div class="setting-row">
+            <div class="setting-label">Ground Output Pin (BCM)</div>
+            <div class="setting-input-row"><input class="input-field" type="number" id="s-ground_pin" value="${s.ground_pin!=null?s.ground_pin:''}" min="2" max="27" placeholder="None"></div>
+            <div class="setting-help">Drives a GPIO pin LOW so it acts as a GND source. Useful if paddle common wire is on a GPIO pin instead of physical GND. Leave empty to disable.</div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">External Switch</div>
+            <div class="segmented">
+              <button class="segmented-btn ${!s.use_external_switch?'active':''}" onclick="settings.use_external_switch=false;renderContent();">Off</button>
+              <button class="segmented-btn ${s.use_external_switch?'active':''}" onclick="settings.use_external_switch=true;renderContent();">On</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">&#9656; LEARNER / FARNSWORTH TIMING</div>
+        <div class="setting-row full">
+          <div class="setting-label">Extended Gaps Mode</div>
+          <div class="segmented">
+            <button class="segmented-btn ${!s.farnsworth_enabled?'active':''}" onclick="settings.farnsworth_enabled=false;renderContent();">Off &mdash; Standard Timing</button>
+            <button class="segmented-btn ${s.farnsworth_enabled?'active':''}" onclick="settings.farnsworth_enabled=true;renderContent();">On &mdash; Extended Gaps</button>
+          </div>
+          <div class="setting-help">Keeps dot &amp; dash element speeds identical but stretches the pauses <em>between</em> letters and words &mdash; helps beginners copy each character without rushing.</div>
+        </div>
+        ${s.farnsworth_enabled?`
+        <div class="settings-grid" style="margin-top:10px;">
+          <div class="setting-row">
+            <div class="setting-label">Letter Gap Multiplier&ensp;<span id="flm-val" style="color:var(--accent);">&times;${s.farnsworth_letter_mult||2}</span></div>
+            <input type="range" min="1" max="8" step="0.5" value="${s.farnsworth_letter_mult||2}" id="s-farnsworth_letter_mult" class="vol-slider"
+              oninput="document.getElementById('flm-val').textContent='\u00d7'+this.value">
+            <div class="setting-help">Multiplies the standard 3-unit letter gap. &times;1&nbsp;= standard (${Math.round(3600/s.wpm_target)}&nbsp;ms). &times;2&nbsp;= double. Current: <strong>${Math.round(3600/s.wpm_target*(s.farnsworth_letter_mult||2))}&nbsp;ms</strong>.</div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Word Gap Multiplier&ensp;<span id="fwm-val" style="color:var(--accent2);">&times;${s.farnsworth_word_mult||2}</span></div>
+            <input type="range" min="1" max="8" step="0.5" value="${s.farnsworth_word_mult||2}" id="s-farnsworth_word_mult" class="vol-slider"
+              oninput="document.getElementById('fwm-val').textContent='\u00d7'+this.value">
+            <div class="setting-help">Multiplies the 4-unit word-boundary extra gap. &times;1&nbsp;= standard (${Math.round(4800/s.wpm_target)}&nbsp;ms extra). Current extra: <strong>${Math.round(4800/s.wpm_target*(s.farnsworth_word_mult||2))}&nbsp;ms</strong>.</div>
+          </div>
+        </div>`:''}
+      </div>
+
+      <hr class="sep">
+      <div class="btn-group">
+        <button class="btn btn-success" onclick="saveSettings()">Save Settings</button>
+        <button class="btn btn-ghost"   onclick="setMode('settings')">Revert</button>
+      </div>
+      <div id="settings-msg" style="margin-top:10px;font-family:'Orbitron',monospace;font-size:0.67rem;color:var(--accent3);min-height:18px;"></div>
+    </div>`;}
+
+// ── GPIO PIN MAP ─────────────────────────────
+function renderGpioMap(s) {
+  const PI_PINS = [
+    [1,'3V3',  2,'5V'  ],[3,'BCM2', 4,'5V'  ],[5,'BCM3', 6,'GND' ],
+    [7,'BCM4', 8,'BCM14'],[9,'GND',10,'BCM15'],[11,'BCM17',12,'BCM18'],
+    [13,'BCM27',14,'GND'],[15,'BCM22',16,'BCM23'],[17,'3V3',18,'BCM24'],
+    [19,'BCM10',20,'GND'],[21,'BCM9',22,'BCM25'],[23,'BCM11',24,'BCM8'],
+    [25,'GND', 26,'BCM7'],[27,'BCM0',28,'BCM1'],[29,'BCM5',30,'GND'],
+    [31,'BCM6',32,'BCM12'],[33,'BCM13',34,'GND'],[35,'BCM19',36,'BCM16'],
+    [37,'BCM26',38,'BCM20'],[39,'GND',40,'BCM21']
+  ];
+  const single = s.pin_mode !== 'dual';
+  const assign = {};
+  if (single) {
+    assign[s.data_pin] = {role:'DATA KEY', col:'key'};
+  } else {
+    assign[s.dot_pin]  = {role:'DOT KEY',  col:'key'};
+    assign[s.dash_pin] = {role:'DASH KEY', col:'key'};
+  }
+  if (s.output_type === 'led') {
+    assign[s.speaker_pin] = {role:s.speaker_pin2!=null?'LED +':'LED OUT', col:'spkr'};
+  } else {
+    if (s.speaker_pin2!=null) {
+      assign[s.speaker_pin] = {role:'SP/LED +', col:'spkr'};
+    } else {
+      assign[s.speaker_pin] = {role:s.speaker_gnd_mode==='3v3'?'SP/LED (3.3V)':'SP/LED', col:'spkr'};
+    }
+  }
+  if (s.speaker_pin2 != null) {
+    assign[s.speaker_pin2] = {role:s.output_type==='led'?'LED \u2212':'SP/LED \u2212', col:'spkr'};
+  }
+  if (s.ground_pin != null) {
+    assign[s.ground_pin] = {role:'GND OUT', col:'gnd-out'};
+  }
+  // Also show grounded_pins
+  (s.grounded_pins || []).forEach(pin => {
+    if (pin != null) assign[pin] = {role:'GND OUT', col:'gnd-out'};
+  });
+  function ptype(lbl){ if(lbl==='3V3')return'3v3'; if(lbl==='5V')return'5v'; if(lbl==='GND')return'gnd'; return'gpio'; }
+  function bcmOf(lbl){ return lbl.startsWith('BCM')?parseInt(lbl.slice(3)):null; }
+  function dotStyle(lbl){
+    const t=ptype(lbl); const bcm=bcmOf(lbl);
+    if(t==='5v')  return 'background:#e05555';
+    if(t==='3v3') return 'background:#ff8c42';
+    if(t==='gnd') return 'background:#4b5563';
+    if(bcm!==null&&assign[bcm]){
+      if(assign[bcm].col==='spkr')    return 'background:var(--accent);box-shadow:0 0 7px rgba(0,212,255,0.7)';
+      if(assign[bcm].col==='gnd-out') return 'background:#9ca3af;box-shadow:0 0 7px rgba(156,163,175,0.7)';
+      return 'background:var(--accent3);box-shadow:0 0 7px rgba(57,255,20,0.7)';
+    }
+    return 'background:var(--text-dim)';
+  }
+  function labelColor(lbl){
+    const t=ptype(lbl); const bcm=bcmOf(lbl);
+    if(t==='5v')  return '#e05555';
+    if(t==='3v3') return '#ff8c42';
+    if(t==='gnd') return '#6b7280';
+    if(bcm!==null&&assign[bcm]){
+      if(assign[bcm].col==='spkr')    return 'var(--accent)';
+      if(assign[bcm].col==='gnd-out') return '#9ca3af';
+      return 'var(--accent3)';
+    }
+    return 'var(--text-dim)';
+  }
+  function mainLabel(lbl){ const t=ptype(lbl); if(t==='gpio'){const b=bcmOf(lbl);return b!==null?`BCM ${b}`:lbl;} return lbl; }
+  function pinHtml(phys,lbl,side){
+    const bcm=bcmOf(lbl); const a=bcm!==null?assign[bcm]:null;
+    const isGpio=ptype(lbl)==='gpio'&&bcm!==null;
+    const lc=labelColor(lbl); const ds=dotStyle(lbl); const ml=mainLabel(lbl);
+    const physEl=`<span class="gpio-phys">${phys}</span>`;
+    const dotId =isGpio?`id="gd-${bcm}"`:''
+    const dotEl =`<span class="gpio-dot" ${dotId} style="${ds}"></span>`;
+    const lblEl =`<span class="gpio-lbl" style="color:${lc};">${ml}</span>`;
+    const roleEl=a?`<span class="gpio-role" style="color:${a.col==='spkr'?'var(--accent)':a.col==='gnd-out'?'#9ca3af':'var(--accent3)'}">${a.role}</span>`:'';
+    const info  =`<div class="gpio-pin-info${side==='right'?' right':''}">` + lblEl + roleEl + '</div>';
+    const click =isGpio?`onclick="gpioPopover(event,${bcm})" title="BCM ${bcm} — click to assign"`:''
+    return `<div class="gpio-pin${side==='right'?' right':''}${isGpio?' clickable':''}" ${click}>${physEl}${dotEl}${info}</div>`;
+  }
+  const rows = PI_PINS.map(([lp,ll,rp,rl])=>`
+    <div class="gpio-row">${pinHtml(lp,ll,'left')}<div class="gpio-connector"></div>${pinHtml(rp,rl,'right')}</div>`).join('');
+  const gndPins = PI_PINS.flatMap(([lp,ll,rp,rl])=>[ll==='GND'?lp:null,rl==='GND'?rp:null]).filter(Boolean);
+  return `
+    <div class="gpio-map-wrap">
+      <div class="gpio-legend">
+        <span class="gpio-legend-item"><span class="gpio-dot" style="background:#e05555"></span>5V</span>
+        <span class="gpio-legend-item"><span class="gpio-dot" style="background:#ff8c42"></span>3.3V</span>
+        <span class="gpio-legend-item"><span class="gpio-dot" style="background:#4b5563"></span>GND</span>
+        <span class="gpio-legend-item"><span class="gpio-dot" style="background:var(--text-dim)"></span>GPIO (unused)</span>
+        <span class="gpio-legend-item"><span class="gpio-dot" style="background:var(--accent3);box-shadow:0 0 6px rgba(57,255,20,0.6)"></span>Key / Paddle</span>
+        <span class="gpio-legend-item"><span class="gpio-dot" style="background:var(--accent);box-shadow:0 0 6px rgba(0,212,255,0.6)"></span>SP/LED</span>
+        <span class="gpio-legend-item"><span class="gpio-dot" style="background:#9ca3af;box-shadow:0 0 6px rgba(156,163,175,0.6)"></span>GND Output</span>
+      </div>
+      <div style="font-size:0.62rem;color:var(--text-dim);font-family:'Share Tech Mono',monospace;margin-bottom:4px;">PIN #&nbsp;&nbsp; BCM / TYPE &nbsp;&lArr;&nbsp; physical header &nbsp;&rArr;&nbsp; BCM / TYPE &nbsp;&nbsp;PIN #</div>
+      <div style="font-size:0.63rem;color:var(--accent3);font-family:'Share Tech Mono',monospace;margin-bottom:8px;">&#9998; Click any GPIO pin to assign it &nbsp;&bull;&nbsp; Active pins glow when pressed</div>
+      <div class="gpio-map">${rows}</div>
+      <div class="gpio-gnd-note" style="margin-top:12px;">
+        <span style="color:var(--text-dim);margin-right:4px;">Ground pins:</span>
+        ${gndPins.map(p=>`<span class="pin-badge">Pin&nbsp;${p}</span>`).join('')}
+        <span style="margin-left:6px;">&mdash; connect your paddle/key common leg to any of these.</span>
+      </div>
+      <div style="margin-top:10px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);">&#9888; SP/LED: ${s.speaker_pin2!=null
+        ?'Dual-pin push-pull mode active &mdash; output is driven differentially between both pins for maximum volume / brightness.'
+        :(s.speaker_gnd_mode==='3v3'
+          ?'Single-pin + 3.3V mode &mdash; wired between GPIO and 3.3V rail. Use a 100&ndash;470&Omega; series resistor.'
+          :'Single-pin + GND mode &mdash; wired between GPIO and GND. Use a 100&ndash;470&Omega; series resistor. Set SP/LED&minus; for push-pull drive.')}</div>
+    </div>`;
+}
+
+// ── GPIO MAP INTERACTIONS ─────────────────────────────────
+function gpioPopover(evt, bcm) {
+  evt.stopPropagation();
+  const existing = document.getElementById('gpio-pop');
+  if (existing) { existing.remove(); return; }
+  const roles = [
+    {key:'data_pin',    label:'Data Key (single-pin)',        col:'key'},
+    {key:'dot_pin',     label:'Dot Paddle (dual-pin)',        col:'key'},
+    {key:'dash_pin',    label:'Dash Paddle (dual-pin)',       col:'key'},
+    {key:'speaker_pin', label:'SP/LED+ Pin',                    col:'spkr'},
+    {key:'speaker_pin2',label:'SP/LED\u2212 Pin (push-pull)',    col:'spkr'},
+    {key:'ground_pin',  label:'Ground Output (drive LOW)',    col:'gnd-out'},
+  ];
+  const btns = roles.map(r=>{
+    const active = settings[r.key]===bcm;
+    const actCls = r.col==='spkr'?' spkr-active':r.col==='gnd-out'?' gnd-active':' key-active';
+    const cls = 'gpio-pop-btn'+(active?actCls:'');
+    return `<button class="${cls}" onclick="doAssignPin(${bcm},'${r.key}')">${active?'&#10003; ':''}${r.label}</button>`;
+  }).join('');
+  const noteEl = `<div style="margin-top:5px;font-size:.62rem;color:var(--text-dim);line-height:1.5;border-top:1px solid var(--border);padding-top:5px;">&#9888; <b>Ground Output</b> drives the pin permanently LOW. Use this if your paddle's common wire is accidentally soldered to a GPIO pin instead of a physical GND pin.</div>`;
+  const clearBtn=`<button class="gpio-pop-btn clear-btn" onclick="doAssignPin(${bcm},null)">&#10005; Remove assignment</button>`;
+  const pop = document.createElement('div');
+  pop.id='gpio-pop'; pop.className='gpio-popover';
+  pop.innerHTML=`<div class="gpio-pop-title">BCM ${bcm} &mdash; Assign as:</div>${btns}${clearBtn}${noteEl}`;
+  document.body.appendChild(pop);
+  const r=evt.currentTarget.getBoundingClientRect();
+  const sy=window.scrollY||document.documentElement.scrollTop;
+  let left=r.left+(window.scrollX||0);
+  if(left+220>window.innerWidth) left=window.innerWidth-226;
+  pop.style.left=Math.max(4,left)+'px';
+  pop.style.top=(r.bottom+sy+6)+'px';
+  setTimeout(()=>document.addEventListener('click',closeGpioPopover,{once:true}),0);
+}
+function closeGpioPopover(){
+  const p=document.getElementById('gpio-pop'); if(p)p.remove();
+}
+function doAssignPin(bcm, settingKey) {
+  closeGpioPopover();
+  ['data_pin','dot_pin','dash_pin','speaker_pin','speaker_pin2'].forEach(k=>{if(settings[k]===bcm)settings[k]=null;});
+  if(settingKey) settings[settingKey]=bcm;
+  const payload={pin_mode:settings.pin_mode,output_type:settings.output_type,
+    speaker_gnd_mode:settings.speaker_gnd_mode||'3v3',
+    data_pin:settings.data_pin,dot_pin:settings.dot_pin,
+    dash_pin:settings.dash_pin,speaker_pin:settings.speaker_pin,
+    speaker_pin2:settings.speaker_pin2};
+  api('/save_settings','POST',payload).then(s=>{
+      Object.assign(settings,s); renderContent();
+      toast(settingKey?`BCM ${bcm} \u2192 ${settingKey.replace('_pin','').replace('_',' ')}`:`BCM ${bcm} cleared`,'success');
+    }).catch(()=>toast('Save failed','error'));
+}
+function updateGpioPinStates(pinStates) {
+  if(!pinStates) return;
+  for(const [bcm,active] of Object.entries(pinStates)){
+    const dot=document.getElementById('gd-'+bcm);
+    if(dot) dot.classList.toggle('pin-active',!!active);
+  }
+}
+
+// ── NETWORK ───────────────────────────────────────
+let _netPollTimer = null;
+
+function renderNetwork(){
+  const dual = settings.pin_mode === 'dual';
+  const keyMode = state.net_key_mode || false;
+  const keyBuf = state.net_morse_buffer || '';
+  const keyOut = state.net_morse_output || '';
+  const isActive = state.button_active && keyMode;
+  
+  return `
+    <div class="panel">
+      <div class="panel-title">NETWORK &mdash; MULTI-PI MESH</div>
+      <div style="text-align:right;margin:-2px 0 8px;"><a href="https://nerd-or-geek.github.io/Morse-Pi/networking.html" target="_blank" style="font-size:0.65rem;color:var(--accent);text-decoration:none;letter-spacing:0.06em;">Networking docs &raquo;</a></div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">&#9656; MY DEVICE</div>
+        <div class="settings-grid">
+          <div class="setting-row full">
+            <div class="setting-label">Device Name</div>
+            <div class="setting-input-row">
+              <input class="input-field" id="net-device-name" type="text"
+                placeholder="e.g. Alpha Station"
+                value="${esc(settings.device_name||'Morse Pi')}"
+                style="margin-bottom:0;">
+              <button class="btn btn-primary" onclick="saveDeviceName()">Save</button>
+            </div>
+            <div class="setting-help">Other Pis on the network see this name.</div>
+          </div>
+        </div>
+        <div id="net-self-info" style="margin-top:8px;font-family:'Share Tech Mono',monospace;font-size:0.73rem;color:var(--text-dim);">Detecting&hellip;</div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">&#9656; DISCOVERED PEERS <span id="net-peer-count" style="color:var(--accent);margin-left:4px;"></span></div>
+        <div id="net-peer-list"><div style="color:var(--text-dim);font-size:0.78rem;">Scanning&hellip;</div></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">&#9656; SEND MESSAGE TO PEER</div>
+        <div class="setting-row full" style="margin-bottom:10px;">
+          <div class="setting-label">Recipient</div>
+          <select class="input-field" id="net-send-target" style="margin-bottom:0;"></select>
+        </div>
+        
+        <div class="setting-row full" style="margin-bottom:12px;">
+          <div class="setting-label">Input Method</div>
+          <div class="segmented">
+            <button class="segmented-btn ${!keyMode?'active':''}" onclick="setNetKeyMode(false)">&#9999; Type Text</button>
+            <button class="segmented-btn ${keyMode?'active':''}" onclick="setNetKeyMode(true)">&#9835; Use Key/Paddle</button>
+          </div>
+        </div>
+        
+        ${keyMode ? `
+        <div class="setting-row full">
+          <div class="setting-label">Key in your message using ${dual ? 'paddles (Z/X)' : 'key (SPACE)'}</div>
+          <div class="section-header" style="margin-top:8px;">Current Symbol Buffer</div>
+          <div class="morse-display ${isActive?'active-send':''}" id="net-key-buf" style="font-size:1.8rem;justify-content:center;min-height:64px;">
+            ${keyBuf?esc(keyBuf):'<span style="color:var(--text-dim);font-size:0.85rem;">awaiting input\u2026</span>'}
+            ${isActive?'<span class="cursor"></span>':''}
+          </div>
+          <div class="section-header">Decoded Message</div>
+          <div class="morse-display" id="net-key-out" style="font-size:1.3rem;justify-content:center;min-height:54px;">
+            ${keyOut?esc(keyOut):'<span style="color:var(--text-dim);font-size:0.8rem;">start keying\u2026</span>'}
+          </div>
+          ${dual?`
+          <div class="morse-key-area">
+            <button class="btn morse-key morse-key-dot" id="net-key-dot"
+              onmousedown="netKeyDownDual('dot')" onmouseup="netKeyUpDual('dot')">
+              &bull;&nbsp; DOT<span class="morse-key-sub">Z key</span>
+            </button>
+            <button class="btn morse-key morse-key-dash" id="net-key-dash"
+              onmousedown="netKeyDownDual('dash')" onmouseup="netKeyUpDual('dash')">
+              &mdash;&nbsp; DASH<span class="morse-key-sub">X key</span>
+            </button>
+          </div>`:`
+          <div class="morse-key-area">
+            <button class="btn morse-key morse-key-single" id="net-key-single"
+              onmousedown="netKeyDown()" onmouseup="netKeyUp()">
+              KEY<span class="morse-key-sub">SPACE or hold</span>
+            </button>
+          </div>`}
+          <div class="btn-group" style="margin-top:10px;">
+            <button class="btn btn-success" onclick="sendNetMorse()">SEND MESSAGE</button>
+            <button class="btn btn-danger" onclick="clearNetMorse()">Clear</button>
+          </div>
+        </div>
+        ` : `
+        <div class="setting-row full">
+          <div class="setting-label">Message (plain text)</div>
+          <div class="setting-input-row">
+            <input class="input-field" id="net-send-text" type="text"
+              placeholder="Type text &mdash; sent as Morse&hellip;"
+              style="margin-bottom:0;"
+              onkeydown="if(event.key==='Enter')sendToPeer();">
+            <button class="btn btn-success" onclick="sendToPeer()">SEND</button>
+          </div>
+          <div id="net-send-morse" style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:var(--accent3);margin-top:5px;min-height:16px;letter-spacing:0.08em;"></div>
+        </div>
+        `}
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>&#9656; RECEIVED MESSAGES</span>
+          <button class="btn btn-ghost" onclick="clearInbox()" style="font-size:0.55rem;padding:3px 9px;">Clear</button>
+        </div>
+        <div id="net-inbox" style="max-height:300px;overflow-y:auto;">
+          <div style="color:var(--text-dim);font-size:0.78rem;">No messages yet.</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function initNetworkTab(){
+  if(_netPollTimer) clearInterval(_netPollTimer);
+  refreshNetStatus();
+  _netPollTimer = setInterval(refreshNetStatus, 4000);
+  const inp = document.getElementById('net-send-text');
+  if(inp) inp.addEventListener('input', e=>{
+    const m = document.getElementById('net-send-morse');
+    if(m) m.textContent = e.target.value ? morseEncode(e.target.value) : '';
+  });
+}
+
+function refreshNetStatus(){
+  if(state.mode !== 'network'){
+    if(_netPollTimer){clearInterval(_netPollTimer);_netPollTimer=null;}
+    return;
+  }
+  fetch('/net_status').then(r=>r.json()).then(d=>{
+    const selfEl = document.getElementById('net-self-info');
+    if(selfEl) selfEl.textContent = 'IP: '+d.self.ip+'  |  Port: '+d.self.port+'  |  UUID: '+d.self.uuid.slice(0,8)+'...';
+    renderNetPeers(d.peers||[]);
+    renderNetInbox(d.inbox||[]);
+  }).catch(()=>{});
+}
+
+function renderNetPeers(peers){
+  const listEl   = document.getElementById('net-peer-list');
+  const selectEl = document.getElementById('net-send-target');
+  const countEl  = document.getElementById('net-peer-count');
+  if(!listEl) return;
+  if(countEl) countEl.textContent = peers.length ? '('+peers.length+')' : '(none)';
+  if(!peers.length){
+    listEl.innerHTML = '<div style="color:var(--text-dim);font-size:0.78rem;padding:8px 0;">No other Morse-Pi devices detected on this network.</div>';
+    if(selectEl) selectEl.innerHTML = '<option value="">-- no peers --</option>';
+    return;
+  }
+  listEl.innerHTML = peers.map(p=>`
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div style="font-family:'Orbitron',monospace;font-size:0.72rem;color:var(--accent);">${esc(p.name)}</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.67rem;color:var(--text-dim);margin-top:2px;">${esc(p.ip)}:${p.port} &nbsp;&bull;&nbsp; seen ${p.last_seen_ago}s ago</div>
+      </div>
+      <button class="btn btn-primary" style="font-size:0.57rem;" onclick="quickSendToPeer('${esc(p.ip)}',${p.port},'${esc(p.name)}')">&#9654; SEND</button>
+    </div>`).join('');
+  if(selectEl){
+    selectEl.innerHTML = '<option value="">-- select peer --</option>' +
+      peers.map(p=>`<option value="${esc(p.ip)}:${p.port}">${esc(p.name)} (${esc(p.ip)})</option>`).join('');
+  }
+}
+
+function renderNetInbox(inbox){
+  const el = document.getElementById('net-inbox');
+  if(!el) return;
+  if(!inbox || !inbox.length){
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.78rem;">No messages yet.</div>';
+    return;
+  }
+  el.innerHTML = inbox.map(msg=>{
+    const dt = new Date(msg.ts*1000);
+    const timeStr = dt.toLocaleTimeString();
+    return `<div style="background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+        <span style="font-family:'Orbitron',monospace;font-size:0.65rem;color:var(--accent);">FROM: ${esc(msg.sender)}</span>
+        <span style="font-size:0.63rem;color:var(--text-dim);">${timeStr}</span>
+      </div>
+      <div style="font-family:'Orbitron',monospace;font-size:0.95rem;color:var(--text);letter-spacing:0.06em;">${esc(msg.text)}</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--accent3);margin-top:4px;letter-spacing:0.08em;">${esc(msg.morse)}</div>
+    </div>`;
+  }).join('');
+}
+
+function saveDeviceName(){
+  const inp = document.getElementById('net-device-name');
+  if(!inp || !inp.value.trim()) return;
+  const name = inp.value.trim();
+  settings.device_name = name;
+  api('/save_settings','POST',{device_name:name}).then(s=>{
+    Object.assign(settings, s);
+    toast('Device name saved: '+name,'success');
+  }).catch(()=>toast('Save failed','error'));
+}
+
+function sendToPeer(){
+  const selectEl = document.getElementById('net-send-target');
+  const textEl   = document.getElementById('net-send-text');
+  if(!textEl || !textEl.value.trim()){toast('Enter a message first','warning');return;}
+  if(!selectEl || !selectEl.value){toast('Select a peer first','warning');return;}
+  const parts = selectEl.value.split(':');
+  const ip = parts[0]; const port = parseInt(parts[1]||'5000');
+  api('/send_to_peer','POST',{ip,port,text:textEl.value.trim()}).then(res=>{
+    if(res.ok){
+      toast('Sent!','success');
+      textEl.value='';
+      const m=document.getElementById('net-send-morse'); if(m)m.textContent='';
+    } else {
+      toast('Send failed: '+(res.error||'?'),'error',4000);
+    }
+  }).catch(()=>toast('Send failed','error'));
+}
+
+function quickSendToPeer(ip, port, name){
+  const textEl = document.getElementById('net-send-text');
+  if(!textEl || !textEl.value.trim()){toast('Type a message in the Send box first','warning');return;}
+  api('/send_to_peer','POST',{ip,port,text:textEl.value.trim()}).then(res=>{
+    if(res.ok){
+      toast('Sent to '+name+'!','success');
+      textEl.value='';
+      const m=document.getElementById('net-send-morse'); if(m)m.textContent='';
+    } else {
+      toast('Send failed: '+(res.error||'?'),'error',4000);
+    }
+  }).catch(()=>toast('Send failed','error'));
+}
+
+function clearInbox(){
+  api('/clear_inbox','POST').then(()=>refreshNetStatus());
+}
+
+// ── Network Key-Based Morse Input ─────────────────
+function setNetKeyMode(enabled){
+  api('/net_key_mode','POST',{enabled}).then(()=>{
+    state.net_key_mode = enabled;
+    renderContent();
+  }).catch(()=>toast('Failed to toggle key mode','error'));
+}
+
+function netKeyDown(){
+  document.getElementById('net-key-single')?.classList.add('pressed');
+  api('/net_key_press','POST',{pressed:true}).catch(()=>{});
+}
+
+function netKeyUp(){
+  document.getElementById('net-key-single')?.classList.remove('pressed');
+  api('/net_key_press','POST',{pressed:false}).catch(()=>{});
+}
+
+function netKeyDownDual(sym){
+  document.getElementById('net-key-'+sym)?.classList.add('pressed');
+  api('/key_press_dual','POST',{sym,pressed:true}).catch(()=>{});
+}
+
+function netKeyUpDual(sym){
+  document.getElementById('net-key-'+sym)?.classList.remove('pressed');
+  api('/key_press_dual','POST',{sym,pressed:false}).catch(()=>{});
+}
+
+function clearNetMorse(){
+  api('/net_clear_morse','POST').then(()=>{
+    state.net_morse_buffer = '';
+    state.net_morse_output = '';
+    renderContent();
+  }).catch(()=>toast('Clear failed','error'));
+}
+
+function sendNetMorse(){
+  const selectEl = document.getElementById('net-send-target');
+  if(!selectEl || !selectEl.value){toast('Select a peer first','warning');return;}
+  const text = state.net_morse_output || '';
+  if(!text.trim()){toast('Key in a message first','warning');return;}
+  const parts = selectEl.value.split(':');
+  const ip = parts[0]; const port = parseInt(parts[1]||'5000');
+  api('/net_send_morse','POST',{ip,port}).then(res=>{
+    if(res.ok){
+      toast('Sent: '+res.sent_text,'success');
+      state.net_morse_buffer = '';
+      state.net_morse_output = '';
+      renderContent();
+    } else {
+      toast('Send failed: '+(res.error||'?'),'error',4000);
+    }
+  }).catch(()=>toast('Send failed','error'));
+}
+
+// ── KEYBOARD ─────────────────────────────────────────────────────
+let kbMode = settings.kb_mode || 'letters';
+let kbDotKey = settings.kb_dot_key || 'z';
+let kbDashKey = settings.kb_dash_key || 'x';
+let kbEnabled = settings.kb_enabled || false;
+let kbOutput = '';
+let usbHidAvailable = false;
+
+// Load initial keyboard status from server
+function loadKbStatus(){
+  api('/kb_status').then(res=>{
+    kbEnabled = res.kb_enabled;
+    kbMode = res.kb_mode;
+    kbDotKey = res.kb_dot_key;
+    kbDashKey = res.kb_dash_key;
+    kbOutput = res.kb_output || '';
+    usbHidAvailable = res.usb_hid_available;
+  }).catch(()=>{});
+}
+loadKbStatus();
+
+function renderKeyboard(){
+  const hidStatus = usbHidAvailable ? 'USB HID READY' : 'USB HID NOT AVAILABLE';
+  const hidClass = usbHidAvailable ? 'ok' : 'err';
+  
+  return `
+    <div class="panel">
+      <div class="panel-title">USB KEYBOARD MODE &nbsp;<span class="tag tag-dev">UNDER DEVELOPMENT</span></div>
+      <p class="hint-text">Turn your Morse-Pi into a USB HID keyboard. Key in Morse code and it types on your computer. Requires USB OTG support on your Pi.</p>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">&#9889; Keyboard Connection</div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <div class="segmented" style="flex:1;min-width:180px;">
+            <button class="segmented-btn ${kbEnabled?'':'active'}" onclick="setKbEnabled(false)">DISABLED</button>
+            <button class="segmented-btn ${kbEnabled?'active':''}" onclick="setKbEnabled(true)">ENABLED</button>
+          </div>
+          <div class="status-pill" style="font-size:0.6rem;">
+            <div class="dot ${kbEnabled && usbHidAvailable?'ok':(kbEnabled?'warn':(usbHidAvailable?'':'err'))}" id="kb-status-dot"></div>
+            ${kbEnabled && usbHidAvailable?'ACTIVE':(kbEnabled?'ENABLED · NO DEVICE':(usbHidAvailable?'STANDBY':'NOT AVAILABLE'))}
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap;">
+          <div class="status-pill" style="font-size:0.55rem;">
+            <div class="dot ${hidClass}"></div>
+            ${hidStatus}
+          </div>
+          <button class="btn btn-ghost btn-xs" onclick="recheckHid()" style="font-size:0.55rem;padding:2px 10px;">&#8635; Re-check</button>
+          ${!usbHidAvailable ? '<button class="btn btn-ghost btn-xs" onclick="tryHidSetup()" style="font-size:0.55rem;padding:2px 10px;">&#9881; Try Setup</button>' : ''}
+        </div>
+        <p class="setting-help" style="margin-top:8px;">When enabled, decoded Morse letters will be sent as keystrokes to your connected computer via USB.</p>
+        ${!usbHidAvailable ? '<p class="setting-help" style="color:var(--danger);">USB HID device (/dev/hidg0) not found. Try the Re-check or Try Setup buttons above, or reboot the Pi.</p>' : ''}
+      </div>
+      
+      <hr class="sep">
+      
+      <div class="settings-section">
+        <div class="settings-section-title">&#9000; Output Mode</div>
+        <div class="segmented" style="max-width:320px;">
+          <button class="segmented-btn ${kbMode==='letters'?'active':''}" onclick="setKbMode('letters')">LETTERS</button>
+          <button class="segmented-btn ${kbMode==='custom'?'active':''}" onclick="setKbMode('custom')">CUSTOM KEYS</button>
+        </div>
+      </div>
+      
+      ${kbMode==='letters' ? `
+        <div class="settings-section">
+          <div class="settings-section-title">&#65; Letter Mode</div>
+          <p class="hint-text">Morse code is decoded into letters (A-Z, 0-9) and sent as keyboard input. Perfect for typing text via Morse.</p>
+          <div class="morse-display" style="min-height:60px;display:flex;flex-direction:column;gap:6px;">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:1.2rem;letter-spacing:0.15em;color:var(--accent);">
+              ${kbOutput ? esc(kbOutput) : '<span style="color:var(--text-dim);font-size:0.8rem;">Key Morse code to type letters here...</span>'}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-ghost btn-xs" onclick="clearKbOutput()">Clear Output</button>
+            <button class="btn btn-ghost btn-xs" onclick="loadKbStatus();renderContent();">Refresh</button>
+          </div>
+        </div>
+      ` : `
+        <div class="settings-section">
+          <div class="settings-section-title">&#9881; Custom Key Mapping</div>
+          <p class="hint-text">Configure which keys are sent for each paddle. Useful for Morse code practice websites that use specific keys (e.g., Z/X or spacebar).</p>
+          <div class="settings-grid">
+            <div class="setting-row">
+              <label class="setting-label">Dot Paddle Key</label>
+              <div class="setting-input-row">
+                <input type="text" class="input-field" id="kb-dot-key" value="${esc(kbDotKey === 'space' ? 'SPACE' : kbDotKey.toUpperCase())}" maxlength="5" style="max-width:100px;text-align:center;text-transform:uppercase;" onchange="setKbDotKey(this.value)">
+                <span style="color:var(--text-dim);font-size:0.72rem;">Press dot paddle → sends this key</span>
+              </div>
+            </div>
+            <div class="setting-row">
+              <label class="setting-label">Dash Paddle Key</label>
+              <div class="setting-input-row">
+                <input type="text" class="input-field" id="kb-dash-key" value="${esc(kbDashKey === 'space' ? 'SPACE' : kbDashKey.toUpperCase())}" maxlength="5" style="max-width:100px;text-align:center;text-transform:uppercase;" onchange="setKbDashKey(this.value)">
+                <span style="color:var(--text-dim);font-size:0.72rem;">Press dash paddle → sends this key</span>
+              </div>
+            </div>
+          </div>
+          <p class="setting-help" style="margin-top:10px;"><b>Common mappings:</b> Z/X for iambic sites, Spacebar for single-key sites. Type "space" for spacebar.</p>
+          <div class="btn-group" style="margin-top:12px;">
+            <button class="btn btn-ghost" onclick="setKbPreset('zx')">Z / X</button>
+            <button class="btn btn-ghost" onclick="setKbPreset('space')">Spacebar</button>
+            <button class="btn btn-ghost" onclick="setKbPreset('comma-period')">. / ,</button>
+          </div>
+          <div class="morse-display" style="min-height:40px;margin-top:12px;display:flex;align-items:center;justify-content:center;">
+            <span style="color:var(--text-dim);font-size:0.8rem;">Custom keys sent: ${kbOutput ? esc(kbOutput) : 'none yet'}</span>
+          </div>
+        </div>
+      `}
+      
+      <hr class="sep">
+      
+      <div class="settings-section">
+        <div class="settings-section-title">&#9432; Setup Instructions</div>
+        <div class="help-card" style="background:var(--bg);">
+          <ul>
+            <li><span>1. Run <code>install.sh</code> as root on the Pi</span></li>
+            <li><span>2. <b>Reboot the Pi</b> after install (required for USB modules)</span></li>
+            <li><span>3. Connect Pi to computer via <b>USB data port</b> (not power-only)</span></li>
+            <li><span>4. Pi will appear as a USB keyboard to your computer</span></li>
+            <li><span>5. Enable keyboard mode above → key Morse → letters typed on computer</span></li>
+          </ul>
+        </div>
+        <p class="setting-help" style="margin-top:8px;">Requires <code>dtoverlay=dwc2</code> in /boot/config.txt, <code>dwc2</code> and <code>libcomposite</code> in /etc/modules, and the <code>morse-pi-hid</code> systemd service. <a href="https://nerd-or-geek.github.io/Morse-Pi/usb-hid.html" target="_blank" style="color:var(--accent);">Full USB HID docs &raquo;</a></p>
+        ${!usbHidAvailable ? `
+        <div class="help-card" style="background:var(--bg);margin-top:10px;border-left:3px solid var(--danger);">
+          <div style="font-size:0.7rem;font-weight:700;color:var(--danger);margin-bottom:6px;">TROUBLESHOOTING</div>
+          <ul style="font-size:0.75rem;line-height:1.7;">
+            <li>Reboot first: <code>sudo reboot</code></li>
+            <li>Check service: <code>sudo systemctl status morse-pi-hid</code></li>
+            <li>Check modules: <code>lsmod | grep dwc2</code></li>
+            <li>Manual setup: <code>sudo /usr/local/bin/morse-pi-hid-setup.sh</code></li>
+            <li>Re-run installer: <code>sudo bash install.sh</code></li>
+          </ul>
+        </div>
+        ` : ''}
+      </div>
+    </div>`;
+}
+
+function setKbEnabled(val){
+  api('/kb_enable','POST',{enabled:val}).then(res=>{
+    if(res.ok){
+      kbEnabled = res.kb_enabled;
+      usbHidAvailable = res.usb_hid_available;
+      if(res.warning){
+        toast(res.warning, 'warning', 5000);
+      } else {
+        toast(val ? 'Keyboard mode enabled' : 'Keyboard mode disabled', 'info');
+      }
+    } else {
+      toast(res.error || 'Failed to enable keyboard', 'error');
+    }
+    renderContent();
+  }).catch(()=>toast('Failed to update keyboard','error'));
+}
+function setKbMode(mode){
+  api('/kb_mode','POST',{mode:mode}).then(res=>{
+    if(res.ok){
+      kbMode = res.kb_mode;
+    }
+    renderContent();
+  }).catch(()=>toast('Failed to update mode','error'));
+}
+function recheckHid(){
+  toast('Checking USB HID…','info',1500);
+  api('/kb_status').then(res=>{
+    usbHidAvailable = res.usb_hid_available;
+    kbEnabled = res.kb_enabled;
+    renderContent();
+    if(res.usb_hid_available){
+      toast('USB HID device found!','success');
+    } else {
+      toast('/dev/hidg0 not found. Try "Try Setup" or reboot.','warning',4000);
+    }
+  }).catch(()=>toast('Failed to check HID status','error'));
+}
+function tryHidSetup(){
+  toast('Attempting HID gadget setup…','info',2000);
+  api('/kb_hid_setup','POST').then(res=>{
+    if(res.ok){
+      usbHidAvailable = res.usb_hid_available;
+      renderContent();
+      if(res.usb_hid_available){
+        toast('HID gadget activated! /dev/hidg0 is ready.','success');
+      } else {
+        toast(res.message || 'Setup ran but /dev/hidg0 still not found. A reboot may be needed.','warning',5000);
+      }
+    } else {
+      toast(res.error || 'HID setup failed','error',5000);
+    }
+  }).catch(()=>toast('Failed to run HID setup','error'));
+}
+function setKbDotKey(key){
+  const newKey = key.toLowerCase() || 'z';
+  api('/kb_set_keys','POST',{dot_key:newKey}).then(res=>{
+    if(res.ok){
+      kbDotKey = res.kb_dot_key;
+    } else {
+      toast(res.error || 'Invalid key', 'error');
+    }
+  }).catch(()=>toast('Failed to update key','error'));
+}
+function setKbDashKey(key){
+  const newKey = key.toLowerCase() || 'x';
+  api('/kb_set_keys','POST',{dash_key:newKey}).then(res=>{
+    if(res.ok){
+      kbDashKey = res.kb_dash_key;
+    } else {
+      toast(res.error || 'Invalid key', 'error');
+    }
+  }).catch(()=>toast('Failed to update key','error'));
+}
+function setKbPreset(preset){
+  let dot, dash;
+  switch(preset){
+    case 'zx': dot='z'; dash='x'; break;
+    case 'space': dot='space'; dash='space'; break;
+    case 'comma-period': dot='.'; dash=','; break;
+    default: return;
+  }
+  api('/kb_set_keys','POST',{dot_key:dot, dash_key:dash}).then(res=>{
+    if(res.ok){
+      kbDotKey = res.kb_dot_key;
+      kbDashKey = res.kb_dash_key;
+      renderContent();
+      toast('Preset applied', 'success');
+    } else {
+      toast(res.error || 'Failed to apply preset', 'error');
+    }
+  }).catch(()=>toast('Failed to apply preset','error'));
+}
+function clearKbOutput(){
+  api('/kb_clear','POST').then(res=>{
+    kbOutput = '';
+    renderContent();
+  }).catch(()=>{});
+}
+
+// ── HELP ───────────────────────────────────────
+function renderHelp(){
+  const DOCS='https://nerd-or-geek.github.io/Morse-Pi';
+  return `
+  <div class="panel">
+    <div class="panel-title">HELP &amp; KEYBOARD SHORTCUTS</div>
+    <div class="help-grid">
+      <div class="help-card">
+        <div class="help-card-title">Keyboard Shortcuts</div>
+        <ul>
+          <li><span>Send/Speed key (single-pin)</span><span class="kbd">SPACE</span></li>
+          <li><span>Dot — dual-pin mode</span><span class="kbd">Z</span></li>
+          <li><span>Dash — dual-pin mode</span><span class="kbd">X</span></li>
+          <li><span>Submit decode answer</span><span class="kbd">Enter</span></li>
+        </ul>
+      </div>
+      <div class="help-card">
+        <div class="help-card-title">Modes</div>
+        <ul>
+          <li><span>Send</span><span style="color:var(--text-dim)">Key in Morse &rarr; decoded text live</span></li>
+          <li><span>Encode</span><span style="color:var(--text-dim)">Type text &rarr; see &amp; hear Morse</span></li>
+          <li><span>Decode</span><span style="color:var(--text-dim)">Read Morse &rarr; type answer</span></li>
+          <li><span>Speed</span><span style="color:var(--text-dim)">Race against a phrase for WPM</span></li>
+        </ul>
+      </div>
+      <div class="help-card">
+        <div class="help-card-title">Straight Key Mode</div>
+        <ul>
+          <li><span>Connect key between data pin and GND</span></li>
+          <li><span>Dot/dash threshold auto-derived from WPM</span></li>
+          <li><span>Works with any momentary switch</span></li>
+        </ul>
+      </div>
+      <div class="help-card">
+        <div class="help-card-title">Iambic Paddle Mode</div>
+        <ul>
+          <li><span>Dot paddle: dot pin to GND</span></li>
+          <li><span>Dash paddle: dash pin to GND</span></li>
+          <li><span>Squeeze both for auto alternation</span></li>
+          <li><span>Paddle memory queues next element</span></li>
+        </ul>
+      </div>
+      <div class="help-card">
+        <div class="help-card-title">Output Types</div>
+        <ul>
+          <li><span>Speaker: PWM audio for piezo/buzzer</span></li>
+          <li><span>LED: On/Off flashing for visual output</span></li>
+          <li><span>Always use a 100&ndash;470&Omega; series resistor</span></li>
+        </ul>
+      </div>
+      <div class="help-card">
+        <div class="help-card-title">Tips</div>
+        <ul>
+          <li><span>Adjust WPM to match your keying speed</span></li>
+          <li><span>Use Test WPM button to hear timing</span></li>
+          <li><span>Use Reference Sheet below to study</span></li>
+        </ul>
+      </div>
+    </div>
+    <hr class="sep">
+    <div class="settings-section-title">&#9656; DOCUMENTATION</div>
+    <div class="help-grid">
+      <div class="help-card">
+        <ul>
+          <li><a href="${DOCS}/" target="_blank" style="color:var(--accent);">Home &mdash; Overview &amp; Quick Start</a></li>
+          <li><a href="${DOCS}/wiring.html" target="_blank" style="color:var(--accent);">Wiring Guide</a></li>
+          <li><a href="${DOCS}/configuration.html" target="_blank" style="color:var(--accent);">Configuration Reference</a></li>
+        </ul>
+      </div>
+      <div class="help-card">
+        <ul>
+          <li><a href="${DOCS}/usb-hid.html" target="_blank" style="color:var(--accent);">USB HID Keyboard Setup</a></li>
+          <li><a href="${DOCS}/networking.html" target="_blank" style="color:var(--accent);">Peer-to-Peer Networking</a></li>
+          <li><a href="${DOCS}/troubleshooting.html" target="_blank" style="color:var(--accent);">Troubleshooting</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>`;}
+
+// ── Cheat Sheet ────────────────────────────────
+function toggleCheatSheet(){
+  cheatOpen=!cheatOpen;
+  const btn=document.getElementById('cheat-toggle-btn');
+  const panel=document.getElementById('cheat-sheet-panel');
+  btn.textContent=cheatOpen?'\u25b4 Hide Reference':'Reference Sheet';
+  if(!cheatOpen){panel.style.display='none';return;}
+  panel.style.display='block';
+  renderCheatContent();
+}
+function renderCheatContent(){
+  const panel=document.getElementById('cheat-sheet-panel');
+  if(!cheatOpen)return;
+  const isAll = cheatTabActive==='all';
+  const group = isAll
+    ? [].concat(CHEAT_GROUPS.letters, CHEAT_GROUPS.numbers, CHEAT_GROUPS.punctuation)
+    : (CHEAT_GROUPS[cheatTabActive]||CHEAT_GROUPS.letters);
+  panel.innerHTML=`
+    <div class="cheat-sheet-outer">
+      <div class="panel-title">MORSE REFERENCE</div>
+      <div class="cheat-tabs">
+        <button class="cheat-tab ${cheatTabActive==='letters'?'active':''}"     onclick="setCheatTab('letters')">Letters A&ndash;Z</button>
+        <button class="cheat-tab ${cheatTabActive==='numbers'?'active':''}"     onclick="setCheatTab('numbers')">Numbers 0&ndash;9</button>
+        <button class="cheat-tab ${cheatTabActive==='punctuation'?'active':''}" onclick="setCheatTab('punctuation')">Punctuation</button>
+        <button class="cheat-tab ${cheatTabActive==='all'?'active':''}"         onclick="setCheatTab('all')">All Characters</button>
+      </div>
+      <div class="cheat-grid">
+        ${group.map(c=>`<div class="cheat-item" onclick="toast('${c}: ${MORSE_CODE[c]||''}','info',1400)"><span class="cheat-char">${esc(c)}</span><span class="cheat-morse">${MORSE_CODE[c]||''}</span></div>`).join('')}
+      </div>
+    </div>`;}
+function setCheatTab(tab){cheatTabActive=tab;renderCheatContent();}
+
+// ── Attach Handlers ────────────────────────────
+function attachHandlers(){
+  if(state.mode==='encode'){
+    const inp=document.getElementById('encode-input');
+    if(inp){
+      inp.addEventListener('input',e=>{
+        api('/encode','POST',{text:e.target.value}).then(res=>{
+          state.encode_output=res.morse; state.encode_input=e.target.value;
+          renderContent();
+          const inp2=document.getElementById('encode-input');
+          if(inp2){inp2.focus();const l=inp2.value.length;inp2.setSelectionRange(l,l);}
+        }).catch(()=>{});
+      });
+      inp.focus();
+    }
+  }
+  if(state.mode==='decode'){
+    const inp=document.getElementById('decode-answer');
+    if(inp){inp.addEventListener('keydown',e=>{if(e.key==='Enter')submitDecode();});inp.focus();}
+  }
+  if(state.mode==='speed'&&!showSpeedResult){startSpeedTimer();}
+}
+
+// ── On-Screen Keys ─────────────────────────────
+function keyDown(type){
+  if(type==='single'){document.getElementById('onscreen-key-single')?.classList.add('pressed');api('/key_press','POST',{pressed:true}).catch(()=>{});}
+}
+function keyUp(type){
+  if(type==='single'){document.getElementById('onscreen-key-single')?.classList.remove('pressed');api('/key_press','POST',{pressed:false}).catch(()=>{});}
+}
+function keyDownDual(sym){
+  document.getElementById('onscreen-key-'+sym)?.classList.add('pressed');
+  api('/key_press_dual','POST',{sym,pressed:true}).catch(()=>{});
+}
+function keyUpDual(sym){
+  document.getElementById('onscreen-key-'+sym)?.classList.remove('pressed');
+  api('/key_press_dual','POST',{sym,pressed:false}).catch(()=>{});
+}
+
+// ── Touch for dual keys ────────────────────────
+function setupTouchKeys(){
+  ['dot','dash'].forEach(sym=>{
+    const el=document.getElementById('onscreen-key-'+sym);
+    if(!el)return;
+    el.addEventListener('touchstart',e=>{e.preventDefault();keyDownDual(sym);},{passive:false});
+    el.addEventListener('touchend',  e=>{e.preventDefault();keyUpDual(sym);},  {passive:false});
+  });
+  const sk=document.getElementById('onscreen-key-single');
+  if(sk){
+    sk.addEventListener('touchstart',e=>{e.preventDefault();keyDown('single');},{passive:false});
+    sk.addEventListener('touchend',  e=>{e.preventDefault();keyUp('single');},  {passive:false});
+  }
+}
+
+// ── Speed Timer ────────────────────────────────
+function startSpeedTimer(){
+  if(speedRunning)return;
+  speedRunning=true; speedStartTime=Date.now();
+  speedTimerInterval=setInterval(()=>{
+    const el=document.getElementById('speed-timer');
+    if(!el){clearInterval(speedTimerInterval);speedRunning=false;return;}
+    const e2=Math.floor((Date.now()-speedStartTime)/1000);
+    el.textContent=`${String(Math.floor(e2/60)).padStart(2,'0')}:${String(e2%60).padStart(2,'0')}`;
+  },500);
+}
+function stopSpeedTimer(){
+  clearInterval(speedTimerInterval); speedRunning=false;
+  const elapsed=speedStartTime?(Date.now()-speedStartTime)/1000:1;
+  speedStartTime=null; return elapsed;
+}
+
+// ── Actions ────────────────────────────────────
+function clearAll(){api('/clear','POST').then(s=>{state=s;renderContent();});}
+function clearSpeedUI(){api('/clear_speed','POST').then(()=>{});}
+function playEncode(){api('/play','POST').then(()=>toast('Playing\u2026','info',1500));}
+function playPhrase(){api('/play_phrase','POST').then(()=>toast('Playing phrase\u2026','info',1500));}
+function newDecode(){setMode('decode');}
+function submitDecode(){
+  const inp=document.getElementById('decode-answer');if(!inp)return;
+  api('/decode_submit','POST',{answer:inp.value}).then(res=>{
+    state.decode_result=res.result; state.decode_correct_answer=res.correct_answer; state.stats=res.stats;
+    renderContent();
+    toast(res.result==='correct'?'Correct!':'Wrong answer',res.result==='correct'?'success':'error');
+  });
+}
+function newSpeed(){stopSpeedTimer();showSpeedResult=false;api('/clear_speed','POST').then(()=>setMode('speed'));}
+function submitSpeed(){
+  const elapsed=stopSpeedTimer();
+  api('/submit_test','POST',{elapsed}).then(res=>{
+    state.speed_result=res; state.stats=res.stats; showSpeedResult=true; renderContent();
+    const acc=res.accuracy||0;
+    toast(acc===100?`PERFECT ${Math.round(res.wpm)} WPM!`:`${acc}% accuracy - ${Math.round(res.wpm)} WPM`,acc>=80?'success':'warning');
+  });
+}
+function resetStats(){api('/reset_stats','POST').then(s=>{state.stats=s;renderContent();toast('Stats reset','warning');});}
+function confirmResetStats(){
+  // Show a modal confirmation dialog
+  const overlay=document.createElement('div');
+  overlay.id='confirm-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s ease;';
+  overlay.innerHTML=`
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:360px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.6);">
+      <div style="font-family:'Orbitron',monospace;font-size:0.75rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--danger);margin-bottom:14px;">Confirm Reset</div>
+      <p style="font-size:0.85rem;color:var(--text);line-height:1.6;margin-bottom:20px;">Are you sure you want to reset all statistics? This action cannot be undone.</p>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <button class="btn btn-danger" onclick="document.getElementById('confirm-overlay').remove();resetStats();">Reset</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('confirm-overlay').remove();">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function copyText(text){if(!text)return;navigator.clipboard?.writeText(text).then(()=>toast('Copied!','success',1500)).catch(()=>toast('Copy failed','error',1500));}
+
+// ── Settings helpers ───────────────────────────
+function setPinMode(mode){settings.pin_mode=mode;renderContent();}
+function setOutputType(type){settings.output_type=type;renderContent();}
+function setSpeakerGndMode(mode){settings.speaker_gnd_mode=mode;renderContent();}
+function saveSettings(){
+  const keys=['dot_freq','dash_freq','wpm_target','difficulty','data_pin','dot_pin','dash_pin'];
+  const data={pin_mode:settings.pin_mode,output_type:settings.output_type,speaker_gnd_mode:settings.speaker_gnd_mode||'3v3',use_external_switch:settings.use_external_switch||false};
+  keys.forEach(k=>{const el=document.getElementById('s-'+k);if(el)data[k]=el.value;});
+  // SP/LED+ pin: from select
+  const sp1El=document.getElementById('s-speaker_pin');
+  if(sp1El) data.speaker_pin=parseInt(sp1El.value);
+  // SP/LED- pin: nullable
+  const sp2El=document.getElementById('s-speaker_pin2');
+  if(sp2El) data.speaker_pin2=sp2El.value?parseInt(sp2El.value):null;
+  // Device name
+  const dnEl=document.getElementById('s-device_name');
+  data.device_name = (dnEl && dnEl.value.trim()) ? dnEl.value.trim() : (settings.device_name||'Morse Pi');
+  // Ground pin: nullable
+  const gpEl=document.getElementById('s-ground_pin');
+  if(gpEl) data.ground_pin=gpEl.value?parseInt(gpEl.value):null;
+  // Volume slider is 0-100, convert to 0.0-1.0
+  const volEl=document.getElementById('s-volume');
+  if(volEl) data.volume=parseFloat(volEl.value)/100;
+  // Farnsworth settings
+  data.farnsworth_enabled = settings.farnsworth_enabled || false;
+  const flmEl=document.getElementById('s-farnsworth_letter_mult');
+  if(flmEl) data.farnsworth_letter_mult=parseFloat(flmEl.value);
+  else data.farnsworth_letter_mult=parseFloat(settings.farnsworth_letter_mult)||2.0;
+  const fwmEl=document.getElementById('s-farnsworth_word_mult');
+  if(fwmEl) data.farnsworth_word_mult=parseFloat(fwmEl.value);
+  else data.farnsworth_word_mult=parseFloat(settings.farnsworth_word_mult)||2.0;
+  api('/save_settings','POST',data).then(s=>{
+    settings=Object.assign({},SETTINGS_DEFAULTS,s);
+    toast('Settings saved','success');
+    const msg=document.getElementById('settings-msg');
+    if(msg){msg.textContent='SAVED';setTimeout(()=>{if(msg)msg.textContent='';},2500);}
+    // Update device name in header
+    const nameEl = document.getElementById('device-name-display');
+    if(nameEl) nameEl.textContent = settings.device_name || 'Morse Pi';
+  });
+}
+function previewTone(freq,duration){
+  const f=freq??settings.dot_freq; const d=duration??0.15;
+  api('/preview_tone','POST',{freq:+f,duration:+d,duty:+settings.volume});
+}
+function wpmTest(){
+  api('/wpm_test','POST').then(res=>{
+    toast('Playing PARIS at '+settings.wpm_target+' WPM','info',3000);
+  });
+}
+
+// ── Keyboard ───────────────────────────────────
+let spaceDown=false,zDown=false,xDown=false;
+let _dotReleaseTimer=null,_dashReleaseTimer=null;
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if(e.code==='Space'&&!spaceDown&&(state.mode==='send'||state.mode==='speed')){
+    spaceDown=true;e.preventDefault();api('/key_press','POST',{pressed:true}).catch(()=>{});
+  }
+  if(e.code==='KeyZ'&&!zDown&&settings.pin_mode==='dual'&&(state.mode==='send'||state.mode==='speed')){
+    zDown=true;e.preventDefault();
+    if(_dotReleaseTimer){clearTimeout(_dotReleaseTimer);_dotReleaseTimer=null;}
+    api('/key_press_dual','POST',{sym:'dot',pressed:true}).catch(()=>{});
+    document.getElementById('onscreen-key-dot')?.classList.add('pressed');
+  }
+  if(e.code==='KeyX'&&!xDown&&settings.pin_mode==='dual'&&(state.mode==='send'||state.mode==='speed')){
+    xDown=true;e.preventDefault();
+    if(_dashReleaseTimer){clearTimeout(_dashReleaseTimer);_dashReleaseTimer=null;}
+    api('/key_press_dual','POST',{sym:'dash',pressed:true}).catch(()=>{});
+    document.getElementById('onscreen-key-dash')?.classList.add('pressed');
+  }
+});
+document.addEventListener('keyup',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if(e.code==='Space'&&spaceDown){spaceDown=false;e.preventDefault();api('/key_press','POST',{pressed:false}).catch(()=>{});}
+  if(e.code==='KeyZ'&&zDown){
+    zDown=false;e.preventDefault();
+    document.getElementById('onscreen-key-dot')?.classList.remove('pressed');
+    // Delay release 50 ms so keydown always arrives at server first (fixes ghost-press race)
+    _dotReleaseTimer=setTimeout(()=>{api('/key_press_dual','POST',{sym:'dot',pressed:false}).catch(()=>{});_dotReleaseTimer=null;},50);
+  }
+  if(e.code==='KeyX'&&xDown){
+    xDown=false;e.preventDefault();
+    document.getElementById('onscreen-key-dash')?.classList.remove('pressed');
+    _dashReleaseTimer=setTimeout(()=>{api('/key_press_dual','POST',{sym:'dash',pressed:false}).catch(()=>{});_dashReleaseTimer=null;},50);
+  }
+});
+
+// ── Polling — incremental DOM updates ──────────
+let _pBtn=null,_pSBuf=null,_pSOut=null,_pSpBuf=null,_pSpOut=null,_pNetBuf=null,_pNetOut=null;
+let _pollInFlight=false;
+setInterval(()=>{
+  if(_pollInFlight)return; // skip if previous poll still in progress
+  _pollInFlight=true;
+  fetch('/status',{signal:AbortSignal.timeout(3000)}).then(r=>{connOk();return r.json();}).then(s=>{
+    const bd=document.getElementById('btn-dot');
+    if(bd)bd.className=s.button_active?'dot active':'dot';
+    updateGpioPinStates(s.pin_states);
+
+    // Incremental update for Send mode — patch only the changed DOM elements
+    if(state.mode==='send'){
+      const bufChanged  = s.current_morse_buffer !== _pSBuf;
+      const outChanged  = s.send_output !== _pSOut;
+      const btnChanged  = s.button_active !== _pBtn;
+      if(bufChanged || outChanged || btnChanged){
+        // Update state data
+        state.button_active = s.button_active;
+        state.current_morse_buffer = s.current_morse_buffer;
+        state.send_output = s.send_output;
+        // Patch DOM directly
+        _patchSendDisplay();
+      }
+    }
+    // Incremental update for Speed mode
+    else if(state.mode==='speed' && !showSpeedResult){
+      const bufChanged  = s.speed_morse_buffer !== _pSpBuf;
+      const outChanged  = s.speed_morse_output !== _pSpOut;
+      const btnChanged  = s.button_active !== _pBtn;
+      if(bufChanged || outChanged || btnChanged){
+        state.button_active = s.button_active;
+        state.speed_morse_buffer = s.speed_morse_buffer;
+        state.speed_morse_output = s.speed_morse_output;
+        _patchSpeedDisplay();
+      }
+    }
+    // Incremental update for Network key mode
+    else if(state.mode==='network' && state.net_key_mode){
+      const bufChanged = s.net_morse_buffer !== _pNetBuf;
+      const outChanged = s.net_morse_output !== _pNetOut;
+      const btnChanged = s.button_active !== _pBtn;
+      if(bufChanged || outChanged || btnChanged){
+        state.button_active = s.button_active;
+        state.net_morse_buffer = s.net_morse_buffer;
+        state.net_morse_output = s.net_morse_output;
+        _patchNetKeyDisplay();
+      }
+      _pNetBuf = s.net_morse_buffer; _pNetOut = s.net_morse_output;
+    }
+    // Update keyboard output if on keyboard tab and output changed
+    else if(state.mode==='keyboard'){
+      const newKbOutput = s.kb_output || '';
+      if(newKbOutput !== kbOutput){
+        kbOutput = newKbOutput;
+        _patchKbDisplay();
+      }
+      // Also update HID availability
+      usbHidAvailable = s.usb_hid_available;
+      kbEnabled = s.kb_enabled;
+    }
+    _pBtn=s.button_active;_pSBuf=s.current_morse_buffer;_pSOut=s.send_output;_pSpBuf=s.speed_morse_buffer;_pSpOut=s.speed_morse_output;
+    _pollInFlight=false;
+  }).catch(()=>{connLost();_pollInFlight=false;});
+},250);
+
+// ── Incremental DOM patchers ───────────────────
+function _patchKbDisplay(){
+  // Update keyboard output display in letter or custom mode
+  const outEl = document.querySelector('.morse-display');
+  if(outEl && state.mode==='keyboard'){
+    if(kbMode==='letters'){
+      outEl.innerHTML = kbOutput 
+        ? '<div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:1.2rem;letter-spacing:0.15em;color:var(--accent);">' + esc(kbOutput) + '</div>'
+        : '<div style="flex:1;display:flex;align-items:center;justify-content:center;"><span style="color:var(--text-dim);font-size:0.8rem;">Key Morse code to type letters here...</span></div>';
+    } else {
+      outEl.innerHTML = '<span style="color:var(--text-dim);font-size:0.8rem;">Custom keys sent: ' + (kbOutput ? esc(kbOutput) : 'none yet') + '</span>';
+    }
+  }
+}
+
+function _patchSendDisplay(){
+  const buf = state.current_morse_buffer||'';
+  const out = state.send_output||'';
+  const isActive = state.button_active;
+  const bufEl = document.getElementById('send-buf-display');
+  const outEl = document.getElementById('send-out-display');
+  if(bufEl){
+    bufEl.className = 'morse-display'+(isActive?' active-send':'');
+    bufEl.innerHTML = buf ? esc(buf)+(isActive?'<span class="cursor"></span>':'')
+      : '<span style="color:var(--text-dim);font-size:0.92rem;">awaiting input\u2026</span>';
+  }
+  if(outEl){
+    outEl.innerHTML = out ? esc(out)
+      : '<span style="color:var(--text-dim);font-size:0.88rem;">start sending\u2026</span>';
+  }
+}
+function _patchSpeedDisplay(){
+  const buf = state.speed_morse_buffer||'';
+  const out = state.speed_morse_output||'';
+  const isActive = state.button_active;
+  const bufEl = document.getElementById('speed-buf-display');
+  const outEl = document.getElementById('speed-out-display');
+  if(bufEl){
+    bufEl.className = 'morse-display'+(isActive?' active-send':'');
+    bufEl.innerHTML = buf ? esc(buf)+(isActive?'<span class="cursor"></span>':'')
+      : '<span style="color:var(--text-dim);font-size:0.88rem;">awaiting\u2026</span>';
+  }
+  if(outEl){
+    outEl.innerHTML = out ? esc(out)
+      : '<span style="color:var(--text-dim);font-size:0.83rem;">start sending\u2026</span>';
+  }
+}
+function _patchNetKeyDisplay(){
+  const buf = state.net_morse_buffer||'';
+  const out = state.net_morse_output||'';
+  const isActive = state.button_active;
+  const bufEl = document.getElementById('net-key-buf');
+  const outEl = document.getElementById('net-key-out');
+  if(bufEl){
+    bufEl.className = 'morse-display'+(isActive?' active-send':'');
+    bufEl.innerHTML = buf ? esc(buf)+(isActive?'<span class="cursor"></span>':'')
+      : '<span style="color:var(--text-dim);font-size:0.85rem;">awaiting input\u2026</span>';
+  }
+  if(outEl){
+    outEl.innerHTML = out ? esc(out)
+      : '<span style="color:var(--text-dim);font-size:0.8rem;">start keying\u2026</span>';
+  }
+}
+
+// ── Init ───────────────────────────────────────
+document.getElementById('cheat-toggle-btn').addEventListener('click',toggleCheatSheet);
+renderNav(); renderContent(); setupTouchKeys();
+
+api('/status').then(s=>{
+  const gd=document.getElementById('gpio-dot');
+  if(gd)gd.className=s.gpio_available?'dot ok':'dot err';
+}).catch(()=>{});
+
+api('/get_settings').then(s=>{
+  settings=Object.assign({},SETTINGS_DEFAULTS,s);
+  // Update device name in header
+  const nameEl = document.getElementById('device-name-display');
+  if(nameEl) nameEl.textContent = settings.device_name || 'Morse Pi';
+}).catch(()=>{});
+
+// ── Theme Toggle ────────────────────────────
+function toggleTheme() {
+  const root = document.documentElement;
+  const btn = document.getElementById('theme-btn');
+  if (root.classList.contains('light')) {
+    root.classList.remove('light');
+    if(btn) btn.innerHTML = '&#9788; LIGHT';
+    localStorage.setItem('morse-pi-theme', 'dark');
+  } else {
+    root.classList.add('light');
+    if(btn) btn.innerHTML = '&#9790; DARK';
+    localStorage.setItem('morse-pi-theme', 'light');
+  }
+}
+
+// Apply saved theme on load
+(function() {
+  const saved = localStorage.getItem('morse-pi-theme');
+  const btn = document.getElementById('theme-btn');
+  if (saved === 'light') {
+    document.documentElement.classList.add('light');
+    if (btn) btn.innerHTML = '&#9790; DARK';
+  }
+})();
+</script>
+</body>
+</html>
