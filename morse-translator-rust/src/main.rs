@@ -295,27 +295,38 @@ fn route_post(stream: &mut TcpStream, path: &str, body: &str) {
 // ════════════════════════════════════════════════════════════════════════════
 
 fn handle_status(stream: &mut TcpStream) {
-    let st = state::STATE.lock().unwrap();
-    let mut json = st.state_json();
-    // Inject extra fields before the closing }
+    let (mut json, gpio_avail, kb_enabled, kb_mode, kb_dot, kb_dash) = {
+        let st = state::STATE.lock().unwrap();
+        let j = st.state_json();
+        (
+            j,
+            st.gpio_available,
+            st.settings.kb_enabled,
+            st.settings.kb_mode.clone(),
+            st.settings.kb_dot_key.clone(),
+            st.settings.kb_dash_key.clone(),
+        )
+    };
+    // Lock is released — safe to call pin_states_json (which also locks STATE)
+    let keyer_label = sound::KEYER_STATE_LABEL.lock().unwrap().clone();
+    let pin_states = gpio::pin_states_json();
+    let hid_avail = keyboard::USB_HID_AVAILABLE.load(std::sync::atomic::Ordering::Relaxed);
+
     if json.ends_with('}') {
         json.pop();
     }
-    let keyer_label = sound::KEYER_STATE_LABEL.lock().unwrap().clone();
-    let pin_states = gpio::pin_states_json();
     let extra = format!(
         r#","gpio_available":{},"pin_states":{},"keyer_state":"{}","kb_enabled":{},"kb_mode":"{}","kb_dot_key":"{}","kb_dash_key":"{}","usb_hid_available":{}}}"#,
-        st.gpio_available,
+        gpio_avail,
         pin_states,
         escape_json(&keyer_label),
-        st.settings.kb_enabled,
-        escape_json(&st.settings.kb_mode),
-        escape_json(&st.settings.kb_dot_key),
-        escape_json(&st.settings.kb_dash_key),
-        keyboard::USB_HID_AVAILABLE.load(std::sync::atomic::Ordering::Relaxed),
+        kb_enabled,
+        escape_json(&kb_mode),
+        escape_json(&kb_dot),
+        escape_json(&kb_dash),
+        hid_avail,
     );
     json.push_str(&extra);
-    drop(st);
     send_json(stream, &json);
 }
 
