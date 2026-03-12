@@ -80,6 +80,7 @@ pub fn send_key(ch: char, kb_enabled: bool) -> bool {
 }
 
 /// Send a full string as USB HID keystrokes.
+#[allow(dead_code)]
 pub fn send_string(text: &str, kb_enabled: bool) {
     for c in text.chars() {
         send_key(c, kb_enabled);

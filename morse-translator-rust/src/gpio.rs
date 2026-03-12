@@ -13,6 +13,7 @@ use std::time::Duration;
 // ── pigpio C bindings (only when compiled with --features gpio) ──────────────
 
 #[cfg(feature = "gpio")]
+#[link(name = "pigpiod_if2")]
 extern "C" {
     fn pigpio_start(addr: *const i8, port: *const i8) -> i32;
     fn pigpio_stop(pi: i32);
@@ -41,7 +42,9 @@ pub struct GpioPulse {
 
 pub const PI_INPUT: u32 = 0;
 pub const PI_OUTPUT: u32 = 1;
+#[allow(dead_code)]
 pub const PI_PUD_OFF: u32 = 0;
+#[allow(dead_code)]
 pub const PI_PUD_DOWN: u32 = 1;
 pub const PI_PUD_UP: u32 = 2;
 
@@ -89,6 +92,7 @@ pub fn pigpio_connect() -> i32 {
     { -1 }
 }
 
+#[allow(dead_code)]
 pub fn pigpio_disconnect(pi: i32) {
     #[cfg(feature = "gpio")]
     {
@@ -191,6 +195,7 @@ pub fn init() {
     }
 }
 
+#[allow(dead_code)]
 pub fn deinit() {
     let st = state::STATE.lock().unwrap();
     if use_pigpio() && st.pi_handle >= 0 {
