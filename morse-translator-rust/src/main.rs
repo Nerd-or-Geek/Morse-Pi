@@ -275,6 +275,9 @@ fn route_post(stream: &mut TcpStream, path: &str, body: &str) {
         "/net_key_press" => handle_net_key_press(stream, body),
         "/net_clear_morse" => handle_net_clear_morse(stream),
         "/net_send_morse" => handle_net_send_morse(stream, body),
+        "/net_live_transmit_set" => handle_net_live_transmit_set(stream, body),
+        "/net_live_transmit_symbol" => handle_net_live_transmit_symbol(stream, body),
+        "/net_receive_live_symbol" => handle_net_receive_live_symbol(stream, body),
         "/kb_enable" => handle_kb_enable(stream, body),
         "/kb_hid_setup" => handle_kb_hid_setup(stream),
         "/kb_mode" => handle_kb_mode(stream, body),
@@ -977,6 +980,81 @@ fn handle_net_send_morse(stream: &mut TcpStream, body: &str) {
             send_json(stream, r#"{"ok":false,"error":"connection failed"}"#);
         }
     }
+}
+
+fn handle_net_live_transmit_set(stream: &mut TcpStream, body: &str) {
+    let enabled = json_bool(body, "enabled").unwrap_or(false);
+    let ip = json_str(body, "ip").unwrap_or("").to_string();
+    let port = json_int(body, "port").unwrap_or(5000) as u16;
+    
+    {
+        let mut st = state::STATE.lock().unwrap();
+        st.net_live_transmit_enabled = enabled;
+        if enabled {
+            st.net_live_transmit_target_ip = ip;
+            st.net_live_transmit_target_port = port;
+        }
+    }
+    
+    let json = format!(
+        r#"{{"ok":true,"enabled":{},"ip":"{}","port":{}}}"#,
+        enabled,
+        json_str(body, "ip").unwrap_or(""),
+        port,
+    );
+    send_json(stream, &json);
+}
+
+fn handle_net_live_transmit_symbol(stream: &mut TcpStream, body: &str) {
+    let symbol = json_str(body, "symbol").unwrap_or("").to_string();
+    
+    if symbol != "." && symbol != "-" {
+        send_json(stream, r#"{"ok":false,"error":"invalid symbol"}"#);
+        return;
+    }
+    
+    let (enabled, ip, port) = {
+        let st = state::STATE.lock().unwrap();
+        (
+            st.net_live_transmit_enabled,
+            st.net_live_transmit_target_ip.clone(),
+            st.net_live_transmit_target_port,
+        )
+    };
+    
+    if !enabled || ip.is_empty() {
+        send_json(stream, r#"{"ok":false,"error":"live transmit not enabled"}"#);
+        return;
+    }
+    
+    let device_name = state::STATE.lock().unwrap().settings.device_name.clone();
+    let payload = format!(
+        r#"{{"symbol":"{}","sender_name":"{}"}}"#,
+        symbol,
+        escape_json(&device_name),
+    );
+    
+    thread::spawn(move || {
+        let _ = network::send_to_peer_http(&ip, port, &payload);
+    });
+    
+    send_json(stream, r#"{"ok":true}"#);
+}
+
+fn handle_net_receive_live_symbol(stream: &mut TcpStream, body: &str) {
+    let symbol = json_str(body, "symbol").unwrap_or("").to_string();
+    
+    if symbol != "." && symbol != "-" {
+        send_json(stream, r#"{"ok":false,"error":"invalid symbol"}"#);
+        return;
+    }
+    
+    // Play the symbol immediately
+    thread::spawn(move || {
+        sound::play_live_morse_symbol(&symbol);
+    });
+    
+    send_json(stream, r#"{"ok":true}"#);
 }
 
 fn handle_kb_enable(stream: &mut TcpStream, body: &str) {

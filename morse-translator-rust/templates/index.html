@@ -1129,6 +1129,8 @@ function updateGpioPinStates(pinStates) {
 let _netPollTimer = null;
 let _netSelectedPeer = '';
 let _netSelectedPeerLabel = '';
+let _netLiveTransmitTarget = '';
+let _netLiveTransmitTargetLabel = '';
 
 function renderNetwork(){
   const dual = settings.pin_mode === 'dual';
@@ -1167,6 +1169,62 @@ function renderNetwork(){
 
       <div class="settings-section">
         <div class="settings-section-title">&#9656; SEND MESSAGE TO PEER</div>
+        <div class="setting-row full" style="margin-bottom:12px;">
+          <div class="setting-label">Transmission Mode</div>
+          <div class="segmented">
+            <button class="segmented-btn ${!state.net_live_transmit_enabled?'active':''}" onclick="setNetLiveTransmit(false)">&#9676; Store & Send</button>
+            <button class="segmented-btn ${state.net_live_transmit_enabled?'active':''}" onclick="setNetLiveTransmit(true)">&#9737; Live Transmit</button>
+          </div>
+        </div>
+        
+        ${state.net_live_transmit_enabled ? `
+        <div style="background:rgba(57,255,20,0.08);border:1px solid rgba(57,255,20,0.3);border-radius:6px;padding:12px;margin-bottom:12px;">
+          <div style="font-family:'Orbitron',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent3);margin-bottom:8px;">&#9737; LIVE TRANSMIT MODE ACTIVE</div>
+          <div class="setting-row full" style="margin-bottom:8px;">
+            <div class="setting-label">Transmit To (Live Feed)</div>
+            <select class="input-field" id="net-live-target" style="margin-bottom:0;" onchange="updateNetLiveTarget()"></select>
+          </div>
+          <div id="net-live-status" style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--accent3);padding:8px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:2px solid var(--accent3);">
+            <span style="color:var(--text-dim);">Waiting for peer selection...</span>
+          </div>
+        </div>
+        
+        <div class="setting-row full">
+          <div class="setting-label">Key in Morse using ${dual ? 'paddles (Z/X)' : 'key (SPACE)'}</div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:8px;">
+            <div style="font-family:'Orbitron',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;">Transmitting:</div>
+            <div class="morse-display ${isActive?'active-send':''}" id="net-live-display" style="font-size:1.5rem;justify-content:center;min-height:50px;background:var(--bg);border-radius:4px;">
+              <span style="color:var(--text-dim);font-size:0.85rem;">start transmitting\u2026</span>
+            </div>
+            <div style="font-family:'Orbitron',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-top:8px;margin-bottom:4px;">Decoded:</div>
+            <div class="morse-display" id="net-live-decoded" style="font-size:1.1rem;justify-content:center;min-height:40px;background:var(--bg);border-radius:4px;">
+              <span style="color:var(--text-dim);font-size:0.8rem;">—</span>
+            </div>
+          </div>
+          
+          ${dual?`
+          <div class="morse-key-area" style="margin-top:12px;">
+            <button class="btn morse-key morse-key-dot" id="net-key-dot"
+              onmousedown="netKeyDownDual('dot')" onmouseup="netKeyUpDual('dot')">
+              &bull;&nbsp; DOT<span class="morse-key-sub">Z key</span>
+            </button>
+            <button class="btn morse-key morse-key-dash" id="net-key-dash"
+              onmousedown="netKeyDownDual('dash')" onmouseup="netKeyUpDual('dash')">
+              &mdash;&nbsp; DASH<span class="morse-key-sub">X key</span>
+            </button>
+          </div>`:`
+          <div class="morse-key-area" style="margin-top:12px;">
+            <button class="btn morse-key morse-key-single" id="net-key-single"
+              onmousedown="netKeyDown()" onmouseup="netKeyUp()">
+              KEY<span class="morse-key-sub">SPACE or hold</span>
+            </button>
+          </div>`}
+          
+          <div class="btn-group" style="margin-top:10px;">
+            <button class="btn btn-danger" onclick="clearNetMorse()">Clear Buffer</button>
+          </div>
+        </div>
+        ` : `
         <div class="setting-row full" style="margin-bottom:10px;">
           <div class="setting-label">Recipient</div>
           <select class="input-field" id="net-send-target" style="margin-bottom:0;"></select>
@@ -1227,6 +1285,7 @@ function renderNetwork(){
           <div id="net-send-morse" style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:var(--accent3);margin-top:5px;min-height:16px;letter-spacing:0.08em;"></div>
         </div>
         `}
+        `}
       </div>
 
       <div class="settings-section">
@@ -1251,6 +1310,12 @@ function initNetworkTab(){
     const opt = e.target.selectedOptions && e.target.selectedOptions[0];
     _netSelectedPeerLabel = opt ? opt.textContent.replace(/\s+\(saved\)$/,'') : '';
   });
+  const liveTarget = document.getElementById('net-live-target');
+  if(liveTarget) liveTarget.addEventListener('change', e=>{
+    _netLiveTransmitTarget = e.target.value || '';
+    const opt = e.target.selectedOptions && e.target.selectedOptions[0];
+    _netLiveTransmitTargetLabel = opt ? opt.textContent.replace(/\s+\(.*\)$/,'') : '';
+  });
   const inp = document.getElementById('net-send-text');
   if(inp) inp.addEventListener('input', e=>{
     const m = document.getElementById('net-send-morse');
@@ -1274,6 +1339,7 @@ function refreshNetStatus(){
 function renderNetPeers(peers){
   const listEl   = document.getElementById('net-peer-list');
   const selectEl = document.getElementById('net-send-target');
+  const liveSelectEl = document.getElementById('net-live-target');
   const countEl  = document.getElementById('net-peer-count');
   const remembered = _netSelectedPeer || (selectEl ? selectEl.value : '');
   const rememberedLabel = _netSelectedPeerLabel || remembered;
@@ -1289,6 +1355,9 @@ function renderNetPeers(peers){
       } else {
         selectEl.innerHTML = '<option value="">-- no peers --</option>';
       }
+    }
+    if(liveSelectEl){
+      liveSelectEl.innerHTML = '<option value="">-- no peers available --</option>';
     }
     return;
   }
@@ -1313,6 +1382,16 @@ function renderNetPeers(peers){
         _netSelectedPeer = remembered;
         const opt = selectEl.selectedOptions && selectEl.selectedOptions[0];
         _netSelectedPeerLabel = opt ? opt.textContent.replace(/\s+\(saved\)$/,'') : rememberedLabel;
+      }
+    }
+  }
+  if(liveSelectEl){
+    const liveOptions = peers.map(p=>`<option value="${esc(p.ip)}:${p.port}">${esc(p.name)} (${esc(p.ip)})</option>`);
+    liveSelectEl.innerHTML = '<option value="">-- select target --</option>' + liveOptions.join('');
+    if(_netLiveTransmitTarget){
+      const liveValues = peers.map(p=>`${p.ip}:${p.port}`);
+      if(liveValues.includes(_netLiveTransmitTarget)){
+        liveSelectEl.value = _netLiveTransmitTarget;
       }
     }
   }
@@ -1384,6 +1463,71 @@ function quickSendToPeer(ip, port, name){
 
 function clearInbox(){
   api('/clear_inbox','POST').then(()=>refreshNetStatus());
+}
+
+// ── Network Live Transmit Mode ──────────────────
+function setNetLiveTransmit(enabled){
+  const selectEl = enabled ? document.getElementById('net-live-target') : document.getElementById('net-send-target');
+  if(enabled && (!selectEl || !selectEl.value)){
+    toast('Select a peer first','warning');
+    return;
+  }
+  
+  if(enabled){
+    const value = selectEl.value;
+    const parts = value.split(':');
+    const ip = parts[0];
+    const port = parseInt(parts[1]||'5000');
+    _netLiveTransmitTarget = value;
+    const opt = selectEl.selectedOptions && selectEl.selectedOptions[0];
+    _netLiveTransmitTargetLabel = opt ? opt.textContent.replace(/\s+\(.*\)$/,'') : '';
+    
+    api('/net_live_transmit_set','POST',{enabled:true,ip,port}).then(res=>{
+      if(res.ok){
+        state.net_live_transmit_enabled = true;
+        renderContent();
+        toast('Live transmit: targeting '+_netLiveTransmitTargetLabel,'success');
+      }
+    }).catch(()=>toast('Failed to enable live transmit','error'));
+  } else {
+    api('/net_live_transmit_set','POST',{enabled:false}).then(res=>{
+      if(res.ok){
+        state.net_live_transmit_enabled = false;
+        _netLiveTransmitTarget = '';
+        _netLiveTransmitTargetLabel = '';
+        renderContent();
+        toast('Live transmit disabled','info');
+      }
+    }).catch(()=>toast('Failed to disable live transmit','error'));
+  }
+}
+
+function updateNetLiveTarget(){
+  const selectEl = document.getElementById('net-live-target');
+  if(!selectEl || !selectEl.value){
+    setNetLiveTransmit(false);
+    return;
+  }
+  
+  const value = selectEl.value;
+  const parts = value.split(':');
+  const ip = parts[0];
+  const port = parseInt(parts[1]||'5000');
+  _netLiveTransmitTarget = value;
+  const opt = selectEl.selectedOptions && selectEl.selectedOptions[0];
+  _netLiveTransmitTargetLabel = opt ? opt.textContent.replace(/\s+\(.*\)$/,'') : '';
+  
+  api('/net_live_transmit_set','POST',{enabled:true,ip,port}).then(res=>{
+    if(res.ok){
+      const statusEl = document.getElementById('net-live-status');
+      if(statusEl){
+        statusEl.innerHTML = '✓ Live transmit active → <strong>'+esc(_netLiveTransmitTargetLabel)+'</strong>';
+        statusEl.style.borderLeftColor = 'var(--accent3)';
+      }
+    }
+  }).catch(()=>{
+    toast('Failed to update target','error');
+  });
 }
 
 // ── Network Key-Based Morse Input ─────────────────

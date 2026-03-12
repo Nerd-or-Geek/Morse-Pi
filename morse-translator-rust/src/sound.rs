@@ -736,6 +736,30 @@ pub fn net_key_released() {
     let wpm = state::STATE.lock().unwrap().settings.wpm_target;
     let dot_unit = get_dot_unit(wpm);
     let symbol: char = if duration < dot_unit * 2 { '.' } else { '-' };
+    
+    // Send symbol to peer if live transmit is enabled
+    let (enabled, ip, port) = {
+        let st = state::STATE.lock().unwrap();
+        (
+            st.net_live_transmit_enabled,
+            st.net_live_transmit_target_ip.clone(),
+            st.net_live_transmit_target_port,
+        )
+    };
+    
+    if enabled && !ip.is_empty() {
+        let sym_str = symbol.to_string();
+        let dev_name = state::STATE.lock().unwrap().settings.device_name.clone();
+        thread::spawn(move || {
+            let payload = format!(
+                r#"{{"symbol":"{}","sender_name":"{}"}}"#,
+                sym_str,
+                dev_name.replace("\"", "\\\""),
+            );
+            let _ = crate::network::send_to_peer_http(&ip, port, &payload);
+        });
+    }
+    
     {
         let mut buf = NET_MORSE_BUFFER.lock().unwrap();
         buf.push(symbol);
@@ -774,3 +798,20 @@ fn net_gap_worker() {
 pub fn clear_net_morse_buffers() {
     NET_MORSE_BUFFER.lock().unwrap().clear();
 }
+
+/// Play a live morse symbol (. or -) from a remote peer.
+pub fn play_live_morse_symbol(symbol: &str) {
+    if symbol != "." && symbol != "-" { return; }
+    
+    let wpm = state::STATE.lock().unwrap().settings.wpm_target;
+    let dot_unit = get_dot_unit(wpm);
+    let freq = if symbol == "." {
+        state::STATE.lock().unwrap().settings.dot_freq as u32
+    } else {
+        state::STATE.lock().unwrap().settings.dash_freq as u32
+    };
+    
+    let duration = if symbol == "." { dot_unit } else { dot_unit * 3 };
+    play_tone(freq, Some(duration));
+}
+
