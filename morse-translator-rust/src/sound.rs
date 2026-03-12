@@ -314,14 +314,16 @@ fn is_dot_pressed() -> bool {
     if VIRTUAL_DOT.load(Ordering::Relaxed) { return true; }
     let st = state::STATE.lock().unwrap();
     if !gpio::use_pigpio() || st.pi_handle < 0 { return false; }
-    gpio::read_pin(st.pi_handle, st.settings.dot_pin as u32).unwrap_or(false)
+    // Active-low: pull-up resistor means pin reads HIGH when open, LOW when pressed
+    gpio::read_pin(st.pi_handle, st.settings.dot_pin as u32) == Some(false)
 }
 
 fn is_dash_pressed() -> bool {
     if VIRTUAL_DASH.load(Ordering::Relaxed) { return true; }
     let st = state::STATE.lock().unwrap();
     if !gpio::use_pigpio() || st.pi_handle < 0 { return false; }
-    gpio::read_pin(st.pi_handle, st.settings.dash_pin as u32).unwrap_or(false)
+    // Active-low: pull-up resistor means pin reads HIGH when open, LOW when pressed
+    gpio::read_pin(st.pi_handle, st.settings.dash_pin as u32) == Some(false)
 }
 
 fn keyer_emit(sym: char) {
