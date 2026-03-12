@@ -2,9 +2,11 @@
 
 📖 **[Full Documentation](https://nerd-or-geek.github.io/Morse-Pi/)** — setup guides, usage, troubleshooting, and reference
 
-A full-featured Morse code trainer and practice tool built with Flask, designed to run on a Raspberry Pi with a physical key or paddle. Access everything from any browser on your local network — no app to install on your phone or computer.
+A full-featured Morse code trainer and practice tool designed to run on a Raspberry Pi with a physical key or paddle. Access everything from any browser on your local network — no app to install on your phone or computer.
 
-![Morse-Pi UI](https://img.shields.io/badge/platform-Raspberry%20Pi-red) ![Python](https://img.shields.io/badge/python-3.9%2B-blue) ![Flask](https://img.shields.io/badge/flask-3.x-lightgrey) ![License](https://img.shields.io/badge/license-MIT-green)
+Available in two backends: the original **Python/Flask** version and a native **Rust** binary for lower memory usage and faster startup.
+
+![Morse-Pi UI](https://img.shields.io/badge/platform-Raspberry%20Pi-red) ![Python](https://img.shields.io/badge/python-3.9%2B-blue) ![Rust](https://img.shields.io/badge/rust-stable-orange) ![Flask](https://img.shields.io/badge/flask-3.x-lightgrey) ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
@@ -82,17 +84,47 @@ Pi GPIO header (subset)
 
 ## Installation
 
-### One-line install (Raspberry Pi OS / Debian)
+Choose **one** of the two backends. Both provide the same web UI and features.
+
+### Option A — Rust backend (recommended for new installs)
+
+Native binary, lower memory usage, faster startup. Compiles on-device (10–30 min on Pi Zero, 3–5 min on Pi 3/4/5).
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install-rust.sh | sudo bash
+```
+
+The Rust install script will:
+1. **Configure USB HID keyboard gadget** — sets up the Pi to appear as a USB keyboard
+2. **Install the Rust toolchain** via `rustup` + build dependencies (`pigpio`, `build-essential`)
+3. **Clone the repository** to `/opt/morse-pi` and **build the binary** with `cargo build --release`
+4. **Set up auto-start on boot** — creates a `systemd` service
+
+### Option B — Python backend (original)
+
+No compilation required, installs in ~2 minutes.
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install.sh | sudo bash
 ```
 
-The install script will:
-1. **Configure USB HID keyboard gadget** — sets up the Pi to appear as a USB keyboard when plugged into a computer
+The Python install script will:
+1. **Configure USB HID keyboard gadget** — sets up the Pi to appear as a USB keyboard
 2. **Install all required packages** — `python3`, `pip`, `git`, `flask`, `gpiozero`, `pigpio`
 3. **Clone the repository** to `/opt/morse-pi`
-4. **Set up auto-start on boot** — creates a `systemd` service so Morse-Pi runs automatically
+4. **Set up auto-start on boot** — creates a `systemd` service
+
+### Switching backends on an existing install
+
+To switch an existing Python install to the Rust backend:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/transition-rust.sh | sudo bash
+```
+
+This preserves all your settings, stats, and word lists.
+
+---
 
 Once complete, open your browser to the URL printed on screen, e.g.:
 
@@ -236,7 +268,7 @@ sudo reboot
 
 ---
 
-### Manual installation
+### Manual installation (Python)
 
 ```bash
 # 1. Clone
@@ -254,6 +286,29 @@ sudo usermod -aG gpio $USER
 # 3. Run
 cd morse-translator
 python3 app.py
+```
+
+### Manual installation (Rust)
+
+```bash
+# 1. Clone
+git clone https://github.com/Nerd-or-Geek/Morse-Pi.git
+cd Morse-Pi
+
+# 2. Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+source ~/.cargo/env
+
+# On Raspberry Pi, also install GPIO build deps:
+sudo apt install pigpio libpigpio-dev build-essential -y
+sudo systemctl enable pigpiod --now
+
+# 3. Build and run
+cd morse-translator-rust
+cargo build --release --features gpio   # omit --features gpio if not on a Pi
+cp target/release/morse-pi ../morse-translator/
+cd ../morse-translator
+./morse-pi
 ```
 
 Then open `http://localhost:5000` (or the Pi's IP from another device).
@@ -366,17 +421,29 @@ sudo systemctl restart morse-pi-hid    # reconfigure USB gadget
 
 ```
 Morse-Pi/
-├── install.sh                  ← fresh installer (HID + packages + clone + systemd)
+├── install.sh                  ← fresh installer — Python backend
+├── install-rust.sh             ← fresh installer — Rust backend
+├── transition-rust.sh          ← switch existing Python install → Rust
 ├── update.sh                   ← updater (verify HID + pull code + restart)
 ├── packages.sh                 ← package updater (upgrade apt + pip packages)
-└── morse-translator/
-    ├── app.py                  ← Flask app, GPIO control, Morse timing, networking
-    ├── settings.json           ← saved user settings (auto-created, preserved on update)
-    ├── stats.json              ← user statistics (auto-created, preserved on update)
-    ├── words.json              ← word list for quiz/speed modes
-    └── templates/
-        ├── index.html          ← single-page web UI
-        └── diag.html           ← GPIO live diagnostic popup
+├── morse-translator/           ← shared runtime directory (templates, data, binary)
+│   ├── app.py                  ← Python backend (Flask app)
+│   ├── settings.json           ← saved user settings (auto-created, preserved)
+│   ├── stats.json              ← user statistics (auto-created, preserved)
+│   ├── words.json              ← word list for quiz/speed modes
+│   └── templates/
+│       ├── index.html          ← single-page web UI
+│       └── diag.html           ← GPIO live diagnostic popup
+└── morse-translator-rust/      ← Rust backend source
+    ├── Cargo.toml              ← package manifest and dependencies
+    └── src/
+        ├── main.rs             ← HTTP server and route handlers
+        ├── state.rs            ← settings, stats, global state
+        ├── morse.rs            ← Morse encode/decode, word lists
+        ├── sound.rs            ← tone output, iambic keyer, send/speed modes
+        ├── gpio.rs             ← pigpiod FFI (behind "gpio" feature flag)
+        ├── keyboard.rs         ← USB HID keyboard output
+        └── network.rs          ← UDP beacon peer discovery
 
 # Created by installer on Raspberry Pi:
 /etc/systemd/system/morse-pi.service       ← main app service (auto-start on boot)
