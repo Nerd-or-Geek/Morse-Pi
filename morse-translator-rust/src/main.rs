@@ -1125,14 +1125,14 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                thread::Builder::new()
+                if let Err(e) = thread::Builder::new()
                     .stack_size(256 * 1024)
                     .spawn(move || {
                         handle_connection(stream);
                     })
-                    .unwrap_or_else(|e| {
-                        eprintln!("thread spawn error: {}", e);
-                    });
+                {
+                    eprintln!("thread spawn error: {}", e);
+                }
             }
             Err(e) => {
                 eprintln!("accept error: {}", e);
