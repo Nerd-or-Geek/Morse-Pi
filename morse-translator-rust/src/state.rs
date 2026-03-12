@@ -43,6 +43,8 @@ pub struct Settings {
     pub volume: f64,
     #[serde(default = "default_wpm_target")]
     pub wpm_target: i32,
+    #[serde(default = "default_farnsworth_wpm")]
+    pub farnsworth_wpm: i32,
     #[serde(default = "default_theme")]
     pub theme: String,
     #[serde(default = "default_difficulty")]
@@ -51,11 +53,11 @@ pub struct Settings {
     pub quiz_categories: Vec<String>,
     #[serde(default = "default_practice_chars")]
     pub practice_chars: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub farnsworth_enabled: bool,
-    #[serde(default = "default_farnsworth_mult")]
+    #[serde(default = "default_farnsworth_mult", skip_serializing)]
     pub farnsworth_letter_mult: f64,
-    #[serde(default = "default_farnsworth_mult")]
+    #[serde(default = "default_farnsworth_mult", skip_serializing)]
     pub farnsworth_word_mult: f64,
     #[serde(default = "default_device_name")]
     pub device_name: String,
@@ -80,6 +82,7 @@ fn default_dot_freq() -> i32 { 700 }
 fn default_dash_freq() -> i32 { 500 }
 fn default_volume() -> f64 { 0.75 }
 fn default_wpm_target() -> i32 { 20 }
+fn default_farnsworth_wpm() -> i32 { 20 }
 fn default_theme() -> String { "dark".into() }
 fn default_difficulty() -> String { "easy".into() }
 fn default_quiz_categories() -> Vec<String> { vec!["words".into()] }
@@ -108,6 +111,7 @@ impl Default for Settings {
             dash_freq: 500,
             volume: 0.75,
             wpm_target: 20,
+            farnsworth_wpm: 20,
             theme: "dark".into(),
             difficulty: "easy".into(),
             quiz_categories: vec!["words".into()],
@@ -232,7 +236,24 @@ impl AppState {
     pub fn load_settings(&mut self) {
         match fs::read_to_string("settings.json") {
             Ok(data) => match serde_json::from_str::<Settings>(&data) {
-                Ok(s) => self.settings = s,
+                Ok(mut s) => {
+                    s.wpm_target = s.wpm_target.max(5);
+
+                    if !data.contains("\"farnsworth_wpm\"") {
+                        if s.farnsworth_enabled {
+                            let legacy_mult = s
+                                .farnsworth_letter_mult
+                                .max(s.farnsworth_word_mult)
+                                .max(1.0);
+                            s.farnsworth_wpm = ((s.wpm_target as f64) / legacy_mult).round() as i32;
+                        } else {
+                            s.farnsworth_wpm = s.wpm_target;
+                        }
+                    }
+
+                    s.farnsworth_wpm = s.farnsworth_wpm.max(5).min(s.wpm_target);
+                    self.settings = s;
+                }
                 Err(_) => {}
             },
             Err(_) => {}

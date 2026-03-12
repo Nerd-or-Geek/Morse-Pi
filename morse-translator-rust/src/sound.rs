@@ -21,24 +21,16 @@ pub fn get_dot_unit(wpm: i32) -> Duration {
     Duration::from_millis(1200 / wpm)
 }
 
+fn get_farnsworth_wpm(settings: &state::Settings) -> i32 {
+    settings.farnsworth_wpm.max(5).min(settings.wpm_target.max(5))
+}
+
 fn get_letter_gap(settings: &state::Settings) -> Duration {
-    let du = get_dot_unit(settings.wpm_target);
-    let mut gap = du * 3;
-    if settings.farnsworth_enabled {
-        let mult = settings.farnsworth_letter_mult.max(1.0);
-        gap = Duration::from_nanos((gap.as_nanos() as f64 * mult) as u64);
-    }
-    gap
+    get_dot_unit(get_farnsworth_wpm(settings)) * 3
 }
 
 fn get_word_extra(settings: &state::Settings) -> Duration {
-    let du = get_dot_unit(settings.wpm_target);
-    let mut gap = du * 4;
-    if settings.farnsworth_enabled {
-        let mult = settings.farnsworth_word_mult.max(1.0);
-        gap = Duration::from_nanos((gap.as_nanos() as f64 * mult) as u64);
-    }
-    gap
+    get_dot_unit(get_farnsworth_wpm(settings)) * 4
 }
 
 pub fn get_dot_unit_secs(wpm: i32) -> f64 {
@@ -192,23 +184,19 @@ pub fn stop_tone() {
 
 /// Play plaintext as Morse code using proper WPM-based timing.
 pub fn play_morse_string(text: &str) {
-    let (wpm, dot_freq, dash_freq, farnsworth_enabled, farnsworth_letter_mult, farnsworth_word_mult) = {
+    let (wpm, farnsworth_wpm, dot_freq, dash_freq) = {
         let st = state::STATE.lock().unwrap();
         (
             st.settings.wpm_target,
+            st.settings.farnsworth_wpm,
             st.settings.dot_freq,
             st.settings.dash_freq,
-            st.settings.farnsworth_enabled,
-            st.settings.farnsworth_letter_mult,
-            st.settings.farnsworth_word_mult,
         )
     };
     let du = get_dot_unit(wpm);
     let settings = state::Settings {
         wpm_target: wpm,
-        farnsworth_enabled,
-        farnsworth_letter_mult,
-        farnsworth_word_mult,
+        farnsworth_wpm,
         ..Default::default()
     };
     let letter_gap = get_letter_gap(&settings);

@@ -481,12 +481,16 @@ const SETTINGS_DEFAULTS = {
   pin_mode:'single', data_pin:17, dot_pin:22, dash_pin:27, ground_pin:null, grounded_pins:[],
   use_external_switch:false,
   dot_freq:700, dash_freq:500, volume:0.75,
-  wpm_target:20, difficulty:'easy',
+  wpm_target:20, farnsworth_wpm:20, difficulty:'easy',
   quiz_categories:['words'], practice_chars:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-  farnsworth_enabled:false, farnsworth_letter_mult:2.0, farnsworth_word_mult:2.0,
   device_name:'Morse Pi'
 };
 Object.entries(SETTINGS_DEFAULTS).forEach(([k,v])=>{ if (settings[k]===undefined) settings[k]=v; });
+settings.wpm_target = Math.max(5, parseInt(settings.wpm_target, 10) || SETTINGS_DEFAULTS.wpm_target);
+settings.farnsworth_wpm = Math.min(
+  settings.wpm_target,
+  Math.max(5, parseInt(settings.farnsworth_wpm, 10) || settings.wpm_target)
+);
 
 // ── Morse Tables ───────────────────────────────
 const MORSE_CODE = {
@@ -795,6 +799,11 @@ function renderStats(){
 function renderSettings(){
   const s=settings;
   const single=s.pin_mode!=='dual';
+  const charWpm=Math.max(5, parseInt(s.wpm_target, 10)||20);
+  const farnWpm=Math.min(charWpm, Math.max(5, parseInt(s.farnsworth_wpm, 10)||charWpm));
+  const charDotMs=Math.round(1200/charWpm);
+  const farnDotMs=Math.round(1200/farnWpm);
+  const standardSpacing=farnWpm===charWpm;
   return `
     <div class="panel">
       <div class="panel-title">HARDWARE CONFIGURATION</div>
@@ -807,13 +816,26 @@ function renderSettings(){
             <div class="setting-input-row"><input class="input-field" type="text" id="s-device_name" value="${esc(s.device_name||'Morse Pi')}" placeholder="Morse Pi" style="margin-bottom:0;"></div>
             <div class="setting-help">Human-readable name shown to other Morse-Pi devices on the same network.</div>
           </div>
-          <div class="setting-row">
-            <div class="setting-label">Words Per Minute (WPM)</div>
+          <div class="setting-row full">
+            <div class="setting-label">Character Speed (WPM)</div>
             <div class="setting-input-row">
-              <input class="input-field" type="number" id="s-wpm_target" value="${s.wpm_target}" min="5" max="60" style="max-width:90px;">
-              <button class="btn btn-primary" onclick="wpmTest()">Test WPM</button>
+              <input class="input-field" type="number" id="s-wpm_target" value="${charWpm}" min="5" max="60" style="max-width:120px;">
             </div>
-            <div class="setting-help">All Morse timing is derived from WPM. Dot = 1200/${s.wpm_target} = ${Math.round(1200/s.wpm_target)} ms. Dash = ${Math.round(3600/s.wpm_target)} ms. Letter gap = ${Math.round(3600/s.wpm_target)} ms. Word gap = ${Math.round(8400/s.wpm_target)} ms.</div>
+            <div class="setting-help">This is the real Morse character speed. Dot = ${charDotMs} ms, dash = ${charDotMs*3} ms, and the straight-key dot/dash threshold is based on this speed.</div>
+          </div>
+          <div class="setting-row full">
+            <div class="setting-label">Farnsworth Speed (WPM)</div>
+            <div class="setting-input-row">
+              <input class="input-field" type="number" id="s-farnsworth_wpm" value="${farnWpm}" min="5" max="${charWpm}" style="max-width:120px;">
+            </div>
+            <div class="setting-help">${standardSpacing
+              ?`Set equal to Character Speed for standard timing. Current letter gap = ${farnDotMs*3} ms and total word gap = ${farnDotMs*7} ms.`
+              :`Characters still send at ${charWpm} WPM, but letter spacing and word spacing follow ${farnWpm} WPM. Current letter gap = ${farnDotMs*3} ms and total word gap = ${farnDotMs*7} ms.`}</div>
+          </div>
+          <div class="setting-row full">
+            <div class="btn-group">
+              <button class="btn btn-primary" onclick="wpmTest()">Test Timing</button>
+            </div>
           </div>
           <div class="setting-row">
             <div class="setting-label">Difficulty</div>
@@ -836,7 +858,7 @@ function renderSettings(){
               <button class="segmented-btn ${!single?'active':''}" onclick="setPinMode('dual')">Iambic Paddle (dual pin)</button>
             </div>
             <div class="setting-help">${single
-              ?'<span class="tag tag-blue">Straight Key</span> &mdash; one GPIO pin; press duration determines dot vs. dash. Threshold auto-derived from WPM.'
+              ?'<span class="tag tag-blue">Straight Key</span> &mdash; one GPIO pin; press duration determines dot vs. dash. Threshold auto-derived from Character Speed.'
               :'<span class="tag tag-green">Iambic Paddle</span> &mdash; separate GPIO pins for dot and dash. Full electronic keyer with squeeze and paddle memory.'}</div>
           </div>
           ${single?`
@@ -927,33 +949,6 @@ function renderSettings(){
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section-title">&#9656; LEARNER / FARNSWORTH TIMING</div>
-        <div class="setting-row full">
-          <div class="setting-label">Extended Gaps Mode</div>
-          <div class="segmented">
-            <button class="segmented-btn ${!s.farnsworth_enabled?'active':''}" onclick="settings.farnsworth_enabled=false;renderContent();">Off &mdash; Standard Timing</button>
-            <button class="segmented-btn ${s.farnsworth_enabled?'active':''}" onclick="settings.farnsworth_enabled=true;renderContent();">On &mdash; Extended Gaps</button>
-          </div>
-          <div class="setting-help">Keeps dot &amp; dash element speeds identical but stretches the pauses <em>between</em> letters and words &mdash; helps beginners copy each character without rushing.</div>
-        </div>
-        ${s.farnsworth_enabled?`
-        <div class="settings-grid" style="margin-top:10px;">
-          <div class="setting-row">
-            <div class="setting-label">Letter Gap Multiplier&ensp;<span id="flm-val" style="color:var(--accent);">&times;${s.farnsworth_letter_mult||2}</span></div>
-            <input type="range" min="1" max="8" step="0.5" value="${s.farnsworth_letter_mult||2}" id="s-farnsworth_letter_mult" class="vol-slider"
-              oninput="document.getElementById('flm-val').textContent='\u00d7'+this.value">
-            <div class="setting-help">Multiplies the standard 3-unit letter gap. &times;1&nbsp;= standard (${Math.round(3600/s.wpm_target)}&nbsp;ms). &times;2&nbsp;= double. Current: <strong>${Math.round(3600/s.wpm_target*(s.farnsworth_letter_mult||2))}&nbsp;ms</strong>.</div>
-          </div>
-          <div class="setting-row">
-            <div class="setting-label">Word Gap Multiplier&ensp;<span id="fwm-val" style="color:var(--accent2);">&times;${s.farnsworth_word_mult||2}</span></div>
-            <input type="range" min="1" max="8" step="0.5" value="${s.farnsworth_word_mult||2}" id="s-farnsworth_word_mult" class="vol-slider"
-              oninput="document.getElementById('fwm-val').textContent='\u00d7'+this.value">
-            <div class="setting-help">Multiplies the 4-unit word-boundary extra gap. &times;1&nbsp;= standard (${Math.round(4800/s.wpm_target)}&nbsp;ms extra). Current extra: <strong>${Math.round(4800/s.wpm_target*(s.farnsworth_word_mult||2))}&nbsp;ms</strong>.</div>
-          </div>
-        </div>`:''}
       </div>
 
       <hr class="sep">
@@ -1132,6 +1127,8 @@ function updateGpioPinStates(pinStates) {
 
 // ── NETWORK ───────────────────────────────────────
 let _netPollTimer = null;
+let _netSelectedPeer = '';
+let _netSelectedPeerLabel = '';
 
 function renderNetwork(){
   const dual = settings.pin_mode === 'dual';
@@ -1248,6 +1245,12 @@ function initNetworkTab(){
   if(_netPollTimer) clearInterval(_netPollTimer);
   refreshNetStatus();
   _netPollTimer = setInterval(refreshNetStatus, 4000);
+  const target = document.getElementById('net-send-target');
+  if(target) target.addEventListener('change', e=>{
+    _netSelectedPeer = e.target.value || '';
+    const opt = e.target.selectedOptions && e.target.selectedOptions[0];
+    _netSelectedPeerLabel = opt ? opt.textContent.replace(/\s+\(saved\)$/,'') : '';
+  });
   const inp = document.getElementById('net-send-text');
   if(inp) inp.addEventListener('input', e=>{
     const m = document.getElementById('net-send-morse');
@@ -1272,11 +1275,21 @@ function renderNetPeers(peers){
   const listEl   = document.getElementById('net-peer-list');
   const selectEl = document.getElementById('net-send-target');
   const countEl  = document.getElementById('net-peer-count');
+  const remembered = _netSelectedPeer || (selectEl ? selectEl.value : '');
+  const rememberedLabel = _netSelectedPeerLabel || remembered;
   if(!listEl) return;
   if(countEl) countEl.textContent = peers.length ? '('+peers.length+')' : '(none)';
   if(!peers.length){
     listEl.innerHTML = '<div style="color:var(--text-dim);font-size:0.78rem;padding:8px 0;">No other Morse-Pi devices detected on this network.</div>';
-    if(selectEl) selectEl.innerHTML = '<option value="">-- no peers --</option>';
+    if(selectEl){
+      if(remembered){
+        selectEl.innerHTML = '<option value="">-- select peer --</option>' +
+          `<option value="${esc(remembered)}">${esc(rememberedLabel)} (saved)</option>`;
+        selectEl.value = remembered;
+      } else {
+        selectEl.innerHTML = '<option value="">-- no peers --</option>';
+      }
+    }
     return;
   }
   listEl.innerHTML = peers.map(p=>`
@@ -1288,10 +1301,20 @@ function renderNetPeers(peers){
       <button class="btn btn-primary" style="font-size:0.57rem;" onclick="quickSendToPeer('${esc(p.ip)}',${p.port},'${esc(p.name)}')">&#9654; SEND</button>
     </div>`).join('');
   if(selectEl){
-    const prev = selectEl.value;
-    selectEl.innerHTML = '<option value="">-- select peer --</option>' +
-      peers.map(p=>`<option value="${esc(p.ip)}:${p.port}">${esc(p.name)} (${esc(p.ip)})</option>`).join('');
-    if(prev) selectEl.value = prev;
+    const liveValues = peers.map(p=>`${p.ip}:${p.port}`);
+    const options = peers.map(p=>`<option value="${esc(p.ip)}:${p.port}">${esc(p.name)} (${esc(p.ip)})</option>`);
+    if(remembered && !liveValues.includes(remembered)){
+      options.unshift(`<option value="${esc(remembered)}">${esc(rememberedLabel)} (saved)</option>`);
+    }
+    selectEl.innerHTML = '<option value="">-- select peer --</option>' + options.join('');
+    if(remembered){
+      selectEl.value = remembered;
+      if(selectEl.value === remembered){
+        _netSelectedPeer = remembered;
+        const opt = selectEl.selectedOptions && selectEl.selectedOptions[0];
+        _netSelectedPeerLabel = opt ? opt.textContent.replace(/\s+\(saved\)$/,'') : rememberedLabel;
+      }
+    }
   }
 }
 
@@ -1686,7 +1709,7 @@ function renderHelp(){
         <div class="help-card-title">Straight Key Mode</div>
         <ul>
           <li><span>Connect key between data pin and GND</span></li>
-          <li><span>Dot/dash threshold auto-derived from WPM</span></li>
+            <li><span>Dot/dash threshold auto-derived from Character Speed</span></li>
           <li><span>Works with any momentary switch</span></li>
         </ul>
       </div>
@@ -1710,8 +1733,9 @@ function renderHelp(){
       <div class="help-card">
         <div class="help-card-title">Tips</div>
         <ul>
-          <li><span>Adjust WPM to match your keying speed</span></li>
-          <li><span>Use Test WPM button to hear timing</span></li>
+            <li><span>Character Speed controls the actual dot and dash timing</span></li>
+            <li><span>Farnsworth Speed controls the letter and word spacing</span></li>
+            <li><span>Use Test Timing to hear both speeds together</span></li>
           <li><span>Use Reference Sheet below to study</span></li>
         </ul>
       </div>
@@ -1886,9 +1910,14 @@ function setPinMode(mode){settings.pin_mode=mode;renderContent();}
 function setOutputType(type){settings.output_type=type;renderContent();}
 function setSpeakerGndMode(mode){settings.speaker_gnd_mode=mode;renderContent();}
 function saveSettings(){
-  const keys=['dot_freq','dash_freq','wpm_target','difficulty','data_pin','dot_pin','dash_pin'];
+  const keys=['dot_freq','dash_freq','wpm_target','farnsworth_wpm','difficulty','data_pin','dot_pin','dash_pin'];
   const data={pin_mode:settings.pin_mode,output_type:settings.output_type,speaker_gnd_mode:settings.speaker_gnd_mode||'3v3',use_external_switch:settings.use_external_switch||false};
   keys.forEach(k=>{const el=document.getElementById('s-'+k);if(el)data[k]=el.value;});
+  data.wpm_target = Math.max(5, parseInt(data.wpm_target, 10) || SETTINGS_DEFAULTS.wpm_target);
+  data.farnsworth_wpm = Math.min(
+    data.wpm_target,
+    Math.max(5, parseInt(data.farnsworth_wpm, 10) || data.wpm_target)
+  );
   // SP/LED+ pin: from select
   const sp1El=document.getElementById('s-speaker_pin');
   if(sp1El) data.speaker_pin=parseInt(sp1El.value);
@@ -1904,16 +1933,13 @@ function saveSettings(){
   // Volume slider is 0-100, convert to 0.0-1.0
   const volEl=document.getElementById('s-volume');
   if(volEl) data.volume=parseFloat(volEl.value)/100;
-  // Farnsworth settings
-  data.farnsworth_enabled = settings.farnsworth_enabled || false;
-  const flmEl=document.getElementById('s-farnsworth_letter_mult');
-  if(flmEl) data.farnsworth_letter_mult=parseFloat(flmEl.value);
-  else data.farnsworth_letter_mult=parseFloat(settings.farnsworth_letter_mult)||2.0;
-  const fwmEl=document.getElementById('s-farnsworth_word_mult');
-  if(fwmEl) data.farnsworth_word_mult=parseFloat(fwmEl.value);
-  else data.farnsworth_word_mult=parseFloat(settings.farnsworth_word_mult)||2.0;
   api('/save_settings','POST',data).then(s=>{
     settings=Object.assign({},SETTINGS_DEFAULTS,s);
+    settings.wpm_target = Math.max(5, parseInt(settings.wpm_target, 10) || SETTINGS_DEFAULTS.wpm_target);
+    settings.farnsworth_wpm = Math.min(
+      settings.wpm_target,
+      Math.max(5, parseInt(settings.farnsworth_wpm, 10) || settings.wpm_target)
+    );
     toast('Settings saved','success');
     const msg=document.getElementById('settings-msg');
     if(msg){msg.textContent='SAVED';setTimeout(()=>{if(msg)msg.textContent='';},2500);}
@@ -1928,7 +1954,12 @@ function previewTone(freq,duration){
 }
 function wpmTest(){
   api('/wpm_test','POST').then(res=>{
-    toast('Playing PARIS at '+settings.wpm_target+' WPM','info',3000);
+    const charWpm = res.character_wpm || settings.wpm_target;
+    const farnWpm = res.farnsworth_wpm || settings.farnsworth_wpm || charWpm;
+    const msg = charWpm===farnWpm
+      ? 'Playing PARIS at '+charWpm+' WPM'
+      : 'Playing PARIS at '+charWpm+' char / '+farnWpm+' Farnsworth WPM';
+    toast(msg,'info',3500);
   });
 }
 

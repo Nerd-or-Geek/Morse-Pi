@@ -1132,6 +1132,8 @@ function updateGpioPinStates(pinStates) {
 
 // ── NETWORK ───────────────────────────────────────
 let _netPollTimer = null;
+let _netSelectedPeer = '';
+let _netSelectedPeerLabel = '';
 
 function renderNetwork(){
   const dual = settings.pin_mode === 'dual';
@@ -1248,6 +1250,12 @@ function initNetworkTab(){
   if(_netPollTimer) clearInterval(_netPollTimer);
   refreshNetStatus();
   _netPollTimer = setInterval(refreshNetStatus, 4000);
+  const target = document.getElementById('net-send-target');
+  if(target) target.addEventListener('change', e=>{
+    _netSelectedPeer = e.target.value || '';
+    const opt = e.target.selectedOptions && e.target.selectedOptions[0];
+    _netSelectedPeerLabel = opt ? opt.textContent.replace(/\s+\(saved\)$/,'') : '';
+  });
   const inp = document.getElementById('net-send-text');
   if(inp) inp.addEventListener('input', e=>{
     const m = document.getElementById('net-send-morse');
@@ -1272,11 +1280,21 @@ function renderNetPeers(peers){
   const listEl   = document.getElementById('net-peer-list');
   const selectEl = document.getElementById('net-send-target');
   const countEl  = document.getElementById('net-peer-count');
+  const remembered = _netSelectedPeer || (selectEl ? selectEl.value : '');
+  const rememberedLabel = _netSelectedPeerLabel || remembered;
   if(!listEl) return;
   if(countEl) countEl.textContent = peers.length ? '('+peers.length+')' : '(none)';
   if(!peers.length){
     listEl.innerHTML = '<div style="color:var(--text-dim);font-size:0.78rem;padding:8px 0;">No other Morse-Pi devices detected on this network.</div>';
-    if(selectEl) selectEl.innerHTML = '<option value="">-- no peers --</option>';
+    if(selectEl){
+      if(remembered){
+        selectEl.innerHTML = '<option value="">-- select peer --</option>' +
+          `<option value="${esc(remembered)}">${esc(rememberedLabel)} (saved)</option>`;
+        selectEl.value = remembered;
+      } else {
+        selectEl.innerHTML = '<option value="">-- no peers --</option>';
+      }
+    }
     return;
   }
   listEl.innerHTML = peers.map(p=>`
@@ -1288,10 +1306,20 @@ function renderNetPeers(peers){
       <button class="btn btn-primary" style="font-size:0.57rem;" onclick="quickSendToPeer('${esc(p.ip)}',${p.port},'${esc(p.name)}')">&#9654; SEND</button>
     </div>`).join('');
   if(selectEl){
-    const prev = selectEl.value;
-    selectEl.innerHTML = '<option value="">-- select peer --</option>' +
-      peers.map(p=>`<option value="${esc(p.ip)}:${p.port}">${esc(p.name)} (${esc(p.ip)})</option>`).join('');
-    if(prev) selectEl.value = prev;
+    const liveValues = peers.map(p=>`${p.ip}:${p.port}`);
+    const options = peers.map(p=>`<option value="${esc(p.ip)}:${p.port}">${esc(p.name)} (${esc(p.ip)})</option>`);
+    if(remembered && !liveValues.includes(remembered)){
+      options.unshift(`<option value="${esc(remembered)}">${esc(rememberedLabel)} (saved)</option>`);
+    }
+    selectEl.innerHTML = '<option value="">-- select peer --</option>' + options.join('');
+    if(remembered){
+      selectEl.value = remembered;
+      if(selectEl.value === remembered){
+        _netSelectedPeer = remembered;
+        const opt = selectEl.selectedOptions && selectEl.selectedOptions[0];
+        _netSelectedPeerLabel = opt ? opt.textContent.replace(/\s+\(saved\)$/,'') : rememberedLabel;
+      }
+    }
   }
 }
 

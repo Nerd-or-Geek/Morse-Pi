@@ -496,8 +496,16 @@ fn handle_wpm_test(stream: &mut TcpStream) {
     thread::spawn(|| {
         sound::play_morse_string("PARIS");
     });
-    let wpm = state::STATE.lock().unwrap().settings.wpm_target;
-    let json = format!(r#"{{"status":"playing","wpm":{}}}"#, wpm);
+    let (character_wpm, farnsworth_wpm) = {
+        let st = state::STATE.lock().unwrap();
+        (st.settings.wpm_target, st.settings.farnsworth_wpm)
+    };
+    let json = format!(
+        r#"{{"status":"playing","wpm":{},"character_wpm":{},"farnsworth_wpm":{}}}"#,
+        character_wpm,
+        character_wpm,
+        farnsworth_wpm,
+    );
     send_json(stream, &json);
 }
 
@@ -537,6 +545,7 @@ fn handle_save_settings(stream: &mut TcpStream, body: &str) {
     for &(json_key, field) in &[
         ("data_pin", "data_pin"), ("dot_pin", "dot_pin"), ("dash_pin", "dash_pin"),
         ("dot_freq", "dot_freq"), ("dash_freq", "dash_freq"), ("wpm_target", "wpm_target"),
+        ("farnsworth_wpm", "farnsworth_wpm"),
     ] {
         if let Some(v) = json_int(body, json_key) {
             match field {
@@ -546,6 +555,7 @@ fn handle_save_settings(stream: &mut TcpStream, body: &str) {
                 "dot_freq" => st.settings.dot_freq = v as i32,
                 "dash_freq" => st.settings.dash_freq = v as i32,
                 "wpm_target" => st.settings.wpm_target = v as i32,
+                "farnsworth_wpm" => st.settings.farnsworth_wpm = v as i32,
                 _ => {}
             }
         }
@@ -558,11 +568,34 @@ fn handle_save_settings(stream: &mut TcpStream, body: &str) {
         }
     }
     if let Some(v) = json_float(body, "volume") { st.settings.volume = v; }
-    if let Some(v) = json_float(body, "farnsworth_letter_mult") { st.settings.farnsworth_letter_mult = v; }
-    if let Some(v) = json_float(body, "farnsworth_word_mult") { st.settings.farnsworth_word_mult = v; }
     if let Some(v) = json_bool(body, "use_external_switch") { st.settings.use_external_switch = v; }
-    if let Some(v) = json_bool(body, "farnsworth_enabled") { st.settings.farnsworth_enabled = v; }
     if let Some(v) = json_bool(body, "kb_enabled") { st.settings.kb_enabled = v; }
+
+    // Legacy Farnsworth compatibility for older frontends that still post toggle/multiplier settings.
+    let legacy_enabled = json_bool(body, "farnsworth_enabled");
+    let legacy_letter_mult = json_float(body, "farnsworth_letter_mult");
+    let legacy_word_mult = json_float(body, "farnsworth_word_mult");
+    if legacy_enabled.is_some() || legacy_letter_mult.is_some() || legacy_word_mult.is_some() {
+        st.settings.farnsworth_enabled = legacy_enabled.unwrap_or(st.settings.farnsworth_enabled);
+        if let Some(v) = legacy_letter_mult { st.settings.farnsworth_letter_mult = v; }
+        if let Some(v) = legacy_word_mult { st.settings.farnsworth_word_mult = v; }
+
+        if json_int(body, "farnsworth_wpm").is_none() {
+            if st.settings.farnsworth_enabled {
+                let legacy_mult = st
+                    .settings
+                    .farnsworth_letter_mult
+                    .max(st.settings.farnsworth_word_mult)
+                    .max(1.0);
+                st.settings.farnsworth_wpm = ((st.settings.wpm_target.max(5) as f64) / legacy_mult).round() as i32;
+            } else {
+                st.settings.farnsworth_wpm = st.settings.wpm_target;
+            }
+        }
+    }
+
+    st.settings.wpm_target = st.settings.wpm_target.max(5);
+    st.settings.farnsworth_wpm = st.settings.farnsworth_wpm.max(5).min(st.settings.wpm_target);
 
     st.save_settings();
     let json = st.settings_json();
