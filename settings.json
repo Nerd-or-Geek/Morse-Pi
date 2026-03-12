@@ -1,0 +1,20 @@
+{
+  "speaker_pin": 18,
+  "speaker_polarity": "positive",
+  "pin_mode": "single",
+  "data_pin": 17,
+  "dot_pin": 22,
+  "dash_pin": 27,
+  "ground_pin": null,
+  "use_external_switch": false,
+  "dot_freq": 700,
+  "dash_freq": 500,
+  "volume": 0.75,
+  "wpm_target": 20,
+  "theme": "dark",
+  "difficulty": "easy",
+  "quiz_categories": [
+    "words"
+  ],
+  "practice_chars": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+}

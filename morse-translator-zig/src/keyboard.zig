@@ -51,7 +51,8 @@ pub fn checkUsbHid() bool {
     if (now - hid_check_time < 5000) return usb_hid_available;
     hid_check_time = now;
     usb_hid_available = blk: {
-        std.fs.openFileAbsolute(USB_HID_DEVICE, .{}) catch break :blk false;
+        const f = std.fs.openFileAbsolute(USB_HID_DEVICE, .{}) catch break :blk false;
+        f.close();
         break :blk true;
     };
     return usb_hid_available;

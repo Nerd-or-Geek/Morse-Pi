@@ -137,7 +137,7 @@ fn beaconListener() void {
         };
 
         // Set receive timeout
-        const timeout = std.posix.timeval{ .sec = 2, .usec = 0 };
+        const timeout = std.posix.timeval{ .tv_sec = 2, .tv_usec = 0 };
         std.posix.setsockopt(sock, std.posix.SOL.SOCKET, std.posix.SO.RCVTIMEO, std.mem.asBytes(&timeout)) catch {};
 
         while (true) {

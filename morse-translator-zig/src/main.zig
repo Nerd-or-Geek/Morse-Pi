@@ -610,14 +610,14 @@ fn handleDecodeSubmit(stream: std.net.Stream, body: []const u8) void {
     const correct_phrase = state.current_phrase;
 
     // Compare uppercase
-    var ans_upper = state.gpa.alloc(u8, answer.len) catch &.{};
+    var ans_upper = state.gpa.alloc(u8, answer.len) catch return;
     defer state.gpa.free(ans_upper);
     for (answer, 0..) |c, i| ans_upper[i] = std.ascii.toUpper(c);
     // Trim
     const ans_trimmed = std.mem.trim(u8, ans_upper, " ");
     const phrase_trimmed = std.mem.trim(u8, correct_phrase, " ");
 
-    var phrase_upper = state.gpa.alloc(u8, phrase_trimmed.len) catch &.{};
+    var phrase_upper = state.gpa.alloc(u8, phrase_trimmed.len) catch return;
     defer state.gpa.free(phrase_upper);
     for (phrase_trimmed, 0..) |c, i| phrase_upper[i] = std.ascii.toUpper(c);
 
@@ -658,12 +658,12 @@ fn handleSubmitTest(stream: std.net.Stream, body: []const u8) void {
     const decoded = morse.decode(input_morse);
     defer state.gpa.free(decoded);
 
-    var decoded_upper = state.gpa.alloc(u8, decoded.len) catch &.{};
+    var decoded_upper = state.gpa.alloc(u8, decoded.len) catch return;
     defer state.gpa.free(decoded_upper);
     for (decoded, 0..) |c, i| decoded_upper[i] = std.ascii.toUpper(c);
 
     const expected = state.speed_phrase;
-    var expected_upper = state.gpa.alloc(u8, expected.len) catch &.{};
+    var expected_upper = state.gpa.alloc(u8, expected.len) catch return;
     defer state.gpa.free(expected_upper);
     for (expected, 0..) |c, i| expected_upper[i] = std.ascii.toUpper(c);
 

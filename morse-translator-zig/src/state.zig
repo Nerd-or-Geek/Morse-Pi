@@ -76,7 +76,7 @@ pub fn loadSettings() void {
         };
         if (obj.get("speaker_pin2")) |v| {
             settings.speaker_pin2 = if (v == .integer) @as(?i32, @intCast(v.integer)) else null;
-        };
+        }
         inline for (.{
             .{ "speaker_gnd_mode", "speaker_gnd_mode" },
             .{ "output_type", "output_type" },
@@ -107,7 +107,7 @@ pub fn loadSettings() void {
         }
         if (obj.get("ground_pin")) |v| {
             settings.ground_pin = if (v == .integer) @as(?i32, @intCast(v.integer)) else null;
-        };
+        }
         if (obj.get("volume")) |v| {
             settings.volume = switch (v) {
                 .float => v.float,
