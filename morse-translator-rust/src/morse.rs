@@ -163,7 +163,7 @@ pub fn random_phrase(difficulty: &str) -> String {
             let mut all: Vec<&str> = Vec::new();
             for s in &w.nouns { all.push(s); }
             for s in &w.verbs { all.push(s); }
-            let picked = all.choose(&mut rng).map(|s| **s).unwrap_or("TEST");
+            let picked = all.choose(&mut rng).map(|s| *s).unwrap_or("TEST");
             picked.to_uppercase()
         }
         "hard" => {

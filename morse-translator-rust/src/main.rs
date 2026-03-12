@@ -347,12 +347,12 @@ fn handle_gpio_poll(stream: &mut TcpStream) {
 fn handle_net_status(stream: &mut TcpStream) {
     let ip = network::get_local_ip();
     let device_name = state::STATE.lock().unwrap().settings.device_name.clone();
-    let now = std::time::SystemTime::now()
+    let _now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
 
-    let peers_json = network::peers_json();
+    let _peers_json = network::peers_json();
     // The peers_json already includes self — we need to also add inbox
     // For simplicity, build the full response
     let st = state::STATE.lock().unwrap();

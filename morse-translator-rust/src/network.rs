@@ -2,7 +2,7 @@
 //  Morse-Pi — Peer-to-peer networking via UDP beacons.
 // ============================================================================
 use crate::state;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::{SocketAddr, UdpSocket, TcpStream};
 use std::sync::Mutex;
 use std::thread;

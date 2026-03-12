@@ -7,7 +7,6 @@
 //  When compiled without the "gpio" feature, all functions are no-ops.
 // ============================================================================
 use crate::state;
-use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
