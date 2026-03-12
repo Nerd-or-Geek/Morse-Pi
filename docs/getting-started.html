@@ -33,6 +33,7 @@
 <aside class="sidebar">
   <div class="sidebar-title">On this page</div>
   <ul class="sidebar-links">
+    <li><a href="#quick-start">Quick Start</a></li>
     <li><a href="#features">Features</a></li>
     <li><a href="#requirements">Requirements</a></li>
     <li><a href="#installation">Installation</a></li>
@@ -51,10 +52,41 @@
 </aside>
 <main class="content">
 
-<!-- ── FEATURES ────────────────────────────────────────── -->
+<!-- ── QUICK START ──────────────────────────────────────── -->
 <h1>Getting Started</h1>
 <p class="subtitle">Everything you need to set up Morse-Pi and start practicing Morse code.</p>
 
+<h2 id="quick-start">Quick Start</h2>
+<p>SSH into your Raspberry Pi and run these three commands:</p>
+
+<p><strong>1. Update package lists</strong></p>
+<pre><code>sudo apt update</code></pre>
+
+<p><strong>2. Upgrade installed packages</strong></p>
+<pre><code>sudo apt upgrade -y</code></pre>
+
+<p><strong>3. Install Morse-Pi (Rust backend)</strong></p>
+<pre><code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/install-rust.sh | sudo bash</code></pre>
+
+<div class="callout success">
+  <div class="callout-title">✓ That's it</div>
+  The installer handles everything else — Rust toolchain, GPIO libraries, building the binary, and setting up auto-start on boot. Once it finishes, open your browser to the IP address shown on screen at port 5000:<br><br>
+  <code>http://&lt;your-pi-ip&gt;:5000</code>
+</div>
+
+<div class="callout info">
+  <div class="callout-title">ℹ Build time</div>
+  First build takes <strong>10–30 minutes on Pi Zero</strong>, around 3 minutes on Pi 4. The installer will show progress as it compiles.
+</div>
+
+<div class="callout warn">
+  <div class="callout-title">⚠ Reboot required for USB keyboard mode</div>
+  If you plan to use the USB HID keyboard feature, run <code>sudo reboot</code> after the installer finishes to activate the kernel modules.
+</div>
+
+<hr>
+
+<!-- ── FEATURES ────────────────────────────────────────── -->
 <h2 id="features">Features</h2>
 <table>
   <tr><th>Feature</th><th>Description</th></tr>
@@ -115,11 +147,6 @@
   <li><strong>Build</strong> — clones the repo and runs <code>cargo build --release --features gpio</code></li>
   <li><strong>Auto-start</strong> — creates a systemd service so Morse-Pi runs on every boot</li>
 </ol>
-
-<div class="callout info">
-  <div class="callout-title">ℹ Build time</div>
-  First build takes <strong>10–30 minutes on Pi Zero</strong>, ~3 minutes on Pi 4. Subsequent rebuilds are faster thanks to Cargo's incremental compilation.
-</div>
 
 <h3>Option B — Python backend</h3>
 <p>The original Python/Flask backend. Faster to install, easier to modify:</p>
