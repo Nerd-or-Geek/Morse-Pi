@@ -194,6 +194,9 @@ pub struct AppState {
     pub net_key_mode_enabled: bool,
     pub net_morse_buffer_str: String,
     pub net_morse_output_str: String,
+    pub net_receive_sender: String,
+    pub net_receive_morse_buffer_str: String,
+    pub net_receive_output_str: String,
     pub net_live_transmit_enabled: bool,
     pub net_live_transmit_target_ip: String,
     pub net_live_transmit_target_port: u16,
@@ -233,6 +236,9 @@ impl Default for AppState {
             net_key_mode_enabled: false,
             net_morse_buffer_str: String::new(),
             net_morse_output_str: String::new(),
+            net_receive_sender: String::new(),
+            net_receive_morse_buffer_str: String::new(),
+            net_receive_output_str: String::new(),
             net_live_transmit_enabled: false,
             net_live_transmit_target_ip: String::new(),
             net_live_transmit_target_port: 5000,
@@ -333,7 +339,7 @@ impl AppState {
         );
         let inbox_json = self.inbox_json();
         format!(
-            r#"{{"mode":"{}","cheat_sheet":{},"current_phrase":"{}","decode_result":"{}","decode_correct_answer":"{}","speed_phrase":"{}","speed_result":"{}","speed_morse_buffer":"{}","speed_morse_output":"{}","send_output":"{}","encode_output":"{}","encode_input":"{}","button_active":{},"current_morse_buffer":"{}","net_key_mode":{},"net_morse_buffer":"{}","net_morse_output":"{}","net_live_transmit_enabled":{},"net_live_transmit_target_ip":"{}","net_live_transmit_target_port":{},"kb_output":"{}","stats":{},"net_inbox":{}}}"#,
+            r#"{{"mode":"{}","cheat_sheet":{},"current_phrase":"{}","decode_result":"{}","decode_correct_answer":"{}","speed_phrase":"{}","speed_result":"{}","speed_morse_buffer":"{}","speed_morse_output":"{}","send_output":"{}","encode_output":"{}","encode_input":"{}","button_active":{},"current_morse_buffer":"{}","net_key_mode":{},"net_morse_buffer":"{}","net_morse_output":"{}","net_receive_sender":"{}","net_receive_morse_buffer":"{}","net_receive_output":"{}","net_live_transmit_enabled":{},"net_live_transmit_target_ip":"{}","net_live_transmit_target_port":{},"kb_output":"{}","stats":{},"net_inbox":{}}}"#,
             escape_json(&self.mode),
             self.cheat_sheet,
             escape_json(&self.current_phrase),
@@ -351,6 +357,9 @@ impl AppState {
             self.net_key_mode_enabled,
             escape_json(&self.net_morse_buffer_str),
             escape_json(&self.net_morse_output_str),
+            escape_json(&self.net_receive_sender),
+            escape_json(&self.net_receive_morse_buffer_str),
+            escape_json(&self.net_receive_output_str),
             self.net_live_transmit_enabled,
             escape_json(&self.net_live_transmit_target_ip),
             self.net_live_transmit_target_port,

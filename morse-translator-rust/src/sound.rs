@@ -6,7 +6,7 @@ use crate::gpio;
 use crate::keyboard;
 use crate::morse;
 use crate::state;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -754,6 +754,15 @@ static NET_MORSE_ACTIVE: AtomicBool = AtomicBool::new(false);
 static NET_MORSE_PRESS_TIME: once_cell::sync::Lazy<Mutex<Instant>> =
     once_cell::sync::Lazy::new(|| Mutex::new(Instant::now()));
 
+static NET_RECEIVE_BUFFER: once_cell::sync::Lazy<Mutex<Vec<char>>> =
+    once_cell::sync::Lazy::new(|| Mutex::new(Vec::new()));
+static NET_RECEIVE_ACTIVE: AtomicBool = AtomicBool::new(false);
+static NET_RECEIVE_PRESS_TIME: once_cell::sync::Lazy<Mutex<Instant>> =
+    once_cell::sync::Lazy::new(|| Mutex::new(Instant::now()));
+static NET_RECEIVE_LAST_SYM: once_cell::sync::Lazy<Mutex<String>> =
+    once_cell::sync::Lazy::new(|| Mutex::new("single".into()));
+static NET_RECEIVE_SEQ: AtomicU64 = AtomicU64::new(0);
+
 pub fn net_key_pressed() {
     NET_MORSE_ACTIVE.store(true, Ordering::Relaxed);
     *NET_MORSE_PRESS_TIME.lock().unwrap() = Instant::now();
@@ -814,23 +823,93 @@ pub fn clear_net_morse_buffers() {
     NET_MORSE_BUFFER.lock().unwrap().clear();
 }
 
+fn net_receive_push_symbol(symbol: char) -> u64 {
+    let snapshot = {
+        let mut buf = NET_RECEIVE_BUFFER.lock().unwrap();
+        buf.push(symbol);
+        buf.iter().collect::<String>()
+    };
+    state::STATE.lock().unwrap().net_receive_morse_buffer_str = snapshot;
+    NET_RECEIVE_SEQ.fetch_add(1, Ordering::Relaxed) + 1
+}
+
+fn net_receive_finalize_letter() {
+    let code = {
+        let mut buf = NET_RECEIVE_BUFFER.lock().unwrap();
+        if buf.is_empty() {
+            None
+        } else {
+            let s: String = buf.iter().collect();
+            buf.clear();
+            Some(s)
+        }
+    };
+
+    if let Some(morse_code) = code {
+        let ch = morse::morse_to_char(&morse_code);
+        let mut st = state::STATE.lock().unwrap();
+        st.net_receive_output_str.push(ch);
+        st.net_receive_morse_buffer_str.clear();
+    }
+}
+
+fn net_receive_finalize_word() {
+    let mut st = state::STATE.lock().unwrap();
+    if !st.net_receive_output_str.is_empty() && !st.net_receive_output_str.ends_with(' ') {
+        st.net_receive_output_str.push(' ');
+    }
+}
+
+fn net_receive_gap_worker(expected_seq: u64) {
+    let settings = state::STATE.lock().unwrap().settings.clone();
+
+    thread::sleep(get_letter_gap(&settings));
+    let seq_now = NET_RECEIVE_SEQ.load(Ordering::Relaxed);
+    if seq_now == expected_seq && !NET_RECEIVE_ACTIVE.load(Ordering::Relaxed) {
+        net_receive_finalize_letter();
+
+        thread::sleep(get_word_extra(&settings));
+        let seq_after_word_wait = NET_RECEIVE_SEQ.load(Ordering::Relaxed);
+        if seq_after_word_wait == expected_seq && !NET_RECEIVE_ACTIVE.load(Ordering::Relaxed) {
+            net_receive_finalize_word();
+        }
+    }
+}
+
 /// Receive a live key-down event from a remote peer — start tone indefinitely.
 pub fn net_live_receive_key_down(sym: &str) {
-    if !radio_receive_enabled() { return; }
-    let freq = tone_freq_for_symbol(sym);
-    play_tone(freq, None);
+    NET_RECEIVE_ACTIVE.store(true, Ordering::Relaxed);
+    *NET_RECEIVE_PRESS_TIME.lock().unwrap() = Instant::now();
+    *NET_RECEIVE_LAST_SYM.lock().unwrap() = sym.to_string();
+
+    if radio_receive_enabled() {
+        let freq = tone_freq_for_symbol(sym);
+        play_tone(freq, None);
+    }
     state::STATE.lock().unwrap().button_active = true;
 }
 
 /// Receive a live key-up event from a remote peer — stop tone immediately.
 pub fn net_live_receive_key_up() {
-    if !radio_receive_enabled() {
-        stop_tone();
-        state::STATE.lock().unwrap().button_active = false;
-        return;
-    }
+    let was_active = NET_RECEIVE_ACTIVE.swap(false, Ordering::Relaxed);
     stop_tone();
     state::STATE.lock().unwrap().button_active = false;
+    if !was_active { return; }
+
+    let last_sym = NET_RECEIVE_LAST_SYM.lock().unwrap().clone();
+    let symbol = match last_sym.as_str() {
+        "dot" | "." => '.',
+        "dash" | "-" => '-',
+        _ => {
+            let duration = NET_RECEIVE_PRESS_TIME.lock().unwrap().elapsed();
+            let wpm = state::STATE.lock().unwrap().settings.wpm_target;
+            let dot_unit = get_dot_unit(wpm);
+            if duration < dot_unit * 2 { '.' } else { '-' }
+        }
+    };
+
+    let seq = net_receive_push_symbol(symbol);
+    thread::spawn(move || net_receive_gap_worker(seq));
 }
 
 /// Forward a live key_down or key_up event to the peer, if live transmit is active.
@@ -856,7 +935,7 @@ fn send_live_key_to_peer(pressed: bool, sym: &str) {
 /// Play a live morse symbol (. or -) from a remote peer.
 pub fn play_live_morse_symbol(symbol: &str) {
     if symbol != "." && symbol != "-" { return; }
-    
+
     let wpm = state::STATE.lock().unwrap().settings.wpm_target;
     let dot_unit = get_dot_unit(wpm);
     let freq = if symbol == "." {
@@ -864,8 +943,21 @@ pub fn play_live_morse_symbol(symbol: &str) {
     } else {
         state::STATE.lock().unwrap().settings.dash_freq as u32
     };
-    
+
     let duration = if symbol == "." { dot_unit } else { dot_unit * 3 };
-    play_tone(freq, Some(duration));
+    NET_RECEIVE_ACTIVE.store(true, Ordering::Relaxed);
+    state::STATE.lock().unwrap().button_active = true;
+
+    if radio_receive_enabled() {
+        play_tone(freq, Some(duration));
+    } else {
+        thread::sleep(duration);
+    }
+
+    NET_RECEIVE_ACTIVE.store(false, Ordering::Relaxed);
+    state::STATE.lock().unwrap().button_active = false;
+
+    let seq = net_receive_push_symbol(if symbol == "." { '.' } else { '-' });
+    thread::spawn(move || net_receive_gap_worker(seq));
 }
 

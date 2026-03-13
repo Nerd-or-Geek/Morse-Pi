@@ -135,6 +135,13 @@
     .dot { width:8px; height:8px; border-radius:50%; background:var(--text-dim); }
     .dot.ok { background:var(--accent3); box-shadow:var(--glow-green); }
     .dot.live { background:var(--accent); box-shadow:var(--glow); }
+    .rx-box {
+      min-height:42px; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
+      background:var(--bg); color:var(--text); font-family:'Share Tech Mono',monospace;
+      line-height:1.45; word-break:break-word;
+    }
+    .rx-box.morse { letter-spacing:.12em; color:var(--accent); }
+    .rx-box.text { min-height:70px; white-space:pre-wrap; }
     .toast-wrap { position:fixed; right:18px; bottom:18px; display:flex; flex-direction:column; gap:8px; z-index:9999; }
     .toast {
       background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:11px 14px;
@@ -208,6 +215,27 @@
           <div class="pill"><span class="dot" id="key-dot"></span> Key Active</div>
         </div>
 
+        <div class="row" style="margin-top:12px;">
+          <div class="field" style="flex:1; min-width:100%;">
+            <div class="label">Incoming Sender</div>
+            <div class="rx-box" id="rx-sender">Waiting for incoming transmission…</div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="field" style="flex:1; min-width:100%;">
+            <div class="label">Incoming Morse Buffer</div>
+            <div class="rx-box morse" id="rx-morse">—</div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="field" style="flex:1; min-width:100%;">
+            <div class="label">Decoded Incoming Text</div>
+            <div class="rx-box text" id="rx-text">Waiting for incoming Morse…</div>
+          </div>
+        </div>
+
         <div class="key-row" id="live-keys"></div>
         <div class="hint">Keyboard shortcuts: <strong>Space</strong> for straight key, <strong>Z</strong>/<strong>X</strong> for dot/dash in iambic mode. Physical GPIO keying follows the same live switches.</div>
       </div>
@@ -275,7 +303,11 @@
 <script>
 'use strict';
 
-let state = JSON.parse(document.getElementById('init-state').textContent);
+let state = Object.assign({
+  net_receive_sender:'',
+  net_receive_morse_buffer:'',
+  net_receive_output:''
+}, JSON.parse(document.getElementById('init-state').textContent));
 let settings = JSON.parse(document.getElementById('init-settings').textContent);
 let peers = [];
 let selfInfo = null;
@@ -423,7 +455,7 @@ function updateStatus(){
   const live=document.getElementById('live-display');
   live.className='live-display'+(active?' active':'');
   live.innerHTML = active
-    ? '<span style="color:var(--accent3);">● TRANSMITTING LIVE</span>'
+    ? '<span style="color:var(--accent3);">● LIVE KEY ACTIVE</span>'
     : `<div><div style="color:var(--accent);font-family:'Orbitron',monospace;font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;">Target</div><div>${esc(target)}</div></div>`;
 
   document.getElementById('radio-dot').className='dot'+(state.net_live_transmit_enabled?' live':'');
@@ -431,6 +463,13 @@ function updateStatus(){
   document.getElementById('target-hint').innerHTML = state.net_live_transmit_enabled
     ? `Live link armed for <strong>${esc(target)}</strong>. Local sidetone is <strong>${settings.radio_local_monitor?'on':'off'}</strong>, remote send is <strong>${settings.radio_remote_monitor?'on':'off'}</strong>, and receive audio is <strong>${settings.radio_receive_enabled?'on':'off'}</strong>.`
     : 'Choose a peer, arm the live link, and key away.';
+
+  const rxSender = (state.net_receive_sender || '').trim();
+  const rxMorse = (state.net_receive_morse_buffer || '').trim();
+  const rxText = state.net_receive_output || '';
+  document.getElementById('rx-sender').textContent = rxSender || 'Waiting for incoming transmission…';
+  document.getElementById('rx-morse').textContent = rxMorse || '—';
+  document.getElementById('rx-text').textContent = rxText || 'Waiting for incoming Morse…';
 }
 function renderAll(){ updateSummary(); updateStatus(); }
 function selectPeer(value){
@@ -581,6 +620,11 @@ function refreshAll(showToast=false){
     state = Object.assign({}, state, s || {});
     peers = (n && n.peers) || [];
     selfInfo = n && n.self;
+    if(n){
+      state.net_receive_sender = typeof n.net_receive_sender==='string' ? n.net_receive_sender : (state.net_receive_sender || '');
+      state.net_receive_morse_buffer = typeof n.net_receive_morse_buffer==='string' ? n.net_receive_morse_buffer : '';
+      state.net_receive_output = typeof n.net_receive_output==='string' ? n.net_receive_output : '';
+    }
     syncSelectedPeerFromState();
     renderAll();
     if(showToast) toast('Radio window refreshed','info',1400);

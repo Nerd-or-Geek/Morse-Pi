@@ -393,23 +393,36 @@ fn handle_net_status(stream: &mut TcpStream) {
     // Build response from peers_json() (contains self + peers), then append inbox
     let mut base = network::peers_json();
 
-    let st = state::STATE.lock().unwrap();
-    let inbox: Vec<String> = st.net_inbox.iter().rev().map(|msg| {
-        format!(
-            r#"{{"sender":"{}","text":"{}","morse":"{}","ts":{}}}"#,
-            escape_json(&msg.sender),
-            escape_json(&msg.text),
-            escape_json(&msg.morse),
-            msg.ts,
+    let (inbox, rx_sender, rx_buffer, rx_output) = {
+        let st = state::STATE.lock().unwrap();
+        let inbox: Vec<String> = st.net_inbox.iter().rev().map(|msg| {
+            format!(
+                r#"{{"sender":"{}","text":"{}","morse":"{}","ts":{}}}"#,
+                escape_json(&msg.sender),
+                escape_json(&msg.text),
+                escape_json(&msg.morse),
+                msg.ts,
+            )
+        }).collect();
+        (
+            inbox,
+            st.net_receive_sender.clone(),
+            st.net_receive_morse_buffer_str.clone(),
+            st.net_receive_output_str.clone(),
         )
-    }).collect();
-    drop(st);
+    };
 
     // peers_json() ends with "}" — strip it and append inbox
     if base.ends_with('}') {
         base.pop();
     }
-    base.push_str(&format!(r#","inbox":[{}]}}"#, inbox.join(",")));
+    base.push_str(&format!(
+        r#",\"inbox\":[{}],\"net_receive_sender\":\"{}\",\"net_receive_morse_buffer\":\"{}\",\"net_receive_output\":\"{}\"}}"#,
+        inbox.join(","),
+        escape_json(&rx_sender),
+        escape_json(&rx_buffer),
+        escape_json(&rx_output),
+    ));
     send_json(stream, &base);
 }
 
@@ -1095,25 +1108,32 @@ fn handle_net_live_key(stream: &mut TcpStream, body: &str) {
 fn handle_net_receive_live_key(stream: &mut TcpStream, body: &str) {
     let pressed = json_bool(body, "pressed").unwrap_or(false);
     let sym = json_str(body, "sym").unwrap_or("single").to_string();
+    let sender_name = json_str(body, "sender_name").unwrap_or("").trim().to_string();
+
+    if !sender_name.is_empty() {
+        state::STATE.lock().unwrap().net_receive_sender = sender_name;
+    }
+
     if pressed {
-        thread::spawn(move || { sound::net_live_receive_key_down(&sym); });
+        sound::net_live_receive_key_down(&sym);
     } else {
         sound::net_live_receive_key_up();
     }
+
     send_json(stream, r#"{"ok":true}"#);
 }
 
 fn handle_net_receive_live_symbol(stream: &mut TcpStream, body: &str) {
     let symbol = json_str(body, "symbol").unwrap_or("").to_string();
+    let sender_name = json_str(body, "sender_name").unwrap_or("").trim().to_string();
     
     if symbol != "." && symbol != "-" {
         send_json(stream, r#"{"ok":false,"error":"invalid symbol"}"#);
         return;
     }
 
-    if !state::STATE.lock().unwrap().settings.radio_receive_enabled {
-        send_json(stream, r#"{"ok":true}"#);
-        return;
+    if !sender_name.is_empty() {
+        state::STATE.lock().unwrap().net_receive_sender = sender_name;
     }
     
     // Play the symbol immediately
