@@ -197,6 +197,9 @@ pub struct AppState {
     pub net_receive_sender: String,
     pub net_receive_morse_buffer_str: String,
     pub net_receive_output_str: String,
+    pub net_tx_mode: String,
+    pub net_selected_peer_uuids: Vec<String>,
+    pub net_muted_peer_uuids: Vec<String>,
     pub net_live_transmit_enabled: bool,
     pub net_live_transmit_target_ip: String,
     pub net_live_transmit_target_port: u16,
@@ -239,6 +242,9 @@ impl Default for AppState {
             net_receive_sender: String::new(),
             net_receive_morse_buffer_str: String::new(),
             net_receive_output_str: String::new(),
+            net_tx_mode: "single".into(),
+            net_selected_peer_uuids: Vec::new(),
+            net_muted_peer_uuids: Vec::new(),
             net_live_transmit_enabled: false,
             net_live_transmit_target_ip: String::new(),
             net_live_transmit_target_port: 5000,
@@ -338,8 +344,10 @@ impl AppState {
             self.stats.best_streak, self.stats.total_chars,
         );
         let inbox_json = self.inbox_json();
+        let selected_json = Self::string_vec_json(&self.net_selected_peer_uuids);
+        let muted_json = Self::string_vec_json(&self.net_muted_peer_uuids);
         format!(
-            r#"{{"mode":"{}","cheat_sheet":{},"current_phrase":"{}","decode_result":"{}","decode_correct_answer":"{}","speed_phrase":"{}","speed_result":"{}","speed_morse_buffer":"{}","speed_morse_output":"{}","send_output":"{}","encode_output":"{}","encode_input":"{}","button_active":{},"current_morse_buffer":"{}","net_key_mode":{},"net_morse_buffer":"{}","net_morse_output":"{}","net_receive_sender":"{}","net_receive_morse_buffer":"{}","net_receive_output":"{}","net_live_transmit_enabled":{},"net_live_transmit_target_ip":"{}","net_live_transmit_target_port":{},"kb_output":"{}","stats":{},"net_inbox":{}}}"#,
+            r#"{{"mode":"{}","cheat_sheet":{},"current_phrase":"{}","decode_result":"{}","decode_correct_answer":"{}","speed_phrase":"{}","speed_result":"{}","speed_morse_buffer":"{}","speed_morse_output":"{}","send_output":"{}","encode_output":"{}","encode_input":"{}","button_active":{},"current_morse_buffer":"{}","net_key_mode":{},"net_morse_buffer":"{}","net_morse_output":"{}","net_receive_sender":"{}","net_receive_morse_buffer":"{}","net_receive_output":"{}","net_tx_mode":"{}","net_selected_peers":{},"net_muted_peers":{},"net_live_transmit_enabled":{},"net_live_transmit_target_ip":"{}","net_live_transmit_target_port":{},"kb_output":"{}","stats":{},"net_inbox":{}}}"#,
             escape_json(&self.mode),
             self.cheat_sheet,
             escape_json(&self.current_phrase),
@@ -360,6 +368,9 @@ impl AppState {
             escape_json(&self.net_receive_sender),
             escape_json(&self.net_receive_morse_buffer_str),
             escape_json(&self.net_receive_output_str),
+            escape_json(&self.net_tx_mode),
+            selected_json,
+            muted_json,
             self.net_live_transmit_enabled,
             escape_json(&self.net_live_transmit_target_ip),
             self.net_live_transmit_target_port,
@@ -388,6 +399,14 @@ impl AppState {
             )
         }).collect();
         format!("[{}]", entries.join(","))
+    }
+
+    fn string_vec_json(values: &[String]) -> String {
+        let items: Vec<String> = values
+            .iter()
+            .map(|v| format!("\"{}\"", escape_json(v)))
+            .collect();
+        format!("[{}]", items.join(","))
     }
 
     pub fn init(&mut self) {

@@ -20,6 +20,7 @@ pub struct Peer {
     pub name: String,
     pub ip: String,
     pub port: u16,
+    pub on_air: bool,
     pub last_seen: i64,
 }
 
@@ -89,12 +90,16 @@ fn beacon_sender() {
 
     loop {
         let ip = get_local_ip();
-        let device_name = state::STATE.lock().unwrap().settings.device_name.clone();
+        let (device_name, on_air) = {
+            let st = state::STATE.lock().unwrap();
+            (st.settings.device_name.clone(), st.net_live_transmit_enabled)
+        };
         let pkt = format!(
-            r#"{{"type":"morse_pi_beacon","uuid":"{}","name":"{}","ip":"{}","port":5000}}"#,
+            r#"{{"type":"morse_pi_beacon","uuid":"{}","name":"{}","ip":"{}","port":5000,"on_air":{}}}"#,
             device_uuid(),
             device_name,
             ip,
+            on_air,
         );
         let _ = sock.send_to(pkt.as_bytes(), broadcast_addr);
         thread::sleep(Duration::from_secs(3));
@@ -148,6 +153,7 @@ fn process_beacon(data: &[u8]) {
 
     let name_str = extract_json_string(text, "name").unwrap_or_else(|| "Unknown".into());
     let ip_str = extract_json_string(text, "ip").unwrap_or_else(|| "0.0.0.0".into());
+    let on_air = extract_json_bool(text, "on_air").unwrap_or(false);
 
     let mut peers = PEERS.lock().unwrap();
 
@@ -155,6 +161,7 @@ fn process_beacon(data: &[u8]) {
     if let Some(peer) = peers.iter_mut().find(|p| p.uuid == uuid_str) {
         peer.name = name_str;
         peer.ip = ip_str;
+        peer.on_air = on_air;
         peer.last_seen = current_millis();
         return;
     }
@@ -165,6 +172,7 @@ fn process_beacon(data: &[u8]) {
             name: name_str,
             ip: ip_str,
             port: 5000,
+            on_air,
             last_seen: current_millis(),
         });
     }
@@ -185,30 +193,53 @@ fn extract_json_string(data: &str, key: &str) -> Option<String> {
     Some(rest[..end].to_string())
 }
 
+fn extract_json_bool(data: &str, key: &str) -> Option<bool> {
+    let needle = format!("\"{}\":", key);
+    let idx = data.find(&needle)?;
+    let start = idx + needle.len();
+    let rest = data[start..].trim_start();
+    if rest.starts_with("true") {
+        Some(true)
+    } else if rest.starts_with("false") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+pub fn peers_snapshot() -> Vec<Peer> {
+    PEERS.lock().unwrap().clone()
+}
+
 /// Write peers list as JSON.
 pub fn peers_json() -> String {
     let now = current_millis();
     let ip = get_local_ip();
-    let device_name = state::STATE.lock().unwrap().settings.device_name.clone();
+    let (device_name, self_on_air) = {
+        let st = state::STATE.lock().unwrap();
+        (st.settings.device_name.clone(), st.net_live_transmit_enabled)
+    };
     let peers = PEERS.lock().unwrap();
 
     let peer_entries: Vec<String> = peers.iter().map(|p| {
         let ago = (now - p.last_seen) as f64 / 1000.0;
         format!(
-            r#"{{"uuid":"{}","name":"{}","ip":"{}","port":{},"last_seen_ago":{:.1}}}"#,
+            r#"{{"uuid":"{}","name":"{}","ip":"{}","port":{},"on_air":{},"last_seen_ago":{:.1}}}"#,
             state::escape_json(&p.uuid),
             state::escape_json(&p.name),
             state::escape_json(&p.ip),
             p.port,
+            p.on_air,
             ago,
         )
     }).collect();
 
     format!(
-        r#"{{"self":{{"uuid":"{}","name":"{}","ip":"{}","port":5000}},"peers":[{}]}}"#,
+        r#"{{"self":{{"uuid":"{}","name":"{}","ip":"{}","port":5000,"on_air":{}}},"peers":[{}]}}"#,
         state::escape_json(device_uuid()),
         state::escape_json(&device_name),
         state::escape_json(&ip),
+        self_on_air,
         peer_entries.join(","),
     )
 }
@@ -247,16 +278,17 @@ pub fn send_to_peer_http(ip: &str, port: u16, payload: &str) -> Result<(), Strin
 
 /// Send a live-key event (key_down / key_up) to a peer — single attempt, short timeout.
 /// Used for real-time transmission forwarding; latency matters more than reliability.
-pub fn send_live_key_http(ip: &str, port: u16, pressed: bool, sym: &str, sender_name: &str) {
+pub fn send_live_key_http(ip: &str, port: u16, pressed: bool, sym: &str, sender_name: &str, sender_uuid: &str) {
     let addr: SocketAddr = match format!("{}:{}", ip, port).parse() {
         Ok(a) => a,
         Err(_) => return,
     };
     let payload = format!(
-        r#"{{"pressed":{},"sym":"{}","sender_name":"{}"}}"#,
+        r#"{{"pressed":{},"sym":"{}","sender_name":"{}","sender_uuid":"{}"}}"#,
         pressed,
         state::escape_json(sym),
         sender_name.replace('\\', "\\\\").replace('"', "\\\""),
+        state::escape_json(sender_uuid),
     );
     if let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(600)) {
         let http_req = format!(

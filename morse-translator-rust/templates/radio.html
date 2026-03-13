@@ -182,13 +182,17 @@
       <div class="panel">
         <div class="title">Live link</div>
         <div class="row">
-          <div class="field" style="flex:1.4;">
+          <div class="field" style="flex:1.25;">
             <div class="label">Target Raspberry Pi</div>
             <select id="peer-select" onchange="selectPeer(this.value)"></select>
           </div>
           <div class="field" style="max-width:220px;">
             <div class="label">Live Session</div>
             <div class="seg" id="seg-live"></div>
+          </div>
+          <div class="field" style="max-width:320px;">
+            <div class="label">Transmit Mode</div>
+            <div class="seg" id="seg-tx-mode"></div>
           </div>
         </div>
         <div class="hint" id="target-hint">Choose a peer, arm the live link, and key away.</div>
@@ -306,7 +310,10 @@
 let state = Object.assign({
   net_receive_sender:'',
   net_receive_morse_buffer:'',
-  net_receive_output:''
+  net_receive_output:'',
+  net_tx_mode:'single',
+  net_selected_peers:[],
+  net_muted_peers:[]
 }, JSON.parse(document.getElementById('init-state').textContent));
 let settings = JSON.parse(document.getElementById('init-settings').textContent);
 let peers = [];
@@ -319,6 +326,10 @@ let liveSpaceDown = false, liveDotDown = false, liveDashDown = false;
 let pollBusy = false;
 let farnModeEnabled = false;
 let lastFarnWpm = 20;
+let txMode = (typeof state.net_tx_mode==='string' && state.net_tx_mode) ? state.net_tx_mode : 'single';
+let selectedTxPeers = new Set(Array.isArray(state.net_selected_peers) ? state.net_selected_peers : []);
+let mutedPeers = new Set(Array.isArray(state.net_muted_peers) ? state.net_muted_peers : []);
+let lastOffAirToastTs = 0;
 
 const DEF = {
   device_name:'Morse Pi',
@@ -357,6 +368,12 @@ function boolSeg(elId, value, onLabel, offLabel, onClick, good=false){
     <button class="${cls} ${!value?'active':''}" onclick="${onClick}(false)">${offLabel}</button>
     <button class="${cls} ${value?'active':''}" onclick="${onClick}(true)">${onLabel}</button>`;
 }
+function txModeSeg(){
+  document.getElementById('seg-tx-mode').innerHTML = `
+    <button class="${txMode==='single'?'active':''}" onclick="setTxMode('single')">Single</button>
+    <button class="${txMode==='selected'?'active':''}" onclick="setTxMode('selected')">Selected</button>
+    <button class="${txMode==='all_on_air'?'active':''}" onclick="setTxMode('all_on_air')">All On-Air</button>`;
+}
 function pinModeSeg(){
   document.getElementById('seg-pin-mode').innerHTML = `
     <button class="${settings.pin_mode!=='dual'?'active':''}" onclick="setPinMode('single')">Straight Key</button>
@@ -364,6 +381,54 @@ function pinModeSeg(){
 }
 function clampWpm(v, fallback=20){
   return Math.max(5, Math.min(60, parseInt(v, 10) || fallback));
+}
+function persistLiveConfig(okMsg=''){
+  const payload = {
+    tx_mode: txMode,
+    selected_peers: Array.from(selectedTxPeers),
+    muted_peers: Array.from(mutedPeers)
+  };
+  return api('/net_live_config','POST',payload).then(res=>{
+    if(res && typeof res.net_tx_mode==='string') txMode = res.net_tx_mode;
+    if(res && Array.isArray(res.net_selected_peers)) selectedTxPeers = new Set(res.net_selected_peers);
+    if(res && Array.isArray(res.net_muted_peers)) mutedPeers = new Set(res.net_muted_peers);
+    state.net_tx_mode = txMode;
+    state.net_selected_peers = Array.from(selectedTxPeers);
+    state.net_muted_peers = Array.from(mutedPeers);
+    renderAll();
+    if(okMsg) toast(okMsg,'success',1400);
+    return res;
+  }).catch(()=>{
+    toast('Failed to update live config','error');
+  });
+}
+function setTxMode(mode){
+  if(mode!=='single' && mode!=='selected' && mode!=='all_on_air') return;
+  txMode = mode;
+  persistLiveConfig('Transmit mode updated');
+}
+function toggleTxPeer(uuid, label){
+  if(!uuid) return;
+  if(selectedTxPeers.has(uuid)) selectedTxPeers.delete(uuid);
+  else selectedTxPeers.add(uuid);
+  if(txMode!=='selected') txMode = 'selected';
+  persistLiveConfig(`TX selection updated${label ? ': '+label : ''}`);
+}
+function toggleMutePeer(uuid, label){
+  if(!uuid) return;
+  if(mutedPeers.has(uuid)) {
+    mutedPeers.delete(uuid);
+    persistLiveConfig(`Unmuted ${label || 'peer'}`);
+  } else {
+    mutedPeers.add(uuid);
+    persistLiveConfig(`Muted ${label || 'peer'}`);
+  }
+}
+function toggleTxPeerFromButton(btn){
+  toggleTxPeer(btn.dataset.uuid || '', btn.dataset.label || 'peer');
+}
+function toggleMutePeerFromButton(btn){
+  toggleMutePeer(btn.dataset.uuid || '', btn.dataset.label || 'peer');
 }
 function renderPeerSelect(){
   const select=document.getElementById('peer-select');
@@ -383,12 +448,23 @@ function renderPeers(){
   }
   list.innerHTML=peers.map(peer=>{
     const value=`${peer.ip}:${peer.port}`;
+    const uuid = peer.uuid || '';
+    const onAir = !!peer.on_air;
+    const txSelected = selectedTxPeers.has(uuid);
+    const muted = mutedPeers.has(uuid);
+    const onAirTxt = onAir ? 'ON AIR' : 'OFF AIR';
+    const onAirColor = onAir ? 'var(--accent3)' : 'var(--text-dim)';
     return `<div class="peer">
       <div>
         <strong>${esc(peer.name)}</strong>
-        <div class="meta">${esc(peer.ip)}:${peer.port} • seen ${peer.last_seen_ago}s ago</div>
+        <div class="meta">${esc(peer.ip)}:${peer.port} • seen ${peer.last_seen_ago}s ago • <span style="color:${onAirColor}">${onAirTxt}</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+          <button class="btn" data-value="${esc(value)}" data-label="${esc(peer.name)}" onclick="quickSelectFromButton(this)">Target</button>
+          <button class="btn ${txSelected?'primary':''}" data-uuid="${esc(uuid)}" data-label="${esc(peer.name)}" ${!onAir?'disabled':''} onclick="toggleTxPeerFromButton(this)">${txSelected?'TX ✓':'TX'}</button>
+          <button class="btn ${muted?'warn':''}" data-uuid="${esc(uuid)}" data-label="${esc(peer.name)}" onclick="toggleMutePeerFromButton(this)">${muted?'Unmute':'Mute'}</button>
+        </div>
       </div>
-      <button class="btn" data-value="${esc(value)}" data-label="${esc(peer.name)}" onclick="quickSelectFromButton(this)">Select</button>
+      <div class="pill"><span class="dot ${onAir?'ok':''}"></span>${onAir?'On Air':'Standby'}</div>
     </div>`;
   }).join('');
 }
@@ -442,6 +518,7 @@ function updateSummary(){
 }
 function updateStatus(){
   boolSeg('seg-live', !!state.net_live_transmit_enabled, 'On Air', 'Off Air', 'toggleLive', true);
+  txModeSeg();
   boolSeg('seg-local', !!settings.radio_local_monitor, 'On', 'Off', 'setLocalMonitor', true);
   boolSeg('seg-remote', !!settings.radio_remote_monitor, 'On', 'Off', 'setRemoteMonitor', true);
   boolSeg('seg-receive', !!settings.radio_receive_enabled, 'On', 'Off', 'setReceiveMonitor', true);
@@ -460,9 +537,14 @@ function updateStatus(){
 
   document.getElementById('radio-dot').className='dot'+(state.net_live_transmit_enabled?' live':'');
   document.getElementById('key-dot').className='dot'+(active?' ok':'');
+  const txModeHint = txMode==='all_on_air'
+    ? 'TX to all peers currently on-air'
+    : txMode==='selected'
+      ? `TX to ${selectedTxPeers.size} selected peer(s)`
+      : `TX target: ${esc(target)}`;
   document.getElementById('target-hint').innerHTML = state.net_live_transmit_enabled
-    ? `Live link armed for <strong>${esc(target)}</strong>. Local sidetone is <strong>${settings.radio_local_monitor?'on':'off'}</strong>, remote send is <strong>${settings.radio_remote_monitor?'on':'off'}</strong>, and receive audio is <strong>${settings.radio_receive_enabled?'on':'off'}</strong>.`
-    : 'Choose a peer, arm the live link, and key away.';
+    ? `You are <strong>ON AIR</strong>. ${txModeHint}. Local sidetone is <strong>${settings.radio_local_monitor?'on':'off'}</strong>, remote send is <strong>${settings.radio_remote_monitor?'on':'off'}</strong>, receive audio is <strong>${settings.radio_receive_enabled?'on':'off'}</strong>, muted peers: <strong>${mutedPeers.size}</strong>.`
+    : 'You are <strong>OFF AIR</strong>. Receive and transmit are both blocked until you switch On Air.';
 
   const rxSender = (state.net_receive_sender || '').trim();
   const rxMorse = (state.net_receive_morse_buffer || '').trim();
@@ -492,10 +574,12 @@ function quickSelectFromButton(btn){
   quickSelect(btn.dataset.value || '', btn.dataset.label || 'peer');
 }
 function toggleLive(enabled){
-  if(enabled && !selectedPeer){ toast('Select a Raspberry Pi first','error'); return; }
-  const body = enabled
-    ? { enabled:true, ip:selectedPeer.split(':')[0], port:parseInt(selectedPeer.split(':')[1]||'5000',10) }
-    : { enabled:false };
+  if(enabled && txMode==='single' && !selectedPeer){ toast('Select a target peer first (Single mode)','error'); return; }
+  const body = enabled ? { enabled:true } : { enabled:false };
+  if(enabled && selectedPeer){
+    body.ip = selectedPeer.split(':')[0];
+    body.port = parseInt(selectedPeer.split(':')[1]||'5000',10);
+  }
   api('/net_live_transmit_set','POST',body).then(res=>{
     state.net_live_transmit_enabled = !!res.enabled;
     state.net_live_transmit_target_ip = res.ip || '';
@@ -587,6 +671,14 @@ function testTiming(){
 }
 function keyButton(sym){ return sym==='single' ? document.getElementById('key-single-btn') : document.getElementById(`key-${sym}-btn`); }
 function liveKeyDown(sym){
+  if(!state.net_live_transmit_enabled){
+    const now = Date.now();
+    if(now - lastOffAirToastTs > 1200){
+      toast('Off Air: enable Live Session before transmitting','info',1700);
+      lastOffAirToastTs = now;
+    }
+    return;
+  }
   if(sym==='single'){ if(liveSpaceDown) return; liveSpaceDown=true; }
   if(sym==='dot'){ if(liveDotDown) return; liveDotDown=true; }
   if(sym==='dash'){ if(liveDashDown) return; liveDashDown=true; }
@@ -620,10 +712,18 @@ function refreshAll(showToast=false){
     state = Object.assign({}, state, s || {});
     peers = (n && n.peers) || [];
     selfInfo = n && n.self;
+    txMode = (n && typeof n.net_tx_mode==='string' && n.net_tx_mode) || state.net_tx_mode || txMode || 'single';
+    if(n && Array.isArray(n.net_selected_peers)) selectedTxPeers = new Set(n.net_selected_peers);
+    else if(Array.isArray(state.net_selected_peers)) selectedTxPeers = new Set(state.net_selected_peers);
+    if(n && Array.isArray(n.net_muted_peers)) mutedPeers = new Set(n.net_muted_peers);
+    else if(Array.isArray(state.net_muted_peers)) mutedPeers = new Set(state.net_muted_peers);
     if(n){
       state.net_receive_sender = typeof n.net_receive_sender==='string' ? n.net_receive_sender : (state.net_receive_sender || '');
       state.net_receive_morse_buffer = typeof n.net_receive_morse_buffer==='string' ? n.net_receive_morse_buffer : '';
       state.net_receive_output = typeof n.net_receive_output==='string' ? n.net_receive_output : '';
+      state.net_tx_mode = txMode;
+      state.net_selected_peers = Array.from(selectedTxPeers);
+      state.net_muted_peers = Array.from(mutedPeers);
     }
     syncSelectedPeerFromState();
     renderAll();

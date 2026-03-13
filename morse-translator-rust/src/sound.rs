@@ -6,6 +6,7 @@ use crate::gpio;
 use crate::keyboard;
 use crate::morse;
 use crate::state;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread;
@@ -915,21 +916,66 @@ pub fn net_live_receive_key_up() {
 /// Forward a live key_down or key_up event to the peer, if live transmit is active.
 /// Spawns a background thread so the caller is not blocked.
 fn send_live_key_to_peer(pressed: bool, sym: &str) {
-    let (enabled, remote_enabled, ip, port, dev_name) = {
+    let (enabled, remote_enabled, tx_mode, selected, ip, port, dev_name, dev_uuid) = {
         let st = state::STATE.lock().unwrap();
         (
             st.net_live_transmit_enabled,
             st.settings.radio_remote_monitor,
+            st.net_tx_mode.clone(),
+            st.net_selected_peer_uuids.clone(),
             st.net_live_transmit_target_ip.clone(),
             st.net_live_transmit_target_port,
             st.settings.device_name.clone(),
+            crate::network::device_uuid().to_string(),
         )
     };
-    if !enabled || !remote_enabled || ip.is_empty() { return; }
-    let sym = sym.to_string();
-    thread::spawn(move || {
-        crate::network::send_live_key_http(&ip, port, pressed, &sym, &dev_name);
-    });
+
+    if !enabled || !remote_enabled { return; }
+
+    let peers = crate::network::peers_snapshot();
+    let selected_set: HashSet<String> = selected.into_iter().collect();
+    let mut targets: Vec<(String, u16)> = Vec::new();
+
+    match tx_mode.as_str() {
+        "all_on_air" => {
+            for p in peers {
+                if p.on_air {
+                    targets.push((p.ip, p.port));
+                }
+            }
+        }
+        "selected" => {
+            for p in peers {
+                if selected_set.contains(&p.uuid) && p.on_air {
+                    targets.push((p.ip, p.port));
+                }
+            }
+            if targets.is_empty() && selected_set.is_empty() && !ip.is_empty() {
+                targets.push((ip, port));
+            }
+        }
+        _ => {
+            if !ip.is_empty() {
+                targets.push((ip, port));
+            }
+        }
+    }
+
+    let mut uniq = HashSet::new();
+    for (t_ip, t_port) in targets {
+        let key = format!("{}:{}", t_ip, t_port);
+        if !uniq.insert(key) { continue; }
+        let sym_copy = sym.to_string();
+        let name_copy = dev_name.clone();
+        let uuid_copy = dev_uuid.clone();
+        thread::spawn(move || {
+            crate::network::send_live_key_http(&t_ip, t_port, pressed, &sym_copy, &name_copy, &uuid_copy);
+        });
+    }
+}
+
+pub fn forward_live_key_to_peers(pressed: bool, sym: &str) {
+    send_live_key_to_peer(pressed, sym);
 }
 
 /// Play a live morse symbol (. or -) from a remote peer.

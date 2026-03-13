@@ -163,6 +163,21 @@ fn json_float(body: &str, key: &str) -> Option<f64> {
     json_str(body, key)?.parse().ok()
 }
 
+fn json_str_array(body: &str, key: &str) -> Option<Vec<String>> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    let arr = value.get(key)?.as_array()?;
+    let mut out = Vec::new();
+    for v in arr {
+        if let Some(s) = v.as_str() {
+            let t = s.trim();
+            if !t.is_empty() {
+                out.push(t.to_string());
+            }
+        }
+    }
+    Some(out)
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  TEMPLATE SERVING
 // ════════════════════════════════════════════════════════════════════════════
@@ -278,6 +293,7 @@ fn route_post(stream: &mut TcpStream, path: &str, body: &str) {
         "/net_clear_morse" => handle_net_clear_morse(stream),
         "/net_send_morse" => handle_net_send_morse(stream, body),
         "/net_live_transmit_set" => handle_net_live_transmit_set(stream, body),
+        "/net_live_config" => handle_net_live_config(stream, body),
         "/net_live_transmit_symbol" => handle_net_live_transmit_symbol(stream, body),
         "/net_receive_live_symbol" => handle_net_receive_live_symbol(stream, body),
         "/net_live_key" => handle_net_live_key(stream, body),
@@ -389,11 +405,19 @@ fn handle_gpio_poll(stream: &mut TcpStream) {
     send_json(stream, &json);
 }
 
+fn string_vec_json(values: &[String]) -> String {
+    let entries: Vec<String> = values
+        .iter()
+        .map(|v| format!("\"{}\"", escape_json(v)))
+        .collect();
+    format!("[{}]", entries.join(","))
+}
+
 fn handle_net_status(stream: &mut TcpStream) {
     // Build response from peers_json() (contains self + peers), then append inbox
     let mut base = network::peers_json();
 
-    let (inbox, rx_sender, rx_buffer, rx_output) = {
+    let (inbox, rx_sender, rx_buffer, rx_output, tx_mode, selected_json, muted_json) = {
         let st = state::STATE.lock().unwrap();
         let inbox: Vec<String> = st.net_inbox.iter().rev().map(|msg| {
             format!(
@@ -409,6 +433,9 @@ fn handle_net_status(stream: &mut TcpStream) {
             st.net_receive_sender.clone(),
             st.net_receive_morse_buffer_str.clone(),
             st.net_receive_output_str.clone(),
+            st.net_tx_mode.clone(),
+            string_vec_json(&st.net_selected_peer_uuids),
+            string_vec_json(&st.net_muted_peer_uuids),
         )
     };
 
@@ -417,11 +444,14 @@ fn handle_net_status(stream: &mut TcpStream) {
         base.pop();
     }
     base.push_str(&format!(
-        r#",\"inbox\":[{}],\"net_receive_sender\":\"{}\",\"net_receive_morse_buffer\":\"{}\",\"net_receive_output\":\"{}\"}}"#,
+        r#","inbox":[{}],"net_receive_sender":"{}","net_receive_morse_buffer":"{}","net_receive_output":"{}","net_tx_mode":"{}","net_selected_peers":{},"net_muted_peers":{}}}"#,
         inbox.join(","),
         escape_json(&rx_sender),
         escape_json(&rx_buffer),
         escape_json(&rx_output),
+        escape_json(&tx_mode),
+        selected_json,
+        muted_json,
     ));
     send_json(stream, &base);
 }
@@ -1016,7 +1046,12 @@ fn handle_net_live_transmit_set(stream: &mut TcpStream, body: &str) {
         } else {
             st.net_live_transmit_target_ip.clear();
             st.net_live_transmit_target_port = 5000;
+            st.button_active = false;
         }
+    }
+
+    if !enabled {
+        sound::stop_tone();
     }
     
     let json = format!(
@@ -1024,6 +1059,34 @@ fn handle_net_live_transmit_set(stream: &mut TcpStream, body: &str) {
         enabled,
         json_str(body, "ip").unwrap_or(""),
         port,
+    );
+    send_json(stream, &json);
+}
+
+fn handle_net_live_config(stream: &mut TcpStream, body: &str) {
+    let tx_mode = json_str(body, "tx_mode").unwrap_or("").to_string();
+    let selected = json_str_array(body, "selected_peers");
+    let muted = json_str_array(body, "muted_peers");
+
+    let mut st = state::STATE.lock().unwrap();
+
+    if tx_mode == "single" || tx_mode == "selected" || tx_mode == "all_on_air" {
+        st.net_tx_mode = tx_mode;
+    }
+    if let Some(v) = selected {
+        st.net_selected_peer_uuids = v;
+    }
+    if let Some(v) = muted {
+        st.net_muted_peer_uuids = v;
+    }
+
+    let selected_json = string_vec_json(&st.net_selected_peer_uuids);
+    let muted_json = string_vec_json(&st.net_muted_peer_uuids);
+    let json = format!(
+        r#"{{"ok":true,"net_tx_mode":"{}","net_selected_peers":{},"net_muted_peers":{}}}"#,
+        escape_json(&st.net_tx_mode),
+        selected_json,
+        muted_json,
     );
     send_json(stream, &json);
 }
@@ -1051,10 +1114,12 @@ fn handle_net_live_transmit_symbol(stream: &mut TcpStream, body: &str) {
     }
     
     let device_name = state::STATE.lock().unwrap().settings.device_name.clone();
+    let sender_uuid = network::device_uuid().to_string();
     let payload = format!(
-        r#"{{"symbol":"{}","sender_name":"{}"}}"#,
+        r#"{{"symbol":"{}","sender_name":"{}","sender_uuid":"{}"}}"#,
         symbol,
         escape_json(&device_name),
+        escape_json(&sender_uuid),
     );
     
     thread::spawn(move || {
@@ -1068,15 +1133,11 @@ fn handle_net_live_key(stream: &mut TcpStream, body: &str) {
     let pressed = json_bool(body, "pressed").unwrap_or(false);
     let sym = json_str(body, "sym").unwrap_or("single").to_string();
 
-    let (enabled, remote_enabled, local_monitor, ip, port, dev_name, freq) = {
+    let (enabled, local_monitor, freq) = {
         let st = state::STATE.lock().unwrap();
         (
             st.net_live_transmit_enabled,
-            st.settings.radio_remote_monitor,
             st.settings.radio_local_monitor,
-            st.net_live_transmit_target_ip.clone(),
-            st.net_live_transmit_target_port,
-            st.settings.device_name.clone(),
             if sym == "dash" {
                 st.settings.dash_freq as u32
             } else {
@@ -1084,6 +1145,15 @@ fn handle_net_live_key(stream: &mut TcpStream, body: &str) {
             },
         )
     };
+
+    if !enabled {
+        if !pressed {
+            sound::stop_tone();
+        }
+        state::STATE.lock().unwrap().button_active = false;
+        send_json(stream, r#"{"ok":true,"off_air":true}"#);
+        return;
+    }
 
     if pressed {
         if local_monitor {
@@ -1095,20 +1165,35 @@ fn handle_net_live_key(stream: &mut TcpStream, body: &str) {
         state::STATE.lock().unwrap().button_active = false;
     }
 
-    if enabled && remote_enabled && !ip.is_empty() {
-        let sym_to_send = sym.clone();
-        thread::spawn(move || {
-            network::send_live_key_http(&ip, port, pressed, &sym_to_send, &dev_name);
-        });
-    }
+    sound::forward_live_key_to_peers(pressed, &sym);
 
     send_json(stream, r#"{"ok":true}"#);
+}
+
+fn is_live_receive_allowed(sender_uuid: &str) -> bool {
+    let st = state::STATE.lock().unwrap();
+    if !st.net_live_transmit_enabled {
+        return false;
+    }
+    if !st.settings.radio_receive_enabled {
+        return false;
+    }
+    if !sender_uuid.is_empty() && st.net_muted_peer_uuids.iter().any(|u| u == sender_uuid) {
+        return false;
+    }
+    true
 }
 
 fn handle_net_receive_live_key(stream: &mut TcpStream, body: &str) {
     let pressed = json_bool(body, "pressed").unwrap_or(false);
     let sym = json_str(body, "sym").unwrap_or("single").to_string();
     let sender_name = json_str(body, "sender_name").unwrap_or("").trim().to_string();
+    let sender_uuid = json_str(body, "sender_uuid").unwrap_or("").trim().to_string();
+
+    if !is_live_receive_allowed(&sender_uuid) {
+        send_json(stream, r#"{"ok":true,"ignored":true}"#);
+        return;
+    }
 
     if !sender_name.is_empty() {
         state::STATE.lock().unwrap().net_receive_sender = sender_name;
@@ -1126,9 +1211,15 @@ fn handle_net_receive_live_key(stream: &mut TcpStream, body: &str) {
 fn handle_net_receive_live_symbol(stream: &mut TcpStream, body: &str) {
     let symbol = json_str(body, "symbol").unwrap_or("").to_string();
     let sender_name = json_str(body, "sender_name").unwrap_or("").trim().to_string();
+    let sender_uuid = json_str(body, "sender_uuid").unwrap_or("").trim().to_string();
     
     if symbol != "." && symbol != "-" {
         send_json(stream, r#"{"ok":false,"error":"invalid symbol"}"#);
+        return;
+    }
+
+    if !is_live_receive_allowed(&sender_uuid) {
+        send_json(stream, r#"{"ok":true,"ignored":true}"#);
         return;
     }
 
