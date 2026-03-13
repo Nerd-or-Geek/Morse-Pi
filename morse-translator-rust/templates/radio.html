@@ -195,7 +195,7 @@
             <div class="seg" id="seg-tx-mode"></div>
           </div>
         </div>
-        <div class="hint" id="target-hint">Choose a peer, arm the live link, and key away.</div>
+        <div class="hint" id="target-hint">Arm the live link, then choose a target or transmit mode and key away.</div>
 
         <div class="row" style="margin-top:14px;">
           <div class="field">
@@ -574,7 +574,6 @@ function quickSelectFromButton(btn){
   quickSelect(btn.dataset.value || '', btn.dataset.label || 'peer');
 }
 function toggleLive(enabled){
-  if(enabled && txMode==='single' && !selectedPeer){ toast('Select a target peer first (Single mode)','error'); return; }
   const body = enabled ? { enabled:true } : { enabled:false };
   if(enabled && selectedPeer){
     body.ip = selectedPeer.split(':')[0];
@@ -585,7 +584,11 @@ function toggleLive(enabled){
     state.net_live_transmit_target_ip = res.ip || '';
     state.net_live_transmit_target_port = res.port || 5000;
     updateStatus();
-    toast(enabled ? 'Live link armed' : 'Live link disarmed', enabled ? 'success' : 'info');
+    if(enabled && txMode==='single' && !selectedPeer){
+      toast('Live link armed. Select a target to transmit in Single mode.','info',2400);
+    } else {
+      toast(enabled ? 'Live link armed' : 'Live link disarmed', enabled ? 'success' : 'info');
+    }
   }).catch(()=>toast('Failed to toggle live link','error'));
 }
 function persistSetting(key, value, okMsg){
