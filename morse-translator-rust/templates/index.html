@@ -440,7 +440,7 @@
       <div class="status-pill"><div class="dot" id="btn-dot"></div>KEY</div>
       <button onclick="toggleTheme()" id="theme-btn" title="Toggle light/dark theme" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">&#9788; LIGHT</button>
       <button onclick="window.open('/diag','gpio_diag','width=560,height=820,resizable=yes,menubar=no,toolbar=no,location=no')" title="Open GPIO live diagnostic window" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">GPIO DIAG</button>
-      <button onclick="window.open('/radio','morse_radio','width=1180,height=900,resizable=yes,menubar=no,toolbar=no,location=no')" title="Open dedicated radio control window" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent3)';this.style.color='var(--accent3)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">RADIO WINDOW</button>
+      <button onclick="window.open('/network','morse_radio','width=1180,height=900,resizable=yes,menubar=no,toolbar=no,location=no')" title="Open dedicated radio control window" style="font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:.07em;padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text-dim);cursor:pointer;transition:border-color .15s,color .15s;" onmouseover="this.style.borderColor='var(--accent3)';this.style.color='var(--accent3)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">RADIO WINDOW</button>
     </div>
   </header>
 
@@ -452,6 +452,7 @@
     <button class="nav-btn" data-mode="keyboard"><span class="nav-icon">&#9000;</span>KB</button>
     <button class="nav-btn" data-mode="stats"><span class="nav-icon">&#9632;</span>STATS</button>
     <button class="nav-btn" data-mode="settings"><span class="nav-icon">&#9881;</span>CONFIG</button>
+    <button class="nav-btn" data-mode="radio"><span class="nav-icon">&#128246;</span>RADIO</button>
     <button class="nav-btn" data-mode="help"><span class="nav-icon">&#9432;</span>HELP</button>
   </nav>
 
@@ -566,7 +567,11 @@ function setMode(mode){
   api('/set_mode','POST',{mode}).then(s=>{state=s;renderNav();transitionContent();});
 }
 function renderNav(){
-  document.querySelectorAll('.nav-btn').forEach(btn=>{btn.classList.toggle('active',btn.dataset.mode===state.mode);});
+  document.querySelectorAll('.nav-btn').forEach(btn=>{
+    const mode = btn.dataset.mode;
+    const active = mode===state.mode || (mode==='radio' && state.mode==='network');
+    btn.classList.toggle('active', active);
+  });
 }
 
 // ── Smooth transition helper ───────────────────
@@ -612,7 +617,7 @@ function renderRadioLaunch(){
         </div>
       </div>
       <div class="btn-group" style="margin-top:12px;">
-        <button class="btn btn-success" onclick="window.open('/radio','morse_radio','width=1180,height=900,resizable=yes,menubar=no,toolbar=no,location=no')">Open Radio Window</button>
+        <button class="btn btn-success" onclick="window.open('/network','morse_radio','width=1180,height=900,resizable=yes,menubar=no,toolbar=no,location=no')">Open Radio Window</button>
         <button class="btn btn-ghost" onclick="window.open('/diag','gpio_diag','width=560,height=820,resizable=yes,menubar=no,toolbar=no,location=no')">GPIO Diag</button>
       </div>
     </div>`;
@@ -820,6 +825,7 @@ function renderSettings(){
   const single=s.pin_mode!=='dual';
   const charWpm=Math.max(5, parseInt(s.wpm_target, 10)||20);
   const farnWpm=Math.min(charWpm, Math.max(5, parseInt(s.farnsworth_wpm, 10)||charWpm));
+  const farnEnabled=farnWpm<charWpm;
   const charDotMs=Math.round(1200/charWpm);
   const farnDotMs=Math.round(1200/farnWpm);
   const standardSpacing=farnWpm===charWpm;
@@ -843,9 +849,17 @@ function renderSettings(){
             <div class="setting-help">This is the real Morse character speed. Dot = ${charDotMs} ms, dash = ${charDotMs*3} ms, and the straight-key dot/dash threshold is based on this speed.</div>
           </div>
           <div class="setting-row full">
+            <div class="setting-label">Farnsworth Timing</div>
+            <div class="segmented" style="max-width:420px;">
+              <button class="segmented-btn ${!farnEnabled?'active':''}" onclick="setFarnsworthEnabled(false)">Off (Standard)</button>
+              <button class="segmented-btn ${farnEnabled?'active':''}" onclick="setFarnsworthEnabled(true)">On (Extra Spacing)</button>
+            </div>
+            <div class="setting-help">Turn Farnsworth on to slow letter and word spacing while keeping character speed fast.</div>
+          </div>
+          <div class="setting-row full">
             <div class="setting-label">Farnsworth Speed (WPM)</div>
             <div class="setting-input-row">
-              <input class="input-field" type="number" id="s-farnsworth_wpm" value="${farnWpm}" min="5" max="${charWpm}" style="max-width:120px;">
+              <input class="input-field" type="number" id="s-farnsworth_wpm" value="${farnWpm}" min="5" max="${charWpm}" style="max-width:120px;" ${!farnEnabled?'disabled':''}>
             </div>
             <div class="setting-help">${standardSpacing
               ?`Set equal to Character Speed for standard timing. Current letter gap = ${farnDotMs*3} ms and total word gap = ${farnDotMs*7} ms.`
@@ -1997,6 +2011,19 @@ function attachHandlers(){
     const inp=document.getElementById('decode-answer');
     if(inp){inp.addEventListener('keydown',e=>{if(e.key==='Enter')submitDecode();});inp.focus();}
   }
+  if(state.mode==='settings'){
+    const charEl=document.getElementById('s-wpm_target');
+    const farnEl=document.getElementById('s-farnsworth_wpm');
+    if(charEl&&farnEl){
+      charEl.addEventListener('input',()=>{
+        const charWpm=Math.max(5, parseInt(charEl.value, 10) || settings.wpm_target || SETTINGS_DEFAULTS.wpm_target);
+        farnEl.max=String(charWpm);
+        if(farnEl.disabled){
+          farnEl.value=String(charWpm);
+        }
+      });
+    }
+  }
   if(state.mode==='speed'&&!showSpeedResult){startSpeedTimer();}
 }
 
@@ -2094,15 +2121,36 @@ function copyText(text){if(!text)return;navigator.clipboard?.writeText(text).the
 function setPinMode(mode){settings.pin_mode=mode;renderContent();}
 function setOutputType(type){settings.output_type=type;renderContent();}
 function setSpeakerGndMode(mode){settings.speaker_gnd_mode=mode;renderContent();}
+function setFarnsworthEnabled(enabled){
+  const charEl=document.getElementById('s-wpm_target');
+  const farnEl=document.getElementById('s-farnsworth_wpm');
+  const charWpm=Math.max(5, parseInt(charEl?.value, 10) || settings.wpm_target || SETTINGS_DEFAULTS.wpm_target);
+  settings.wpm_target=charWpm;
+
+  if(enabled){
+    if(charWpm<=5){
+      settings.farnsworth_wpm=charWpm;
+      toast('Increase Character Speed above 5 WPM to enable Farnsworth timing','warning',2600);
+    } else {
+      const current=Math.max(5, parseInt(farnEl?.value, 10) || settings.farnsworth_wpm || (charWpm-5));
+      settings.farnsworth_wpm=Math.max(5, Math.min(charWpm-1, current<charWpm?current:charWpm-1));
+    }
+  } else {
+    settings.farnsworth_wpm=charWpm;
+  }
+  renderContent();
+}
 function saveSettings(){
   const keys=['dot_freq','dash_freq','wpm_target','farnsworth_wpm','difficulty','data_pin','dot_pin','dash_pin'];
   const data={pin_mode:settings.pin_mode,output_type:settings.output_type,speaker_gnd_mode:settings.speaker_gnd_mode||'3v3',use_external_switch:settings.use_external_switch||false};
   keys.forEach(k=>{const el=document.getElementById('s-'+k);if(el)data[k]=el.value;});
   data.wpm_target = Math.max(5, parseInt(data.wpm_target, 10) || SETTINGS_DEFAULTS.wpm_target);
-  data.farnsworth_wpm = Math.min(
-    data.wpm_target,
-    Math.max(5, parseInt(data.farnsworth_wpm, 10) || data.wpm_target)
-  );
+  const farnInput = parseInt(data.farnsworth_wpm, 10);
+  const wantFarnsworth = Number.isFinite(farnInput) && farnInput < data.wpm_target && data.wpm_target > 5;
+  data.farnsworth_wpm = wantFarnsworth
+    ? Math.max(5, Math.min(data.wpm_target - 1, farnInput))
+    : data.wpm_target;
+  data.farnsworth_enabled = data.farnsworth_wpm < data.wpm_target;
   // SP/LED+ pin: from select
   const sp1El=document.getElementById('s-speaker_pin');
   if(sp1El) data.speaker_pin=parseInt(sp1El.value);

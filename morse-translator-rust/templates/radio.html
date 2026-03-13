@@ -226,6 +226,13 @@
         </div>
 
         <div class="row" style="margin-top:14px;">
+          <div class="field" style="max-width:320px;">
+            <div class="label">Farnsworth Timing</div>
+            <div class="seg" id="seg-farn"></div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:14px;">
           <div class="field">
             <div class="label">Character Speed (WPM)</div>
             <input class="input" id="char-wpm" type="number" min="5" max="60">
@@ -278,6 +285,8 @@ let selectedPeer = state.net_live_transmit_target_ip
 let selectedPeerLabel = '';
 let liveSpaceDown = false, liveDotDown = false, liveDashDown = false;
 let pollBusy = false;
+let farnModeEnabled = false;
+let lastFarnWpm = 20;
 
 const DEF = {
   device_name:'Morse Pi',
@@ -320,6 +329,9 @@ function pinModeSeg(){
   document.getElementById('seg-pin-mode').innerHTML = `
     <button class="${settings.pin_mode!=='dual'?'active':''}" onclick="setPinMode('single')">Straight Key</button>
     <button class="${settings.pin_mode==='dual'?'active':''}" onclick="setPinMode('dual')">Iambic Paddle</button>`;
+}
+function clampWpm(v, fallback=20){
+  return Math.max(5, Math.min(60, parseInt(v, 10) || fallback));
 }
 function renderPeerSelect(){
   const select=document.getElementById('peer-select');
@@ -372,18 +384,29 @@ function renderKeys(){
   }
 }
 function updateSummary(){
+  const charWpm = clampWpm(settings.wpm_target, DEF.wpm_target);
+  const farnWpmRaw = clampWpm(settings.farnsworth_wpm, charWpm);
+  const farnWpm = Math.min(charWpm, farnWpmRaw);
+  settings.wpm_target = charWpm;
+  settings.farnsworth_wpm = farnWpm;
+
+  farnModeEnabled = farnWpm < charWpm;
+  if(farnModeEnabled) lastFarnWpm = farnWpm;
+
   document.getElementById('stat-device').textContent=settings.device_name || 'Morse Pi';
   document.getElementById('stat-peer-count').textContent=String(peers.length);
   document.getElementById('stat-mode').textContent=settings.pin_mode==='dual'?'IAMBIC':'STRAIGHT';
-  document.getElementById('stat-speed').textContent=`${settings.wpm_target}/${settings.farnsworth_wpm}`;
+  document.getElementById('stat-speed').textContent=`${charWpm}/${farnWpm}`;
   document.getElementById('device-name').value=settings.device_name || 'Morse Pi';
-  document.getElementById('char-wpm').value=settings.wpm_target;
-  document.getElementById('farn-wpm').value=settings.farnsworth_wpm;
+  document.getElementById('char-wpm').value=charWpm;
+  document.getElementById('farn-wpm').value=farnWpm;
+  document.getElementById('farn-wpm').disabled=!farnModeEnabled;
   document.getElementById('dot-freq').value=settings.dot_freq;
   document.getElementById('dash-freq').value=settings.dash_freq;
-  document.getElementById('timing-hint').textContent = settings.wpm_target===settings.farnsworth_wpm
-    ? `Standard timing at ${settings.wpm_target} WPM.`
-    : `Characters send at ${settings.wpm_target} WPM, spacing stretches to ${settings.farnsworth_wpm} WPM.`;
+  boolSeg('seg-farn', farnModeEnabled, 'On', 'Off', 'setFarnsworthMode', true);
+  document.getElementById('timing-hint').textContent = !farnModeEnabled
+    ? `Standard timing at ${charWpm} WPM (Farnsworth off).`
+    : `Characters send at ${charWpm} WPM, spacing stretches to ${farnWpm} WPM.`;
 }
 function updateStatus(){
   boolSeg('seg-live', !!state.net_live_transmit_enabled, 'On Air', 'Off Air', 'toggleLive', true);
@@ -455,13 +478,56 @@ function setLocalMonitor(v){ persistSetting('radio_local_monitor', !!v, 'Local s
 function setRemoteMonitor(v){ persistSetting('radio_remote_monitor', !!v, 'Peer send updated'); }
 function setReceiveMonitor(v){ persistSetting('radio_receive_enabled', !!v, 'Receive audio updated'); }
 function setPinMode(mode){ persistSetting('pin_mode', mode, mode==='dual' ? 'Iambic paddle enabled' : 'Straight key enabled'); }
+function setFarnsworthMode(enabled){
+  const charInput = document.getElementById('char-wpm');
+  const farnInput = document.getElementById('farn-wpm');
+  const charWpm = clampWpm(charInput ? charInput.value : settings.wpm_target, settings.wpm_target || DEF.wpm_target);
+  settings.wpm_target = charWpm;
+
+  if(enabled){
+    if(charWpm <= 5){
+      settings.farnsworth_wpm = charWpm;
+      farnModeEnabled = false;
+      toast('Increase Character WPM above 5 to enable Farnsworth timing','warning',2800);
+    } else {
+      const fallback = Math.max(5, Math.min(charWpm - 1, lastFarnWpm || (charWpm - 5)));
+      const parsed = clampWpm(farnInput ? farnInput.value : fallback, fallback);
+      settings.farnsworth_wpm = Math.max(5, Math.min(charWpm - 1, parsed));
+      lastFarnWpm = settings.farnsworth_wpm;
+      farnModeEnabled = true;
+    }
+  } else {
+    if(settings.farnsworth_wpm < charWpm){
+      lastFarnWpm = settings.farnsworth_wpm;
+    }
+    settings.farnsworth_wpm = charWpm;
+    farnModeEnabled = false;
+  }
+
+  if(charInput) charInput.value = settings.wpm_target;
+  if(farnInput) farnInput.value = settings.farnsworth_wpm;
+  updateSummary();
+}
 function saveRadioSettings(){
-  const wpm = Math.max(5, parseInt(document.getElementById('char-wpm').value||settings.wpm_target,10) || settings.wpm_target);
-  const farn = Math.min(wpm, Math.max(5, parseInt(document.getElementById('farn-wpm').value||settings.farnsworth_wpm,10) || settings.farnsworth_wpm));
+  const wpm = clampWpm(document.getElementById('char-wpm').value || settings.wpm_target, settings.wpm_target || DEF.wpm_target);
+  const farnInput = document.getElementById('farn-wpm').value || settings.farnsworth_wpm;
+  let farn;
+  if(farnModeEnabled && wpm > 5){
+    const fallback = Math.max(5, Math.min(wpm - 1, lastFarnWpm || (wpm - 5)));
+    farn = Math.max(5, Math.min(wpm - 1, clampWpm(farnInput, fallback)));
+    lastFarnWpm = farn;
+  } else {
+    farn = wpm;
+  }
+
+  settings.wpm_target = wpm;
+  settings.farnsworth_wpm = farn;
+
   const payload = {
     device_name:(document.getElementById('device-name').value || settings.device_name || 'Morse Pi').trim() || 'Morse Pi',
     wpm_target:wpm,
     farnsworth_wpm:farn,
+    farnsworth_enabled:farn < wpm,
     dot_freq:Math.max(50, parseInt(document.getElementById('dot-freq').value||settings.dot_freq,10) || settings.dot_freq),
     dash_freq:Math.max(50, parseInt(document.getElementById('dash-freq').value||settings.dash_freq,10) || settings.dash_freq),
     pin_mode:settings.pin_mode,
@@ -544,6 +610,21 @@ document.addEventListener('keyup', e=>{
     liveKeyUp('single');
   }
 });
+
+const charWpmInput = document.getElementById('char-wpm');
+const farnWpmInput = document.getElementById('farn-wpm');
+if(charWpmInput && farnWpmInput){
+  charWpmInput.addEventListener('input', ()=>{
+    const charWpm = clampWpm(charWpmInput.value, settings.wpm_target || DEF.wpm_target);
+    farnWpmInput.max = String(charWpm);
+    if(!farnModeEnabled){
+      farnWpmInput.value = String(charWpm);
+    } else {
+      const currentFarn = clampWpm(farnWpmInput.value, settings.farnsworth_wpm || charWpm);
+      farnWpmInput.value = String(Math.max(5, Math.min(charWpm, currentFarn)));
+    }
+  });
+}
 
 renderAll();
 refreshAll();

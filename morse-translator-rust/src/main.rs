@@ -236,6 +236,7 @@ fn handle_connection(mut stream: TcpStream) {
 fn route_get(stream: &mut TcpStream, path: &str) {
     match path {
         "/" => serve_template(stream, "templates/index.html"),
+        "/network" => serve_template(stream, "templates/radio.html"),
         "/radio" => serve_template(stream, "templates/radio.html"),
         "/diag" => serve_template(stream, "templates/diag.html"),
         "/status" => handle_status(stream),
@@ -436,7 +437,7 @@ fn handle_set_mode(stream: &mut TcpStream, body: &str) {
         Some(m) => m.to_string(),
         None => { send_state_json(stream); return; }
     };
-    let valid_modes = ["send", "encode", "decode", "speed", "settings", "stats", "network"];
+    let valid_modes = ["send", "encode", "decode", "speed", "settings", "stats", "network", "radio"];
     if !valid_modes.contains(&mode_str.as_str()) {
         send_state_json(stream);
         return;
@@ -1072,7 +1073,7 @@ fn handle_net_live_key(stream: &mut TcpStream, body: &str) {
     };
 
     if pressed {
-        if !enabled || local_monitor {
+        if local_monitor {
             thread::spawn(move || { sound::play_tone(freq, None); });
         }
         state::STATE.lock().unwrap().button_active = true;
