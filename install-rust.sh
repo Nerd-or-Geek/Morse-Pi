@@ -449,6 +449,13 @@ chmod +x "${APP_DIR}/${BINARY_NAME}"
 chown "${RUN_USER}:${RUN_USER}" "${APP_DIR}/${BINARY_NAME}"
 ok "Binary installed"
 
+# Install Rust templates (binary reads these relative to WorkingDirectory=${APP_DIR})
+info "Installing templates…"
+mkdir -p "${APP_DIR}/templates"
+cp -r "${RUST_SRC}/templates/." "${APP_DIR}/templates/"
+chown -R "${RUN_USER}:${RUN_USER}" "${APP_DIR}/templates"
+ok "Templates installed"
+
 # Create default settings.json
 SETTINGS_FILE="${APP_DIR}/settings.json"
 if [[ ! -f "${SETTINGS_FILE}" ]]; then

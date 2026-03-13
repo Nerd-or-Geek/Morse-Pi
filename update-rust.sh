@@ -477,6 +477,13 @@ chmod +x "${APP_DIR}/${BINARY_NAME}"
 chown "${RUN_USER}:${RUN_USER}" "${APP_DIR}/${BINARY_NAME}"
 ok "Binary installed: ${APP_DIR}/${BINARY_NAME} ($(du -h "${BUILT_BINARY}" | cut -f1))"
 
+# Install Rust templates (binary reads these relative to WorkingDirectory=${APP_DIR})
+info "Installing templates…"
+mkdir -p "${APP_DIR}/templates"
+cp -r "${RUST_SRC}/templates/." "${APP_DIR}/templates/"
+chown -R "${RUN_USER}:${RUN_USER}" "${APP_DIR}/templates"
+ok "Templates installed"
+
 # ===========================================================================
 #  STEP 4 — Ensure auto-start on boot + restart service
 # ===========================================================================
