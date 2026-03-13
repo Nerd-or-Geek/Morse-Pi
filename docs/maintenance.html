@@ -56,6 +56,7 @@
   <li>Verify USB HID gadget configuration</li>
   <li>Pull the latest code (preserves <code>settings.json</code>, <code>stats.json</code>, <code>words.json</code>)</li>
   <li>Rebuild the Rust binary with <code>cargo build --release</code></li>
+  <li>Sync the latest Rust templates into <code>/opt/morse-pi/morse-translator/templates</code></li>
   <li>Recreate the systemd service and restart</li>
 </ol>
 
@@ -77,10 +78,12 @@ sudo systemctl restart morse-pi</code></pre>
 
 <div class="callout info">
   <div class="callout-title">ℹ Rust backend rebuild</div>
-  If you're running the Rust backend, you'll need to rebuild after pulling new code:
+  If you're running the Rust backend, you'll need to rebuild and sync templates after pulling new code:
   <pre><code>cd /opt/morse-pi/morse-translator-rust
 cargo build --release --features gpio
 sudo cp target/release/morse-pi /opt/morse-pi/morse-translator/morse-pi
+sudo mkdir -p /opt/morse-pi/morse-translator/templates
+sudo cp -r templates/. /opt/morse-pi/morse-translator/templates/
 sudo systemctl restart morse-pi</code></pre>
 </div>
 

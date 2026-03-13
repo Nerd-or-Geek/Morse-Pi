@@ -57,6 +57,21 @@
   <li>If ufw is active, verify port 5000 is open: <code>sudo ufw status</code></li>
 </ol>
 
+<h3>Updated code, but the UI still looks old</h3>
+<ol>
+  <li>Hard-refresh your browser (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>) or clear cache.</li>
+  <li>For Rust installs, run the updater again: <code>curl -sSL https://raw.githubusercontent.com/Nerd-or-Geek/Morse-Pi/main/update-rust.sh | sudo bash</code></li>
+  <li>If you updated manually, rebuild and sync templates:
+    <pre><code>cd /opt/morse-pi/morse-translator-rust
+cargo build --release --features gpio
+sudo cp target/release/morse-pi /opt/morse-pi/morse-translator/morse-pi
+sudo mkdir -p /opt/morse-pi/morse-translator/templates
+sudo cp -r templates/. /opt/morse-pi/morse-translator/templates/
+sudo systemctl restart morse-pi</code></pre>
+  </li>
+  <li>Open the dedicated radio page directly to verify route updates: <code>http://&lt;pi-ip&gt;:5000/network</code> (legacy <code>/radio</code> also works).</li>
+</ol>
+
 <h3>Service won't start</h3>
 <ol>
   <li>Check logs: <code>sudo journalctl -u morse-pi -n 50</code></li>
@@ -215,7 +230,7 @@
 
 <h3>Messages not arriving</h3>
 <ul>
-  <li>Verify the peer shows as online in the NET tab (peers disappear after 15 seconds without a beacon)</li>
+  <li>Verify the peer shows as online in the RADIO page (peers disappear after 15 seconds without a beacon)</li>
   <li>Check that port 5000 is reachable on the target Pi: <code>curl http://&lt;peer-ip&gt;:5000/status</code></li>
   <li>Check for firewall rules: <code>sudo ufw status</code></li>
 </ul>

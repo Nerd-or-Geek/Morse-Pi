@@ -275,7 +275,7 @@ python3 app.py</code></pre>
   <tr><td><strong>KB</strong></td><td>USB HID keyboard settings and output</td></tr>
   <tr><td><strong>STATS</strong></td><td>Accuracy and streak statistics</td></tr>
   <tr><td><strong>CONFIG</strong></td><td>All settings (pins, tones, WPM, theme, Farnsworth, etc.)</td></tr>
-  <tr><td><strong>NET</strong></td><td>Multi-Pi networking: discover peers, send/receive messages</td></tr>
+  <tr><td><strong>RADIO</strong></td><td>Multi-Pi networking: discover peers, send/receive messages, and live transmit</td></tr>
   <tr><td><strong>HELP</strong></td><td>Built-in reference for shortcuts, wiring, and mode descriptions</td></tr>
 </table>
 
@@ -351,7 +351,7 @@ python3 app.py</code></pre>
 <p>See the <a href="usb-hid.html">USB HID Keyboard</a> page for full setup and configuration details.</p>
 
 <!-- ── NETWORK MODE ───────────────────────────────────── -->
-<h2 id="network-mode">Networking (NET)</h2>
+<h2 id="network-mode">Networking (RADIO)</h2>
 <p>Multiple Morse-Pi devices on the same LAN automatically discover each other — no configuration needed.</p>
 
 <h3>How discovery works</h3>
@@ -364,7 +364,7 @@ python3 app.py</code></pre>
 
 <h3>Sending messages</h3>
 <ol>
-  <li>Open the <strong>NET</strong> tab</li>
+  <li>Open the <strong>RADIO</strong> tab</li>
   <li>Select a discovered peer from the list</li>
   <li>Type a message and click <strong>SEND</strong>, or key Morse using your paddle and send the decoded text</li>
   <li>The message is sent via HTTP to the peer's <code>/receive_morse</code> endpoint</li>
@@ -372,8 +372,14 @@ python3 app.py</code></pre>
 </ol>
 
 <div class="callout info">
+  <div class="callout-title">ℹ Direct radio URL</div>
+  Open the dedicated radio console directly at <code>http://&lt;pi-ip&gt;:5000/network</code>.
+  The older <code>/radio</code> URL is still supported as a compatibility alias.
+</div>
+
+<div class="callout info">
   <div class="callout-title">ℹ Device name</div>
-  Set your device name in <strong>CONFIG → Device Name</strong> or directly in the NET tab. This is how other Pis identify your device.
+  Set your device name in <strong>CONFIG → Device Name</strong> or directly in the RADIO page. This is how other Pis identify your device.
 </div>
 
 <!-- ── STATS MODE ─────────────────────────────────────── -->
@@ -398,7 +404,7 @@ python3 app.py</code></pre>
   <li><strong>Pin Assignment</strong> — choose which BCM pins are used for data, dot, dash, speaker, and ground</li>
   <li><strong>Audio</strong> — dot frequency, dash frequency, volume, output type (speaker PWM or LED on/off)</li>
   <li><strong>Speed</strong> — WPM target with a "Test WPM" button that plays "PARIS" at the configured speed</li>
-  <li><strong>Farnsworth Timing</strong> — enable stretched gaps with configurable letter and word gap multipliers</li>
+  <li><strong>Farnsworth Timing</strong> — toggle extra spacing on/off and set Farnsworth speed (WPM) below Character WPM</li>
   <li><strong>Quiz</strong> — difficulty level and word categories</li>
   <li><strong>Theme</strong> — dark or light UI theme</li>
   <li><strong>Device Name</strong> — the name shown to other Pis on the network</li>

@@ -37,6 +37,7 @@
     <li><a href="#overview">Overview</a></li>
     <li><a href="#discovery">Peer Discovery</a></li>
     <li><a href="#setup">Setup</a></li>
+    <li><a href="#open-radio">Open the Radio Page</a></li>
     <li><a href="#store-forward">Store &amp; Forward Messages</a></li>
     <li><a href="#live-transmit">Live Radio Transmission</a></li>
     <li><a href="#key-modes">Network Key Modes</a></li>
@@ -51,7 +52,7 @@
 
 <!-- ── OVERVIEW ───────────────────────────────────────── -->
 <h2 id="overview">Overview</h2>
-<p>The <strong>NET</strong> tab lets Morse-Pi devices on the same LAN discover each other automatically and exchange Morse code in two ways:</p>
+<p>The <strong>RADIO</strong> page lets Morse-Pi devices on the same LAN discover each other automatically and exchange Morse code in two ways:</p>
 <ul>
   <li><strong>Store &amp; Forward</strong> — key or type a complete message, then send it to a peer. The receiving Pi plays it through its speaker and stores it in the inbox.</li>
   <li><strong>Live Radio Transmission</strong> — select a peer, then every paddle press or key-down is forwarded in real time. The remote Pi's speaker plays the tone as you press — just like a radio contact.</li>
@@ -84,14 +85,21 @@
   <li>Install Morse-Pi on each Raspberry Pi (see <a href="getting-started.html#installation">Getting Started → Installation</a>).</li>
   <li>Connect all Pis to the same Wi-Fi or wired network.</li>
   <li>Open the web UI on each Pi (<code>http://&lt;pi-ip&gt;:5000</code>).</li>
-  <li>Open the <strong>NET</strong> tab on each Pi.</li>
-  <li>Set a unique <strong>Device Name</strong> for each Pi (top of the NET tab). Examples: <em>Shack-1</em>, <em>Portable</em>.</li>
+  <li>Open the <strong>RADIO</strong> tab (or direct radio URL) on each Pi.</li>
+  <li>Set a unique <strong>Device Name</strong> for each Pi (top of the RADIO page). Examples: <em>Shack-1</em>, <em>Portable</em>.</li>
   <li>Within a few seconds, each Pi should appear in the other's peer list.</li>
 </ol>
 
+<h3 id="open-radio">Open the Radio Page</h3>
+<ul>
+  <li>From the main UI, click <strong>RADIO</strong>, then click <strong>Open Radio Window</strong>.</li>
+  <li>Direct URL (recommended): <code>http://&lt;pi-ip&gt;:5000/network</code></li>
+  <li>Legacy alias (still supported): <code>http://&lt;pi-ip&gt;:5000/radio</code></li>
+</ul>
+
 <div class="callout success">
   <div class="callout-title">✓ No configuration files to edit</div>
-  All networking settings are configured live from the NET tab in the web UI. Changes take effect immediately.
+  All networking settings are configured live from the RADIO page. Changes take effect immediately.
 </div>
 
 <!-- ── STORE & FORWARD ────────────────────────────────── -->
@@ -100,7 +108,7 @@
 
 <h3>Send a typed message</h3>
 <ol>
-  <li>In the NET tab, select a peer from the <strong>Peers</strong> list.</li>
+  <li>In the RADIO page, select a peer from the <strong>Peers</strong> list.</li>
   <li>Choose <strong>Message Mode</strong>.</li>
   <li>Type your message in the text field and click <strong>SEND</strong>.</li>
 </ol>
@@ -124,9 +132,9 @@
 
 <h3>Enabling live transmit</h3>
 <ol>
-  <li>Select a peer from the <strong>Peers</strong> list in the NET tab.</li>
+  <li>Select a peer from the <strong>Peers</strong> list in the RADIO page.</li>
   <li>Toggle the <strong>Live Transmit</strong> switch to <strong>ON</strong>.</li>
-  <li>The NET display shows <em>"hold key or paddle to transmit…"</em> when idle.</li>
+  <li>The RADIO display shows <em>"hold key or paddle to transmit…"</em> when idle.</li>
 </ol>
 
 <h3>Transmitting</h3>
@@ -161,7 +169,7 @@
 
 <!-- ── KEY MODES ───────────────────────────────────────── -->
 <h2 id="key-modes">Network Key Modes</h2>
-<p>The NET tab has three selectable key modes, controlled by the buttons at the top of the NET panel:</p>
+<p>The RADIO page has three selectable key modes, controlled by the buttons at the top of the panel:</p>
 <table>
   <tr><th>Mode</th><th>Description</th></tr>
   <tr><td><strong>Message</strong></td><td>Type a text message and send it to a peer.</td></tr>
@@ -171,7 +179,7 @@
 
 <!-- ── INBOX ──────────────────────────────────────────── -->
 <h2 id="inbox">Inbox</h2>
-<p>Received messages (from store-and-forward sends) are stored in the <strong>Inbox</strong> at the bottom of the NET tab. Each entry shows the sender name, timestamp, and message text.</p>
+<p>Received messages (from store-and-forward sends) are stored in the <strong>Inbox</strong> at the bottom of the RADIO page. Each entry shows the sender name, timestamp, and message text.</p>
 <ul>
   <li>Click a message to replay it through the speaker.</li>
   <li>Messages persist until you click <strong>Clear</strong>.</li>

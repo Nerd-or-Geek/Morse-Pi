@@ -127,12 +127,13 @@
 </table>
 
 <h3>Farnsworth timing</h3>
-<p>Farnsworth timing keeps the characters at full speed but stretches the gaps between them, making it easier for beginners to follow.</p>
+<p>Farnsworth timing keeps character elements at full speed while stretching spacing, making copy practice easier for beginners.</p>
 <ul>
-  <li><strong>Letter gap</strong> = 3 × dot_unit × <code>farnsworth_letter_mult</code> (default 2×)</li>
-  <li><strong>Word gap</strong> = 7 × dot_unit × <code>farnsworth_word_mult</code> (default 2×)</li>
+  <li><strong>Character speed</strong> uses <code>wpm_target</code></li>
+  <li><strong>Spacing speed</strong> uses <code>farnsworth_wpm</code></li>
+  <li>Farnsworth is effectively ON when <code>farnsworth_wpm &lt; wpm_target</code></li>
 </ul>
-<p>Enable Farnsworth timing in <strong>CONFIG → Farnsworth Mode</strong>.</p>
+<p>In the UI, configure this in <strong>CONFIG → Farnsworth Timing</strong> (On/Off + Farnsworth Speed WPM).</p>
 
 <!-- ── SETTINGS REFERENCE ─────────────────────────────── -->
 <h2 id="settings-ref">Settings Reference</h2>
@@ -154,13 +155,17 @@
   <tr><td><code>volume</code></td><td>float</td><td><code>0.75</code></td><td>PWM duty cycle (0.01–0.95)</td></tr>
   <tr><td><code>theme</code></td><td>string</td><td><code>"dark"</code></td><td>UI theme: <code>dark</code> or <code>light</code></td></tr>
   <tr><td><code>difficulty</code></td><td>string</td><td><code>"easy"</code></td><td>Quiz difficulty: <code>easy</code>, <code>medium</code>, <code>hard</code></td></tr>
-  <tr><td><code>farnsworth_enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable Farnsworth timing</td></tr>
-  <tr><td><code>farnsworth_letter_mult</code></td><td>float</td><td><code>2.0</code></td><td>Letter gap multiplier</td></tr>
-  <tr><td><code>farnsworth_word_mult</code></td><td>float</td><td><code>2.0</code></td><td>Word gap multiplier</td></tr>
+  <tr><td><code>farnsworth_wpm</code></td><td>int</td><td><code>20</code></td><td>Spacing speed for Farnsworth timing. Set below <code>wpm_target</code> for extra spacing.</td></tr>
+  <tr><td><code>farnsworth_enabled</code></td><td>bool</td><td><code>false</code></td><td>Compatibility flag accepted by <code>/save_settings</code>; effective mode is derived from <code>farnsworth_wpm &lt; wpm_target</code>.</td></tr>
+  <tr><td><code>farnsworth_letter_mult</code></td><td>float</td><td><code>2.0</code></td><td>Legacy/internal compatibility field (not used by current UI controls).</td></tr>
+  <tr><td><code>farnsworth_word_mult</code></td><td>float</td><td><code>2.0</code></td><td>Legacy/internal compatibility field (not used by current UI controls).</td></tr>
   <tr><td><code>kb_enabled</code></td><td>bool</td><td><code>false</code></td><td>Enable USB HID keyboard output</td></tr>
   <tr><td><code>kb_mode</code></td><td>string</td><td><code>"letters"</code></td><td><code>letters</code> = decoded chars, <code>custom</code> = mapped keys</td></tr>
   <tr><td><code>kb_dot_key</code></td><td>string</td><td><code>"z"</code></td><td>Key sent for dot in custom mode</td></tr>
   <tr><td><code>kb_dash_key</code></td><td>string</td><td><code>"x"</code></td><td>Key sent for dash in custom mode</td></tr>
+  <tr><td><code>radio_local_monitor</code></td><td>bool</td><td><code>true</code></td><td>Play your own local keying audio while transmitting</td></tr>
+  <tr><td><code>radio_remote_monitor</code></td><td>bool</td><td><code>true</code></td><td>Play incoming live key audio from peers</td></tr>
+  <tr><td><code>radio_receive_enabled</code></td><td>bool</td><td><code>true</code></td><td>Allow/ignore incoming live key events from peers</td></tr>
 </table>
 
 <div class="callout info">
@@ -176,6 +181,9 @@
 <table>
   <tr><th>Route</th><th>Method</th><th>Description</th></tr>
   <tr><td><code>/</code></td><td>GET</td><td>Main web UI</td></tr>
+  <tr><td><code>/network</code></td><td>GET</td><td>Dedicated radio control page</td></tr>
+  <tr><td><code>/radio</code></td><td>GET</td><td>Legacy alias for <code>/network</code></td></tr>
+  <tr><td><code>/diag</code></td><td>GET</td><td>GPIO diagnostic page</td></tr>
   <tr><td><code>/status</code></td><td>GET</td><td>Full app state (polled by UI every 250ms)</td></tr>
   <tr><td><code>/get_settings</code></td><td>GET</td><td>Current settings</td></tr>
   <tr><td><code>/save_settings</code></td><td>POST</td><td>Update and persist settings</td></tr>
@@ -201,6 +209,15 @@
   <tr><td><code>/send_to_peer</code></td><td>POST</td><td>Send message to another Pi</td></tr>
   <tr><td><code>/receive_morse</code></td><td>POST</td><td>Receive incoming Morse from peer</td></tr>
   <tr><td><code>/net_status</code></td><td>GET</td><td>Peers + inbox</td></tr>
+  <tr><td><code>/net_key_mode</code></td><td>POST</td><td>Enable/disable keyed-message mode</td></tr>
+  <tr><td><code>/net_key_press</code></td><td>POST</td><td>Record local key press/release for keyed-message mode</td></tr>
+  <tr><td><code>/net_clear_morse</code></td><td>POST</td><td>Clear keyed-message buffers</td></tr>
+  <tr><td><code>/net_send_morse</code></td><td>POST</td><td>Send buffered keyed Morse message to selected peer</td></tr>
+  <tr><td><code>/net_live_transmit_set</code></td><td>POST</td><td>Enable/disable live transmit mode</td></tr>
+  <tr><td><code>/net_live_transmit_symbol</code></td><td>POST</td><td>Forward live dot/dash symbol events to a peer</td></tr>
+  <tr><td><code>/net_receive_live_symbol</code></td><td>POST</td><td>Receive live dot/dash symbol events from peer</td></tr>
+  <tr><td><code>/net_live_key</code></td><td>POST</td><td>Forward live key down/up events to peer</td></tr>
+  <tr><td><code>/net_receive_live_key</code></td><td>POST</td><td>Receive live key down/up events from peer</td></tr>
 </table>
 
 <h3>USB HID keyboard</h3>
@@ -236,9 +253,14 @@
 │   ├── words.json              ← word list for quiz/speed modes
 │   └── templates/
 │       ├── index.html          ← single-page web UI
+│       ├── radio.html          ← dedicated radio control page
 │       └── diag.html           ← GPIO live diagnostic popup
 └── morse-translator-rust/      ← Rust backend (native binary)
     ├── Cargo.toml              ← Rust package manifest &amp; dependencies
+    ├── templates/              ← source templates synced into runtime app dir by install/update scripts
+    │   ├── index.html
+    │   ├── radio.html
+    │   └── diag.html
     └── src/
         ├── main.rs             ← HTTP server, routing, template engine
         ├── state.rs            ← settings, stats, app state, JSON serialization
