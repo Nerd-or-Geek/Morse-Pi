@@ -55,7 +55,7 @@
 <p>The <strong>RADIO</strong> page lets Morse-Pi devices on the same LAN discover each other automatically and exchange Morse code in two ways:</p>
 <ul>
   <li><strong>Store &amp; Forward</strong> — key or type a complete message, then send it to a peer. The receiving Pi plays it through its speaker and stores it in the inbox.</li>
-  <li><strong>Live Radio Transmission</strong> — select a peer, then every paddle press or key-down is forwarded in real time. The remote Pi's speaker plays the tone as you press — just like a radio contact.</li>
+  <li><strong>Live Radio Transmission</strong> — switch <strong>ON AIR</strong>, choose a transmit mode (<em>Single</em>, <em>Selected</em>, or <em>All On-Air</em>), and every paddle press or key-down is forwarded in real time. The receiving Pi plays tone live and decodes incoming Morse text on the RADIO page.</li>
 </ul>
 <p>No configuration is needed. Devices discover each other automatically as long as they are on the same subnet.</p>
 
@@ -64,7 +64,7 @@
 <p>Morse-Pi uses <strong>UDP broadcast beacons</strong> for zero-configuration discovery:</p>
 <ol>
   <li>Every device sends a UDP broadcast to port <strong>5001</strong> every 3 seconds.</li>
-  <li>The beacon payload is a JSON object: <code>{"name":"&lt;device-name&gt;","ip":"&lt;ip&gt;","port":5000}</code></li>
+  <li>The beacon payload is a JSON object similar to: <code>{"type":"morse_pi_beacon","uuid":"&lt;uuid&gt;","name":"&lt;device-name&gt;","ip":"&lt;ip&gt;","port":5000,"on_air":true|false}</code></li>
   <li>Receiving devices add the peer to their peer list and update its last-seen timestamp.</li>
   <li>Peers that have not sent a beacon for <strong>15 seconds</strong> are automatically removed from the list.</li>
 </ol>
@@ -128,13 +128,14 @@
 
 <!-- ── LIVE TRANSMIT ───────────────────────────────────── -->
 <h2 id="live-transmit">Live Radio Transmission</h2>
-<p>Live transmit mode is the real-time radio contact feature. Every key-down/key-up event is forwarded to the selected peer immediately — the remote Pi's speaker tone follows your paddle in real time.</p>
+<p>Live transmit is the real-time radio contact feature. Every key-down/key-up event is forwarded immediately based on your transmit mode, and the remote Pi follows your keying in real time.</p>
 
-<h3>Enabling live transmit</h3>
+<h3>Going ON AIR</h3>
 <ol>
-  <li>Select a peer from the <strong>Peers</strong> list in the RADIO page.</li>
-  <li>Toggle the <strong>Live Transmit</strong> switch to <strong>ON</strong>.</li>
-  <li>The RADIO display shows <em>"hold key or paddle to transmit…"</em> when idle.</li>
+  <li>Open the RADIO page and choose your transmit mode.</li>
+  <li>For <strong>Single</strong> mode, select a target peer first. (<strong>Selected</strong> and <strong>All On-Air</strong> do not require a single target.)</li>
+  <li>Toggle <strong>Live Session</strong> to <strong>On Air</strong>.</li>
+  <li>When <strong>Off Air</strong>, this device will not transmit <em>or receive</em> live events.</li>
 </ol>
 
 <h3>Transmitting</h3>
@@ -149,11 +150,20 @@
   <tr><td><kbd>X</kbd> key</td><td>Dash paddle in iambic/dual-pin mode</td></tr>
 </table>
 
+<h3>Transmit modes and muting</h3>
+<table>
+  <tr><th>Mode</th><th>Behavior</th></tr>
+  <tr><td><strong>Single</strong></td><td>Transmit only to the currently selected target peer.</td></tr>
+  <tr><td><strong>Selected</strong></td><td>Transmit only to peers you mark with the <strong>TX</strong> button (on-air peers only).</td></tr>
+  <tr><td><strong>All On-Air</strong></td><td>Transmit to every discovered peer currently marked <strong>On Air</strong>.</td></tr>
+</table>
+<p>Each peer row also has a <strong>Mute</strong> button. Muted peers are ignored for incoming live receive on this device.</p>
+
 <h3>What the receiving Pi does</h3>
 <ul>
   <li>When a key-down event arrives, the receiving Pi immediately starts playing a tone through its speaker.</li>
   <li>When the key-up event arrives, the tone stops.</li>
-  <li>The <strong>button active</strong> indicator on the receiving Pi's UI lights up while the key is held.</li>
+  <li>The receiving RADIO page updates <strong>Incoming Sender</strong>, <strong>Incoming Morse Buffer</strong>, and <strong>Decoded Incoming Text</strong> live.</li>
   <li>No message is stored — live transmit is ephemeral, just like a radio contact.</li>
 </ul>
 
@@ -219,9 +229,10 @@
 
 <h3>Live transmit is enabled but nothing happens when I key</h3>
 <ul>
-  <li>Make sure a peer is selected in the Peers list <em>before</em> enabling Live Transmit.</li>
-  <li>After selecting the peer, toggle the Live Transmit switch off and back on.</li>
-  <li>Check that the peer is still online (the peer's status indicator should show it as active).</li>
+  <li>Confirm this device is <strong>On Air</strong>. Off Air blocks both TX and RX.</li>
+  <li>If using <strong>Single</strong> mode, make sure a peer is selected before turning On Air.</li>
+  <li>If using <strong>Selected</strong> mode, verify at least one peer has <strong>TX ✓</strong> and is shown as <strong>On Air</strong>.</li>
+  <li>Check that the peer is still online (last-seen is recent in the peer list).</li>
 </ul>
 
 <div class="callout info">

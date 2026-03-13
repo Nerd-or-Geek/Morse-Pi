@@ -208,16 +208,17 @@
   <tr><td><code>/peers</code></td><td>GET</td><td>Device identity + discovered peers</td></tr>
   <tr><td><code>/send_to_peer</code></td><td>POST</td><td>Send message to another Pi</td></tr>
   <tr><td><code>/receive_morse</code></td><td>POST</td><td>Receive incoming Morse from peer</td></tr>
-  <tr><td><code>/net_status</code></td><td>GET</td><td>Peers + inbox</td></tr>
+  <tr><td><code>/net_status</code></td><td>GET</td><td>Peers + inbox + live receive fields + TX mode/mute config</td></tr>
   <tr><td><code>/net_key_mode</code></td><td>POST</td><td>Enable/disable keyed-message mode</td></tr>
   <tr><td><code>/net_key_press</code></td><td>POST</td><td>Record local key press/release for keyed-message mode</td></tr>
   <tr><td><code>/net_clear_morse</code></td><td>POST</td><td>Clear keyed-message buffers</td></tr>
   <tr><td><code>/net_send_morse</code></td><td>POST</td><td>Send buffered keyed Morse message to selected peer</td></tr>
-  <tr><td><code>/net_live_transmit_set</code></td><td>POST</td><td>Enable/disable live transmit mode</td></tr>
+  <tr><td><code>/net_live_transmit_set</code></td><td>POST</td><td>Toggle this device On Air / Off Air (Off Air blocks live TX/RX)</td></tr>
+  <tr><td><code>/net_live_config</code></td><td>POST</td><td>Set live TX mode (<code>single</code>/<code>selected</code>/<code>all_on_air</code>), selected peers, and muted peers</td></tr>
   <tr><td><code>/net_live_transmit_symbol</code></td><td>POST</td><td>Forward live dot/dash symbol events to a peer</td></tr>
   <tr><td><code>/net_receive_live_symbol</code></td><td>POST</td><td>Receive live dot/dash symbol events from peer</td></tr>
-  <tr><td><code>/net_live_key</code></td><td>POST</td><td>Forward live key down/up events to peer</td></tr>
-  <tr><td><code>/net_receive_live_key</code></td><td>POST</td><td>Receive live key down/up events from peer</td></tr>
+  <tr><td><code>/net_live_key</code></td><td>POST</td><td>Forward live key down/up events according to current TX mode</td></tr>
+  <tr><td><code>/net_receive_live_key</code></td><td>POST</td><td>Receive live key down/up events from peer (filtered by Off Air / receive enabled / muted sender)</td></tr>
 </table>
 
 <h3>USB HID keyboard</h3>
