@@ -38,6 +38,9 @@ HID_SERVICE_FILE="/etc/systemd/system/${HID_SERVICE_NAME}.service"
 HID_SCRIPT="/usr/local/bin/morse-pi-hid-setup.sh"
 BINARY_NAME="morse-pi"
 PORT=5000
+PIGPIO_REPO_URL="https://github.com/joan2937/pigpio.git"
+PIGPIO_SRC_DIR="/usr/local/src/pigpio"
+PIGPIOD_SERVICE_FILE="/etc/systemd/system/pigpiod.service"
 
 # ── Sanity checks ─────────────────────────────────────────────────────────────
 banner "Morse-Pi Installer (Rust)"
@@ -97,6 +100,92 @@ if [[ "${AVAIL_ROOT_MB}" -lt "${NEEDED_MB}" ]]; then
     Free some space and try again."
   fi
 fi
+
+ensure_pigpio_source_build() {
+  if [[ "${IS_PI}" != "true" ]]; then
+    return 0
+  fi
+
+  local needs_build=false
+
+  if ! ldconfig -p 2>/dev/null | grep -q "libpigpio"; then
+    warn "pigpio not found in system libs — will build from source"
+    needs_build=true
+  else
+    ok "pigpio already installed (source build detected)"
+  fi
+
+  if ! ldconfig -p 2>/dev/null | grep -q "libpigpiod_if2"; then
+    warn "libpigpiod_if2 not found — Rust GPIO build needs this too"
+    needs_build=true
+  fi
+
+  if ! command -v pigpiod &>/dev/null; then
+    warn "pigpiod binary not found — source build will install it"
+    needs_build=true
+  fi
+
+  if [[ "${needs_build}" != "true" ]]; then
+    ok "pigpio userspace libraries and daemon are ready"
+    return 0
+  fi
+
+  info "Installing pigpio from source…"
+  rm -rf "${PIGPIO_SRC_DIR}"
+  git clone --depth 1 "${PIGPIO_REPO_URL}" "${PIGPIO_SRC_DIR}" || die "Failed to clone pigpio source"
+
+  (
+    cd "${PIGPIO_SRC_DIR}"
+    make -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+    make install
+  ) || die "pigpio source build failed"
+
+  ldconfig
+
+  if ! ldconfig -p 2>/dev/null | grep -q "libpigpiod_if2"; then
+    die "pigpio source build completed, but libpigpiod_if2 is still missing"
+  fi
+  if ! command -v pigpiod &>/dev/null; then
+    die "pigpio source build completed, but pigpiod is still missing"
+  fi
+
+  ok "pigpio installed from source"
+}
+
+ensure_pigpiod_service() {
+  if [[ "${IS_PI}" != "true" ]]; then
+    return 0
+  fi
+
+  if systemctl cat pigpiod >/dev/null 2>&1; then
+    ok "pigpiod service already present"
+    return 0
+  fi
+
+  local pigpiod_bin
+  pigpiod_bin="$(command -v pigpiod || true)"
+  [[ -n "${pigpiod_bin}" ]] || die "pigpiod binary not found after source install"
+
+  info "Creating pigpiod systemd service…"
+  cat > "${PIGPIOD_SERVICE_FILE}" <<EOF
+[Unit]
+Description=pigpio daemon
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=${pigpiod_bin} -l
+ExecStop=/usr/bin/pkill -x pigpiod
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl daemon-reload
+  ok "pigpiod service created"
+}
 
 # ===========================================================================
 #  STEP 1 — USB HID Keyboard Gadget
@@ -339,11 +428,16 @@ info "Refreshing package lists…"
 apt-get update -qq || warn "apt-get update had issues — continuing anyway"
 
 # System packages needed for building
-PKGS=(git build-essential)
+PKGS=(git build-essential curl ca-certificates)
 
-# GPIO libraries (Pi only)
+# pigpio is now handled via source build (not apt)
 if [[ "${IS_PI}" == "true" ]]; then
-  PKGS+=(pigpio libpigpio-dev)
+  info "Skipping apt pigpio (handled via source build)"
+  if ! ldconfig -p | grep -q libpigpio; then
+    warn "pigpio not found in system libs — will build from source"
+  else
+    ok "pigpio already installed (source build detected)"
+  fi
 fi
 
 for pkg in "${PKGS[@]}"; do
@@ -355,6 +449,11 @@ for pkg in "${PKGS[@]}"; do
     ok "$pkg installed"
   fi
 done
+
+if [[ "${IS_PI}" == "true" ]]; then
+  ensure_pigpio_source_build
+  ensure_pigpiod_service
+fi
 
 # GPIO daemon (Pi only)
 if [[ "${IS_PI}" == "true" ]]; then
